@@ -4,6 +4,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.schemas.response import Response
 
 router = APIRouter()
 
@@ -32,8 +33,8 @@ async def health(db: AsyncSession = Depends(get_db)):
     except Exception:
         redis_ok = False
 
-    return {
+    return Response.ok(data={
         "status": "ok" if (db_ok and redis_ok) else "degraded",
         "db": db_ok,
         "redis": redis_ok,
-    }
+    })
