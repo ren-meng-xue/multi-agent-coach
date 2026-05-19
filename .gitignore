@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.uv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+.next/
+.turbo/
+*.tsbuildinfo
+
+# Env
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Docker volumes
+postgres-data/
+redis-data/
+
+# Logs / coverage
+*.log
+coverage/
+htmlcov/
+.coverage
+
+# Build artifacts
+dist/
+build/
+
+# Claude Code local
+.claude/
+.playwright-mcp/
