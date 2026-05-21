@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.api.v1 import auth as auth_v1
 from app.api.v1 import health as health_v1
 from app.core.config import get_settings
 from app.core.exceptions import AppException
@@ -103,3 +104,4 @@ async def global_exception_handler(request, exc: Exception):
 
 # 挂载路由
 app.include_router(health_v1.router, prefix="/api/v1", tags=["health"])
+app.include_router(auth_v1.router, prefix="/api/v1", tags=["auth"])
