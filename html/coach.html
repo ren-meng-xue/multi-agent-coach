@@ -1,0 +1,730 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Coach · Multi Agent Coach</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet" />
+<style>
+  /* === Design Tokens === */
+  :root {
+    --bg-root: #fafaf7;
+    --bg-surface: #f3f2ee;
+    --bg-card: #ffffff;
+    --bg-elevated: #fafaf8;
+    --bg-subtle: #f5f4f0;
+    --border-light: #e8e7e2;
+    --border: #dcdbd5;
+    --border-focus: #b8b5aa;
+    --text-primary: #171717;
+    --text-secondary: #525252;
+    --text-tertiary: #8a8a8a;
+    --text-placeholder: #b0b0b0;
+    --accent-indigo: #4f46e5;
+    --accent-indigo-light: #eef2ff;
+    --accent-indigo-hover: #4338ca;
+    --accent-amber: #d97706;
+    --accent-amber-light: #fffbeb;
+    --accent-emerald: #059669;
+    --accent-emerald-light: #ecfdf5;
+    --accent-rose: #e11d48;
+    --accent-rose-light: #fff1f2;
+    --accent-violet: #7c3aed;
+    --accent-violet-light: #f5f3ff;
+    --font-display: "DM Serif Display", Georgia, "Times New Roman", serif;
+    --font-body: "DM Sans", system-ui, -apple-system, sans-serif;
+    --shadow-xs: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
+    --radius-xs: 6px;
+    --radius-sm: 10px;
+    --radius: 14px;
+    --radius-lg: 20px;
+    --transition: 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 15px; -webkit-font-smoothing: antialiased; }
+  body {
+    font-family: var(--font-body);
+    background: var(--bg-root);
+    color: var(--text-secondary);
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+  /* 纸纹背景：复用主原型纹理 */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3Cpattern id='g' width='60' height='60' patternUnits='userSpaceOnUse'%3E%3Cpath d='M30 5v50M5 30h50' stroke='%23e8e7e2' stroke-width='0.5' fill='none'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width='60' height='60' fill='url(%23g)'/%3E%3C/svg%3E");
+    opacity: 0.4;
+  }
+
+  .app { position: relative; z-index: 1; max-width: 1400px; margin: 0 auto; padding: 0 28px; min-height: 100vh; display: flex; flex-direction: column; }
+
+  /* === Header === */
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 0; flex-shrink: 0;
+    border-bottom: 1px solid var(--border-light);
+  }
+  .logo-area { display: flex; align-items: center; gap: 12px; }
+  .logo-mark {
+    width: 34px; height: 34px; border-radius: 8px;
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 700; font-size: 16px;
+    box-shadow: 0 2px 8px rgba(79,70,229,0.2);
+  }
+  .logo-text { font-size: 17px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.01em; }
+  .logo-text span { color: var(--accent-indigo); }
+  .back-link {
+    font-size: 13px; color: var(--text-tertiary); text-decoration: none;
+    padding: 6px 12px; border-radius: var(--radius-xs);
+    transition: all var(--transition);
+  }
+  .back-link:hover { color: var(--text-primary); background: var(--bg-subtle); }
+
+  .main { flex: 1; padding: 32px 0 48px; position: relative; }
+
+  /* === Coach 主视图 === */
+  .coach-stage {
+    position: relative;
+    width: 100%; max-width: 760px; margin: 0 auto;
+    display: flex; flex-direction: column; gap: 28px;
+  }
+
+  /* demo toggle 右上 */
+  .coach-demo-toggle {
+    position: absolute; top: -4px; right: 0;
+    display: flex; gap: 0; border: 1px solid var(--border-light);
+    border-radius: var(--radius-xs); overflow: hidden;
+    background: var(--bg-subtle); font-size: 11px;
+  }
+  .coach-demo-toggle button {
+    border: none; background: transparent; padding: 6px 12px;
+    color: var(--text-tertiary); cursor: pointer; transition: all var(--transition);
+    font: inherit; font-size: 11px;
+  }
+  .coach-demo-toggle button.active {
+    background: var(--text-primary); color: #fff; font-weight: 600;
+  }
+  .coach-demo-toggle button:not(.active):hover { color: var(--text-primary); }
+
+  /* 新/老态 visibility */
+  .coach-stage[data-state="returning"] .for-new { display: none !important; }
+  .coach-stage[data-state="new"] .for-returning { display: none !important; }
+
+  /* 顶部 Coach 身份条 */
+  .coach-meta-bar {
+    display: flex; align-items: center; gap: 14px;
+    padding-bottom: 18px; padding-right: 220px; /* 留位置给 demo toggle */
+    border-bottom: 1px solid var(--border-light);
+  }
+  .coach-avatar {
+    width: 52px; height: 52px; border-radius: 50%; flex-shrink: 0;
+    background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
+    color: #fff; font-family: var(--font-display); font-size: 22px; font-weight: 400;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 0 4px rgba(124,58,237,0.08), 0 6px 18px rgba(124,58,237,0.18);
+    position: relative;
+  }
+  .coach-avatar::after {
+    content: ''; position: absolute; right: -1px; bottom: -1px;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--accent-emerald); border: 2px solid #fff;
+  }
+  .coach-stage[data-state="new"] .coach-avatar::after {
+    background: var(--accent-violet);
+  }
+  .coach-identity { flex: 1; min-width: 0; }
+  .coach-name {
+    font-family: var(--font-display); font-size: 20px;
+    color: var(--text-primary); line-height: 1.2;
+  }
+  .coach-sub {
+    font-size: 12px; color: var(--text-tertiary);
+    margin-top: 4px; display: flex; gap: 8px; align-items: center;
+  }
+  .coach-sub .sub-dot { width: 3px; height: 3px; border-radius: 50%; background: var(--text-tertiary); }
+  .coach-sub b { color: var(--text-secondary); font-weight: 600; }
+
+  /* 用户消息槽：每轮覆盖（A 方案）只显示当下一条 */
+  .coach-user-msg {
+    display: flex; justify-content: flex-end; padding: 0 4px;
+    animation: msgIn 0.32s ease;
+  }
+  .coach-user-msg .um-bubble {
+    max-width: 78%; padding: 10px 14px;
+    background: var(--bg-elevated); border: 1px solid var(--border-light);
+    border-radius: var(--radius) var(--radius) 4px var(--radius);
+    color: var(--text-primary); font-size: 13px; line-height: 1.55;
+  }
+  .coach-user-msg .um-time {
+    font-size: 10px; color: var(--text-tertiary);
+    margin-top: 4px; text-align: right; padding-right: 4px;
+  }
+  @keyframes msgIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Coach 思考态：紫色脉动点 */
+  .coach-thinking { display: flex; gap: 16px; padding: 0 4px; }
+  .coach-thinking .ct-rail {
+    width: 2px; flex-shrink: 0; border-radius: 2px;
+    background: var(--accent-violet); opacity: 0.3;
+  }
+  .coach-thinking .ct-pulse {
+    display: flex; align-items: center; gap: 10px;
+    color: var(--text-tertiary); font-size: 13px;
+    font-family: var(--font-body);
+  }
+  .coach-thinking .ct-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent-violet);
+    animation: coachPulse 1.4s ease-in-out infinite;
+  }
+  @keyframes coachPulse {
+    0%, 100% { transform: scale(1); opacity: 0.4; }
+    50% { transform: scale(1.6); opacity: 1; }
+  }
+
+  /* Coach 说话区：无气泡，大字号衬线，左侧紫色竖条 */
+  .coach-speech {
+    display: flex; gap: 16px; padding: 0 4px;
+    animation: msgIn 0.4s ease;
+  }
+  .coach-speech-rail {
+    width: 2px; flex-shrink: 0; border-radius: 2px;
+    background: linear-gradient(180deg, var(--accent-violet) 0%, var(--accent-indigo) 100%);
+    opacity: 0.5;
+  }
+  .coach-speech-body {
+    flex: 1; font-family: var(--font-display);
+    font-size: 22px; line-height: 1.55; color: var(--text-primary);
+    font-weight: 400;
+  }
+  .coach-speech-body p + p { margin-top: 14px; }
+  .coach-mark {
+    color: var(--accent-indigo); padding: 0 2px;
+    background: linear-gradient(180deg, transparent 62%, rgba(79,70,229,0.16) 62%);
+  }
+  .coach-mark.warn {
+    color: var(--accent-rose);
+    background: linear-gradient(180deg, transparent 62%, rgba(225,29,72,0.16) 62%);
+  }
+
+  /* 工具调用 inline 卡片：Coach 在对话里"递给你"一张预览 */
+  .coach-tool-card {
+    margin: 14px 0 6px; padding: 14px 16px;
+    border: 1px solid rgba(124,58,237,0.22); border-radius: var(--radius);
+    background: linear-gradient(135deg, var(--accent-violet-light) 0%, rgba(124,58,237,0.04) 100%);
+    box-shadow: 0 4px 14px rgba(124,58,237,0.08);
+    font-family: var(--font-body);
+  }
+  .coach-tool-card .ctc-kicker {
+    font-size: 10px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--accent-violet); margin-bottom: 6px;
+  }
+  .coach-tool-card .ctc-title {
+    font-family: var(--font-display); font-size: 18px;
+    color: var(--text-primary); line-height: 1.3; margin-bottom: 4px;
+  }
+  .coach-tool-card .ctc-meta {
+    font-size: 12px; color: var(--text-tertiary);
+    display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px;
+  }
+  .coach-tool-card .ctc-meta b { color: var(--text-secondary); font-weight: 600; }
+
+  /* 行动 CTA：与 Coach 说话错位缩进 */
+  .coach-cta-row {
+    display: flex; gap: 10px; flex-wrap: wrap;
+    padding-left: 18px; margin-top: 4px;
+  }
+  .coach-cta {
+    padding: 12px 22px; border-radius: var(--radius);
+    font-family: var(--font-body); font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: all var(--transition);
+    border: 1px solid transparent;
+  }
+  .coach-cta.primary {
+    background: var(--text-primary); color: #fff;
+    border-color: var(--text-primary);
+    box-shadow: 0 6px 18px rgba(23,23,23,0.18);
+  }
+  .coach-cta.primary:hover { background: #000; transform: translateY(-1px); }
+  .coach-cta.secondary {
+    background: #fff; color: var(--text-secondary); border-color: var(--border);
+  }
+  .coach-cta.secondary:hover { border-color: var(--border-focus); color: var(--text-primary); }
+  .coach-chip {
+    padding: 8px 14px; border-radius: 999px;
+    background: #fff; border: 1px solid var(--border);
+    color: var(--text-secondary); font-size: 13px;
+    font-family: var(--font-body); cursor: pointer;
+    transition: all var(--transition);
+  }
+  .coach-chip:hover {
+    border-color: var(--text-primary); color: var(--text-primary);
+    transform: translateY(-1px);
+  }
+  .coach-chip.primary {
+    background: var(--text-primary); color: #fff; border-color: var(--text-primary);
+    font-weight: 600;
+  }
+  .coach-chip.primary:hover { background: #000; }
+
+  /* 历史 7 场缩略带：水平 chips（仅老用户） */
+  .coach-history {
+    margin-top: 10px; padding-top: 22px;
+    border-top: 1px solid var(--border-light);
+  }
+  .coach-history-label {
+    font-size: 10px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--text-tertiary); margin-bottom: 12px;
+  }
+  .coach-history-strip {
+    display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px;
+  }
+  .coach-history-strip::-webkit-scrollbar { height: 4px; }
+  .coach-history-strip::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 2px; }
+  .coach-history-chip {
+    flex-shrink: 0; padding: 10px 14px; border-radius: var(--radius-xs);
+    border: 1px solid var(--border-light); background: #fff;
+    display: flex; flex-direction: column; gap: 2px; min-width: 102px;
+    cursor: pointer; transition: all var(--transition);
+  }
+  .coach-history-chip:hover { border-color: var(--border); transform: translateY(-1px); }
+  .coach-history-chip .ch-num { font-size: 11px; color: var(--text-tertiary); font-weight: 600; }
+  .coach-history-chip .ch-score {
+    font-family: var(--font-display); font-size: 18px; color: var(--text-primary);
+    display: flex; align-items: baseline; gap: 4px;
+  }
+  .coach-history-chip .ch-trend { font-size: 10px; font-family: var(--font-body); font-weight: 600; }
+  .coach-history-chip .ch-date { font-size: 10px; color: var(--text-tertiary); margin-top: 1px; }
+  .coach-history-chip.improving .ch-score, .coach-history-chip.improving .ch-trend { color: var(--accent-emerald); }
+  .coach-history-chip.declining .ch-score, .coach-history-chip.declining .ch-trend { color: var(--accent-rose); }
+  .coach-history-chip.flat .ch-trend { color: var(--text-tertiary); }
+
+  /* 底部输入区 */
+  .coach-input-wrap {
+    margin-top: 6px; padding: 12px;
+    background: #fff; border: 1px solid var(--border-light);
+    border-radius: var(--radius); box-shadow: var(--shadow-sm);
+    display: flex; align-items: flex-end; gap: 10px;
+  }
+  .coach-input-wrap textarea {
+    flex: 1; border: none; outline: none; resize: none;
+    background: transparent; color: var(--text-primary);
+    font: inherit; font-size: 14px; line-height: 1.6;
+    padding: 6px 8px; min-height: 28px; max-height: 96px;
+  }
+  .coach-input-wrap textarea::placeholder { color: var(--text-placeholder); }
+  .coach-input-wrap .coach-send {
+    width: 38px; height: 38px; border-radius: 10px; border: none;
+    background: var(--text-primary); color: #fff;
+    cursor: pointer; font-size: 16px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    transition: all var(--transition); flex-shrink: 0;
+  }
+  .coach-input-wrap .coach-send:hover { background: #000; transform: translateY(-1px); }
+  .coach-input-hint {
+    padding-left: 4px; font-size: 11px; color: var(--text-tertiary);
+    margin-top: 6px;
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .app { padding: 0 16px; }
+    .coach-demo-toggle { position: static; margin-bottom: 14px; }
+    .coach-meta-bar { padding-right: 0; }
+    .coach-speech-body { font-size: 19px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="header">
+    <div class="logo-area">
+      <div class="logo-mark">A</div>
+      <div class="logo-text">Multi Agent <span>Coach</span></div>
+    </div>
+    <a href="prototype-light.html" class="back-link">← 回主原型</a>
+  </header>
+
+  <main class="main">
+    <div class="coach-stage" data-state="returning" id="coachStage">
+
+      <!-- demo toggle：原型预览用，切换新/老用户态 -->
+      <div class="coach-demo-toggle" id="demoToggle">
+        <button data-state="returning" class="active" type="button">老用户 · 已 7 场</button>
+        <button data-state="new" type="button">新用户 · 第 0 场</button>
+      </div>
+
+      <!-- Coach 身份条 -->
+      <div class="coach-meta-bar">
+        <div class="coach-avatar">C</div>
+        <div class="coach-identity">
+          <div class="coach-name">Coach</div>
+          <div class="coach-sub for-returning">
+            <span>你的 AI 面试教练</span>
+            <span class="sub-dot"></span>
+            <span>已陪你 <b>7 场</b></span>
+          </div>
+          <div class="coach-sub for-new">
+            <span>你的 AI 面试教练</span>
+            <span class="sub-dot"></span>
+            <span>我们第一次见面</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 用户消息槽：每轮覆盖（A），只显示当下一条；JS 控制插入/清空 -->
+      <div id="userMsgSlot"></div>
+
+      <!-- Coach thinking 槽：用户发完消息后短暂显示 -->
+      <div class="coach-thinking" id="coachThinking" hidden>
+        <div class="ct-rail"></div>
+        <div class="ct-pulse">
+          <div class="ct-dot"></div>
+          <span>Coach 正在回...</span>
+        </div>
+      </div>
+
+      <!-- Coach 说话区：唯一一段，根据 data-state / 对话进度替换内容 -->
+      <div class="coach-speech" id="coachSpeech">
+        <div class="coach-speech-rail"></div>
+        <div class="coach-speech-body" id="coachSpeechBody">
+          <!-- 老用户开场 -->
+          <div class="for-returning">
+            <p>欢迎回来。</p>
+            <p>我看了你过去 7 场面试，发现一个挺要命的规律 ——<br>
+            你讲项目时，<span class="coach-mark warn">结果指标永远是模糊的</span>，7 场里有 <span class="coach-mark warn">5 场</span> 都被扣。</p>
+            <p>今天我想让你重练，<span class="coach-mark">这次你必须给我数字</span>。</p>
+          </div>
+          <!-- 新用户开场 -->
+          <div class="for-new">
+            <p>你好。我还不认识你。</p>
+            <p>我是你的 AI 面试教练 —— 我会陪你练面试，记住你讲过的每个项目，<br>
+            然后告诉你 <span class="coach-mark">下次该怎么讲会更好</span>。</p>
+            <p>开始之前，先告诉我：你正在准备 <span class="coach-mark">什么岗位</span>？</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 行动 CTA 区：根据 data-state / 对话进度替换 -->
+      <div id="coachCtaRow">
+        <div class="coach-cta-row for-returning" id="returningCta">
+          <button class="coach-cta primary" data-action="follow">好，今天就练这个</button>
+          <button class="coach-cta secondary" data-action="switch">等等，我想换方向</button>
+        </div>
+        <div class="coach-cta-row for-new" id="newCta">
+          <button class="coach-chip primary" data-action="new-role" data-role="AI Agent Engineer">AI Agent 工程师</button>
+          <button class="coach-chip" data-action="new-role" data-role="前端工程师">前端工程师</button>
+          <button class="coach-chip" data-action="new-role" data-role="后端工程师">后端工程师</button>
+          <button class="coach-chip" data-action="new-role" data-role="Python 工程师">Python 工程师</button>
+          <button class="coach-chip" data-action="new-role" data-role="全栈工程师">全栈工程师</button>
+        </div>
+      </div>
+
+      <!-- 历史 7 场（仅老用户） -->
+      <div class="coach-history for-returning">
+        <div class="coach-history-label">你的 7 场记忆</div>
+        <div class="coach-history-strip">
+          <div class="coach-history-chip improving">
+            <div class="ch-num">#37</div>
+            <div class="ch-score">7.2 <span class="ch-trend">↗ +0.4</span></div>
+            <div class="ch-date">5月15日 · 多 Agent</div>
+          </div>
+          <div class="coach-history-chip declining">
+            <div class="ch-num">#36</div>
+            <div class="ch-score">6.8 <span class="ch-trend">↘ -0.3</span></div>
+            <div class="ch-date">5月12日 · 多 Agent</div>
+          </div>
+          <div class="coach-history-chip flat">
+            <div class="ch-num">#35</div>
+            <div class="ch-score">7.1 <span class="ch-trend">→ 0</span></div>
+            <div class="ch-date">5月10日 · 单 Agent</div>
+          </div>
+          <div class="coach-history-chip improving">
+            <div class="ch-num">#34</div>
+            <div class="ch-score">7.1 <span class="ch-trend">↗ +0.5</span></div>
+            <div class="ch-date">5月8日 · 多 Agent</div>
+          </div>
+          <div class="coach-history-chip declining">
+            <div class="ch-num">#33</div>
+            <div class="ch-score">6.6 <span class="ch-trend">↘ -0.4</span></div>
+            <div class="ch-date">5月6日 · 多 Agent</div>
+          </div>
+          <div class="coach-history-chip flat">
+            <div class="ch-num">#32</div>
+            <div class="ch-score">7.0 <span class="ch-trend">→ 0</span></div>
+            <div class="ch-date">5月4日 · 单 Agent</div>
+          </div>
+          <div class="coach-history-chip improving">
+            <div class="ch-num">#31</div>
+            <div class="ch-score">7.0 <span class="ch-trend">↗ +0.6</span></div>
+            <div class="ch-date">5月2日 · 多 Agent</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 用户回应输入区 -->
+      <div>
+        <div class="coach-input-wrap">
+          <textarea id="coachInput" rows="1" placeholder="或者直接告诉我你想聊什么..."></textarea>
+          <button class="coach-send" id="coachSend" type="button">&#8593;</button>
+        </div>
+        <div class="coach-input-hint">按 Enter 发送 · Shift + Enter 换行</div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<script>
+(function() {
+
+  var stage = document.getElementById('coachStage');
+  var speech = document.getElementById('coachSpeech');
+  var speechBody = document.getElementById('coachSpeechBody');
+  var thinking = document.getElementById('coachThinking');
+  var userSlot = document.getElementById('userMsgSlot');
+  var ctaRow = document.getElementById('coachCtaRow');
+  var inputEl = document.getElementById('coachInput');
+  var sendBtn = document.getElementById('coachSend');
+
+  // demoToggle：切换新/老用户态，重置对话流到初始
+  document.querySelectorAll('#demoToggle button').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var state = this.getAttribute('data-state');
+      document.querySelectorAll('#demoToggle button').forEach(function(b) { b.classList.remove('active'); });
+      this.classList.add('active');
+      stage.setAttribute('data-state', state);
+      resetConversation();
+    });
+  });
+
+  // resetConversation：恢复初始 Coach 开场 + 清空用户气泡和 thinking
+  function resetConversation() {
+    userSlot.innerHTML = '';
+    thinking.hidden = true;
+    speech.style.display = 'flex';
+    var state = stage.getAttribute('data-state');
+    speechBody.innerHTML = state === 'new' ? initialSpeechNew() : initialSpeechReturning();
+    ctaRow.innerHTML = state === 'new' ? initialCtaNew() : initialCtaReturning();
+    rebindCtaActions();
+  }
+
+  // initialSpeechReturning / initialSpeechNew：Coach 开场两态文案
+  function initialSpeechReturning() {
+    return [
+      '<div class="for-returning">',
+      '<p>欢迎回来。</p>',
+      '<p>我看了你过去 7 场面试，发现一个挺要命的规律 ——<br>',
+      '你讲项目时，<span class="coach-mark warn">结果指标永远是模糊的</span>，7 场里有 <span class="coach-mark warn">5 场</span> 都被扣。</p>',
+      '<p>今天我想让你重练，<span class="coach-mark">这次你必须给我数字</span>。</p>',
+      '</div>'
+    ].join('');
+  }
+  function initialSpeechNew() {
+    return [
+      '<div class="for-new">',
+      '<p>你好。我还不认识你。</p>',
+      '<p>我是你的 AI 面试教练 —— 我会陪你练面试，记住你讲过的每个项目，<br>',
+      '然后告诉你 <span class="coach-mark">下次该怎么讲会更好</span>。</p>',
+      '<p>开始之前，先告诉我：你正在准备 <span class="coach-mark">什么岗位</span>？</p>',
+      '</div>'
+    ].join('');
+  }
+  function initialCtaReturning() {
+    return [
+      '<div class="coach-cta-row" id="returningCta">',
+      '<button class="coach-cta primary" data-action="follow">好，今天就练这个</button>',
+      '<button class="coach-cta secondary" data-action="switch">等等，我想换方向</button>',
+      '</div>'
+    ].join('');
+  }
+  function initialCtaNew() {
+    return [
+      '<div class="coach-cta-row" id="newCta">',
+      '<button class="coach-chip primary" data-action="new-role" data-role="AI Agent Engineer">AI Agent 工程师</button>',
+      '<button class="coach-chip" data-action="new-role" data-role="前端工程师">前端工程师</button>',
+      '<button class="coach-chip" data-action="new-role" data-role="后端工程师">后端工程师</button>',
+      '<button class="coach-chip" data-action="new-role" data-role="Python 工程师">Python 工程师</button>',
+      '<button class="coach-chip" data-action="new-role" data-role="全栈工程师">全栈工程师</button>',
+      '</div>'
+    ].join('');
+  }
+
+  // rebindCtaActions：每次替换 CTA 后重绑事件
+  function rebindCtaActions() {
+    ctaRow.querySelectorAll('[data-action]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        handleAction(this.getAttribute('data-action'), this);
+      });
+    });
+  }
+
+  // 用户气泡渲染：A 方案"每轮覆盖"，旧的直接清掉
+  function showUserMessage(text) {
+    userSlot.innerHTML = '';
+    var wrap = document.createElement('div');
+    wrap.className = 'coach-user-msg';
+    var inner = document.createElement('div');
+    var bubble = document.createElement('div');
+    bubble.className = 'um-bubble';
+    bubble.textContent = text;
+    var time = document.createElement('div');
+    time.className = 'um-time';
+    time.textContent = '刚刚 · 你';
+    inner.appendChild(bubble);
+    inner.appendChild(time);
+    wrap.appendChild(inner);
+    userSlot.appendChild(wrap);
+  }
+
+  // showThinking / hideThinking：切换 Coach 思考态
+  function showThinking() {
+    speech.style.display = 'none';
+    ctaRow.innerHTML = '';
+    thinking.hidden = false;
+  }
+  function hideThinking() {
+    thinking.hidden = true;
+    speech.style.display = 'flex';
+  }
+
+  // 替换 Coach 说话内容 + 新 CTA
+  function setCoachReply(htmlBody, ctaHtml) {
+    speechBody.innerHTML = htmlBody;
+    ctaRow.innerHTML = ctaHtml;
+    rebindCtaActions();
+  }
+
+  // handleAction：处理 CTA 点击
+  function handleAction(action, btn) {
+    if (action === 'follow') {
+      // 主 CTA "好，今天就练这个" → 直冲面试房间（跳过 setup，未来接面试房间页时把目标改成 #tab-interview 并自动 start）
+      showThinking();
+      setTimeout(function() {
+        hideThinking();
+        setCoachReply(
+          '<p>好。<span class="coach-mark">2 秒</span>给我，HR 准备好了。</p>' +
+          '<div class="coach-tool-card">' +
+          '<div class="ctc-kicker">即将进入</div>' +
+          '<div class="ctc-title">第 #38 场 · 多 Agent 委员会</div>' +
+          '<div class="ctc-meta"><span>本场重点 <b>量化结果 · 失败降级</b></span><span>预计 <b>30 min</b></span></div>' +
+          '</div>',
+          '<div class="coach-cta-row"><button class="coach-cta primary" data-action="go-room">进入考场</button><button class="coach-cta secondary" data-action="reset">算了，再聊聊</button></div>'
+        );
+      }, 1200);
+    }
+    else if (action === 'switch') {
+      // 次 CTA "等等，我想换方向" → 进面试设置页让用户重新选
+      showThinking();
+      setTimeout(function() {
+        hideThinking();
+        setCoachReply(
+          '<p>好。那你今天想换的是 ——</p>',
+          '<div class="coach-cta-row">' +
+          '<button class="coach-chip" data-action="switch-target" data-target="role">换个目标岗位</button>' +
+          '<button class="coach-chip" data-action="switch-target" data-target="stack">换个技术栈</button>' +
+          '<button class="coach-chip" data-action="switch-target" data-target="project">换个项目讲</button>' +
+          '<button class="coach-chip" data-action="reset">我想想，先回到刚才</button>' +
+          '</div>'
+        );
+      }, 1200);
+    }
+    else if (action === 'switch-target') {
+      // 用户选了换什么 → Coach 把跳转意图表达出来 + 给打开 setup 的入口
+      var t = btn.getAttribute('data-target');
+      var label = t === 'role' ? '目标岗位' : (t === 'stack' ? '技术栈' : '项目');
+      showThinking();
+      setTimeout(function() {
+        hideThinking();
+        setCoachReply(
+          '<p>明白。我把<span class="coach-mark">' + label + '</span>选择页打开给你。</p>',
+          '<div class="coach-cta-row"><button class="coach-cta primary" data-action="go-setup">打开</button><button class="coach-cta secondary" data-action="reset">不了</button></div>'
+        );
+      }, 1000);
+    }
+    else if (action === 'go-room') {
+      window.location.href = 'interview.html';
+    }
+    else if (action === 'go-setup') {
+      // 跳到主原型的面试设置页（同上，M2 阶段先到 #tab-interview）
+      window.location.href = 'prototype-light.html';
+    }
+    else if (action === 'new-role') {
+      // 新用户选岗位 → Coach 接话 + 进入"讲项目"环节
+      var role = btn.getAttribute('data-role');
+      showUserMessage('我在准备 ' + role + ' 的面试');
+      showThinking();
+      setTimeout(function() {
+        hideThinking();
+        setCoachReply(
+          '<p>好。<span class="coach-mark">' + role + '</span>。</p>' +
+          '<p>那再给我一分钟 —— 用一两句话告诉我，<br>' +
+          '你最想拿出来讲的<span class="coach-mark">那个项目</span>，是什么？</p>',
+          '<div class="coach-cta-row"><button class="coach-cta primary" data-action="go-setup">我直接试一场吧</button><button class="coach-cta secondary" data-action="reset">让我想想</button></div>'
+        );
+      }, 1100);
+    }
+    else if (action === 'reset') {
+      // 回到初始状态
+      resetConversation();
+    }
+  }
+
+  // 输入处理：自动高度 + Enter 发送
+  inputEl.addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 96) + 'px';
+  });
+  inputEl.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendBtn.click();
+    }
+  });
+
+  // 发送：把用户文字显示出来，Coach 进思考态，1.2s 后给一段通用回复
+  // 真实产品里这里换成 SSE 订阅 /coach/chat 的流式 token
+  sendBtn.addEventListener('click', function() {
+    var text = inputEl.value.trim();
+    if (!text) return;
+    showUserMessage(text);
+    inputEl.value = '';
+    inputEl.style.height = 'auto';
+    showThinking();
+    setTimeout(function() {
+      hideThinking();
+      setCoachReply(
+        '<p>听到了。</p>' +
+        '<p>我先把这条记下来，<span class="coach-mark">下一场会带着这个上下文</span>开始。</p>' +
+        '<p>你现在想要 ——</p>',
+        '<div class="coach-cta-row">' +
+        '<button class="coach-cta primary" data-action="go-room">直接进考场</button>' +
+        '<button class="coach-chip" data-action="go-setup">先调一下配置</button>' +
+        '<button class="coach-chip" data-action="reset">再聊聊</button>' +
+        '</div>'
+      );
+    }, 1400);
+  });
+
+  // 初始化：首屏 CTA 绑定（HTML 初始渲染的按钮没经过 rebindCtaActions）
+  rebindCtaActions();
+  document.querySelectorAll('.coach-history-chip').forEach(function(chip) {
+    chip.addEventListener('click', function() {
+      window.location.href = 'prototype-light.html';
+    });
+  });
+
+})();
+</script>
+</body>
+</html>

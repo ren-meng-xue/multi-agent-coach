@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Multi Agent Coach — 登录</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg-root: #fafaf7;
+    --bg-surface: #f3f2ee;
+    --bg-card: #ffffff;
+    --bg-elevated: #fafaf8;
+    --bg-subtle: #f5f4f0;
+    --border-light: #e8e7e2;
+    --border: #dcdbd5;
+    --border-focus: #b8b5aa;
+    --text-primary: #171717;
+    --text-secondary: #525252;
+    --text-tertiary: #8a8a8a;
+    --text-placeholder: #b0b0b0;
+    --accent-indigo: #4f46e5;
+    --accent-indigo-light: #eef2ff;
+    --accent-indigo-hover: #4338ca;
+    --accent-amber: #d97706;
+    --accent-amber-light: #fffbeb;
+    --accent-emerald: #059669;
+    --accent-emerald-light: #ecfdf5;
+    --accent-rose: #e11d48;
+    --accent-rose-light: #fff1f2;
+    --accent-violet: #7c3aed;
+    --accent-violet-light: #f5f3ff;
+    --font-display: "DM Serif Display", Georgia, "Times New Roman", serif;
+    --font-body: "DM Sans", system-ui, -apple-system, sans-serif;
+    --shadow-lg: 0 12px 40px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04);
+    --radius: 14px;
+    --radius-xl: 28px;
+    --transition: 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 15px; -webkit-font-smoothing: antialiased; }
+  body {
+    font-family: var(--font-body);
+    background: transparent;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin: 0;
+  }
+  a { color: var(--accent-indigo); text-decoration: none; cursor: pointer; }
+  a:hover { text-decoration: underline; }
+
+  .auth-split {
+    display: grid; grid-template-columns: 1.1fr 1fr; min-height: 460px;
+    border-radius: var(--radius-xl); overflow: hidden;
+    border: 1px solid var(--border-light); 
+    box-shadow: var(--shadow-lg);
+    position: relative;
+    background: #fff;
+  }
+  
+  .auth-split::before {
+    content: ''; position: absolute; top: -10%; left: -10%; width: 60%; height: 70%;
+    background: radial-gradient(circle, rgba(79,70,229,0.06) 0%, transparent 70%);
+    pointer-events: none; z-index: 0;
+  }
+  .auth-split::after {
+    content: ''; position: absolute; bottom: -10%; right: -10%; width: 60%; height: 70%;
+    background: radial-gradient(circle, rgba(5,150,105,0.06) 0%, transparent 70%);
+    pointer-events: none; z-index: 0;
+  }
+
+  .auth-hero {
+    padding: 24px 36px; display: flex; flex-direction: column; justify-content: center;
+    position: relative; z-index: 1;
+  }
+  .auth-hero .overline {
+    font-size: 10px; font-weight: 800; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--accent-indigo);
+    margin-bottom: 8px; display: flex; align-items: center; gap: 8px;
+  }
+  
+  .auth-hero h2 {
+    font-family: var(--font-display); font-size: 28px; font-weight: 400;
+    color: var(--text-primary); line-height: 1.25; margin-bottom: 8px;
+    letter-spacing: -0.01em;
+  }
+  .auth-hero h2 b { color: var(--accent-indigo); font-weight: 400; }
+  .auth-hero .tagline {
+    font-size: 13px; color: var(--text-secondary); margin-bottom: 20px;
+    line-height: 1.5; max-width: 380px;
+  }
+  
+  .auth-features { display: flex; flex-direction: column; gap: 10px; }
+  .auth-feat {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 12px; color: var(--text-secondary);
+  }
+  .auth-feat .feat-icon {
+    width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 14px;
+    background: #fff; border: 1px solid var(--border-light);
+  }
+
+  .auth-panel {
+    padding: 24px 30px; display: flex; flex-direction: column; justify-content: center;
+    position: relative; z-index: 1;
+    background: rgba(250,250,248,0.4);
+    border-left: 1px solid rgba(0,0,0,0.03);
+  }
+  .clerk-card {
+    background: rgba(255,255,255,0.8); 
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid #fff;
+    border-radius: 16px; padding: 20px 24px; 
+    box-shadow: 
+      0 10px 15px -3px rgba(0,0,0,0.05),
+      inset 0 0 0 1px rgba(255,255,255,0.4);
+    max-width: 380px; margin: 0 auto; width: 100%;
+  }
+  .clerk-header { text-align: center; margin-bottom: 12px; }
+  .clerk-header h3 {
+    font-size: 16px; font-weight: 700; color: var(--text-primary);
+    margin-bottom: 2px; font-family: var(--font-body);
+  }
+  .clerk-header p { font-size: 12px; color: var(--text-tertiary); }
+  
+  .clerk-social { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+  .clerk-social-btn {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 6px; border: 1px solid var(--border); border-radius: 8px;
+    background: #fff; color: var(--text-secondary); font-size: 12px;
+    font-weight: 600; cursor: pointer; transition: all var(--transition);
+  }
+  .clerk-social-btn:hover { border-color: var(--border-focus); background: var(--bg-subtle); }
+  .clerk-social-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+  .clerk-divider {
+    display: flex; align-items: center; gap: 12px; margin: 10px 0;
+    color: var(--text-placeholder); font-size: 9px; text-transform: uppercase;
+    letter-spacing: 0.1em; font-weight: 700;
+  }
+
+  .field { margin-bottom: 14px; }
+  .field label {
+    display: block; font-size: 11px; font-weight: 700; color: var(--text-secondary);
+    margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.02em;
+  }
+  .field input {
+    width: 100%; padding: 10px 12px;
+    background: #fff; border: 1px solid var(--border);
+    border-radius: 8px; font-size: 13px;
+  }
+
+  .btn-clerk-primary {
+    width: 100%; padding: 12px; border-radius: 8px; border: none;
+    background: #171717; color: #fff;
+    font-weight: 700; font-size: 14px; cursor: pointer;
+  }
+
+  .clerk-footer { text-align: center; margin-top: 20px; font-size: 13px; color: var(--text-tertiary); }
+
+  @media (max-width: 960px) {
+    .auth-split { grid-template-columns: 1fr; }
+    .auth-hero { padding: 40px 28px; }
+    .auth-panel { padding: 40px 28px; }
+  }
+</style>
+</head>
+<body>
+  <div class="auth-split">
+    <div class="auth-hero">
+      <div class="overline">AI-Powered Interview Coach</div>
+      <h2>你的 <b>AI 面试陪练</b><br>数字分身</h2>
+      <p class="tagline">不只是模拟面试，而是一个会成长、会反思、会记住你的每一次进步的职业伙伴。</p>
+      <div class="auth-features">
+        <div class="auth-feat">
+          <div class="feat-icon i1">&#9670;</div>
+          <div><strong>8 角色多 Agent 协作</strong><span>HR、技术、BOSS、Coach 等全流程仿真，覆盖行为面到终面。</span></div>
+        </div>
+        <div class="auth-feat">
+          <div class="feat-icon i2">&#9670;</div>
+          <div><strong>跨会话分级长期记忆</strong><span>跨会话记住 STAR 故事、能力曲线、答题盲点，越练越懂你。</span></div>
+        </div>
+        <div class="auth-feat">
+          <div class="feat-icon i3">&#9670;</div>
+          <div><strong>Reflexion 自反思引擎</strong><span>Agent 答题后自我反思打分，并针对性反向出题攻克弱项。</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="auth-panel">
+      <div id="loginBlock" class="clerk-card">
+        <div class="clerk-header">
+          <h3>Sign in</h3>
+          <p>to continue to Multi Agent Coach</p>
+        </div>
+        <div class="clerk-social">
+          <button class="clerk-social-btn">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+            GitHub
+          </button>
+          <button class="clerk-social-btn">
+            <svg viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.66l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+            Google
+          </button>
+        </div>
+        <div class="clerk-divider">or</div>
+        <div class="field">
+          <label>Email address</label>
+          <input type="email" placeholder="email@example.com" />
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input type="password" placeholder="••••••••" />
+        </div>
+        <button class="btn-clerk-primary" id="goLogin">Continue</button>
+        <div class="clerk-footer">
+          No account? <a id="toRegister">Sign up</a>
+        </div>
+      </div>
+
+      <div id="registerBlock" class="clerk-card" style="display:none">
+        <div class="clerk-header">
+          <h3>Create your account</h3>
+          <p>to continue to Multi Agent Coach</p>
+        </div>
+        <div class="clerk-social">
+          <button class="clerk-social-btn">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+            GitHub
+          </button>
+          <button class="clerk-social-btn">
+            <svg viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.66l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+            Google
+          </button>
+        </div>
+        <div class="clerk-divider">or</div>
+        <div class="field">
+          <label>Name</label>
+          <input type="text" placeholder="Your name" />
+        </div>
+        <div class="field">
+          <label>Email address</label>
+          <input type="email" placeholder="email@example.com" />
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input type="password" placeholder="at least 8 characters" />
+        </div>
+        <button class="btn-clerk-primary" id="goRegister">Continue</button>
+        <div class="clerk-footer">
+          Have an account? <a id="toLogin">Sign in</a>
+        </div>
+      </div>
+    </div>
+  </div>
+<script>
+(function() {
+  // sendHeight: notify parent to resize the auth iframe.
+  function sendHeight() {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: 'auth:resize', height: document.documentElement.scrollHeight }, '*');
+    }
+  }
+
+  // notifyLogin: notify parent that auth completed.
+  function notifyLogin() {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: 'auth:login' }, '*');
+    }
+  }
+
+  var toRegister = document.getElementById('toRegister');
+  var toLogin = document.getElementById('toLogin');
+  var loginBlock = document.getElementById('loginBlock');
+  var registerBlock = document.getElementById('registerBlock');
+  if (toRegister && loginBlock && registerBlock) {
+    toRegister.addEventListener('click', function() {
+      loginBlock.style.display = 'none';
+      registerBlock.style.display = 'block';
+      sendHeight();
+    });
+  }
+  if (toLogin && loginBlock && registerBlock) {
+    toLogin.addEventListener('click', function() {
+      loginBlock.style.display = 'block';
+      registerBlock.style.display = 'none';
+      sendHeight();
+    });
+  }
+
+  var goLogin = document.getElementById('goLogin');
+  var goRegister = document.getElementById('goRegister');
+  if (goLogin) goLogin.addEventListener('click', notifyLogin);
+  if (goRegister) goRegister.addEventListener('click', notifyLogin);
+
+  window.addEventListener('load', sendHeight);
+  window.addEventListener('resize', sendHeight);
+})();
+</script>
+</body>
+</html>

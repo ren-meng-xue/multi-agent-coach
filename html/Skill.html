@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>gstack & superpowers 技能参考</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "PingFang SC", sans-serif;
+    font-size: 14px;
+    color: #222;
+    background: #fff;
+  }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 32px 24px 80px; }
+
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  .sub { color: #888; margin: 0 0 32px; font-size: 14px; }
+
+  h2 { font-size: 16px; margin: 36px 0 10px; padding-bottom: 6px; border-bottom: 2px solid #6672ef; color: #333; }
+
+  table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #eee; vertical-align: middle; font-size: 14px; }
+  th { background: #6672ef; font-weight: 600; color: #fff; font-size: 13px; white-space: nowrap; }
+  tr:hover td { background: #f8f8ff; }
+  tbody tr { cursor: pointer; }
+
+  td:first-child { font-weight: 600; white-space: nowrap; min-width: 200px; }
+  td:nth-child(3) { white-space: nowrap; }
+  td:nth-child(4) { color: #666; font-size: 13px; }
+
+  .tag { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 3px; }
+  .tag.high { background: #fce4e4; color: #b91c1c; }
+  .tag.mid  { background: #fef3c7; color: #92400e; }
+  .tag.low  { background: #e8f0e8; color: #427142; }
+
+  .toc { margin-bottom: 24px; }
+  .toc a { color: #555; margin-right: 16px; font-size: 13px; text-decoration: none; }
+  .toc a:hover { color: #6672ef; }
+
+  .switch { margin-bottom: 24px; display: flex; gap: 8px; }
+  .switch button {
+    padding: 6px 16px; border: 1px solid #ddd; background: #fff;
+    border-radius: 4px; cursor: pointer; font-size: 14px;
+  }
+  .switch button.on { background: #6672ef; color: #fff; border-color: #6672ef; }
+
+  /* copied flash */
+  tr.copied td { background: #e8eeff !important; transition: background 0.15s; }
+
+  /* toast */
+  .toast {
+    position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
+    background: #333; color: #fff; padding: 8px 20px; border-radius: 6px;
+    font-size: 13px; opacity: 0; pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    transform: translateX(-50%) translateY(8px);
+    z-index: 999;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* 回到顶部 */
+  .back-top {
+    position: fixed; bottom: 32px; right: 32px;
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    background: #6672ef; color: #fff; border: none;
+    font-size: 18px; cursor: pointer;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.25s;
+    box-shadow: 0 2px 12px rgba(102,114,239,0.3);
+    z-index: 998;
+  }
+  .back-top.visible { opacity: 1; pointer-events: auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>技能参考</h1>
+  <p class="sub">gstack 48 个 + superpowers 14 个。调用：<code>/技能名</code>，点击行复制</p>
+
+  <div class="switch">
+    <button id="btng" class="on" onclick="showGstack()">gstack</button>
+    <button id="btns" onclick="showSuper()">superpowers</button>
+  </div>
+
+  <div class="toc" id="toc-gstack">
+    <a href="#browser">浏览器 & UI</a>
+    <a href="#review">代码审查 & 计划</a>
+    <a href="#ship">部署 & 发布</a>
+    <a href="#workflow">工作流辅助</a>
+    <a href="#tools">工具</a>
+    <a href="#setup">配置安装</a>
+    <a href="#browser-infra">浏览器基础设施</a>
+    <a href="#learn">学习与洞察</a>
+  </div>
+  <div class="toc" id="toc-super" style="display:none">
+    <a href="#sp-dev">开发流程</a>
+    <a href="#sp-review">代码审查</a>
+    <a href="#sp-exec">任务执行</a>
+    <a href="#sp-meta">元技能</a>
+  </div>
+
+  <!-- ========== GSTACK ========== -->
+  <div id="gstack-section">
+
+  <h2 id="browser">浏览器 & UI</h2>
+  <table>
+    <thead><tr><th>Skill</th><th>用途</th><th>频度</th><th>触发方式</th></tr></thead>
+    <tbody>
+      <tr><td>gstack-browse</td><td>打开网页、截图、交互操作</td><td><span class="tag high">高频</span></td><td>"打开这个页面""截个图看看"</td></tr>
+      <tr><td>gstack-qa</td><td>自动化 UI 测试并修复 Bug</td><td><span class="tag high">高频</span></td><td>"QA 一下""测测这个功能"</td></tr>
+      <tr><td>gstack-investigate</td><td>页面问题调试排查</td><td><span class="tag high">高频</span></td><td>"帮我 debug""为什么坏了"</td></tr>
+      <tr><td>gstack-qa-only</td><td>只跑测试出报告，不修 Bug</td><td><span class="tag mid">常用</span></td><td>"只报 bug 别修"</td></tr>
+      <tr><td>gstack-scrape</td><td>抓取页面数据</td><td><span class="tag mid">常用</span></td><td>"抓取这个页面的数据"</td></tr>
+      <tr><td>gstack-design-review</td><td>对现有页面做视觉 QA——间距、层级、一致性问题</td><td><span class="tag mid">常用</span></td><td>"审查设计""看看视觉有没有问题"</td></tr>
+      <tr><td>gstack-design-html</td><td>将设计稿转为 HTML 原型</td><td><span class="tag mid">常用</span></td><td>"把设计变成页面"</td></tr>
+      <tr><td>gstack-design-consultation</td><td>从零建立设计系统（色彩/字体/间距）</td><td><span class="tag mid">常用</span></td><td>"设计系统""品牌规范"</td></tr>
+      <tr><td>gstack-benchmark</td><td>页面性能基准测试</td><td><span class="tag mid">常用</span></td><td>"测一下页面速度"</td></tr>
+      <tr><td>gstack-design-shotgun</td><td>生成多个设计方案横向对比</td><td><span class="tag low">低频</span></td><td>"多出几版看看""有哪些方案"</td></tr>
+      <tr><td>gstack-devex-review</td><td>实测开发者上手体验，出 DX 评分</td><td><span class="tag low">低频</span></td><td>"测一下开发者体验"</td></tr>
+      <tr><td>gstack-hackernews-frontpage</td><td>抓取 HN 首页标题/分数/评论数</td><td><span class="tag low">低频</span></td><td>"HN 首页有什么"</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="review">代码审查 & 计划</h2>
+  <table>
+    <thead><tr><th>Skill</th><th>用途</th><th>频度</th><th>触发方式</th></tr></thead>
+    <tbody>
+      <tr><td>gstack-review</td><td>代码审查（SQL 安全、LLM 信任边界、副作用）</td><td><span class="tag high">高频</span></td><td>"review 一下""帮我看看代码"</td></tr>
+      <tr><td>gstack-plan-eng-review</td><td>技术方案 review（架构/数据流/边界/性能）</td><td><span class="tag high">高频</span></td><td>"review 架构""技术评审"</td></tr>
+      <tr><td>gstack-office-hours</td><td>YC 办公时间——六个追问 + 设计脑暴</td><td><span class="tag high">高频</span></td><td>"我有个想法""这个值不值得做"</td></tr>
+      <tr><td>gstack-plan-design-review</td><td>设计方案 review（UI/UX 各维度 0-10 评分）</td><td><span class="tag mid">常用</span></td><td>"设计评审""UX 方案看看"</td></tr>
+      <tr><td>gstack-plan-ceo-review</td><td>产品/业务方案 review（重新思考问题）</td><td><span class="tag mid">常用</span></td><td>"想想能不能更大""策略 review"</td></tr>
+      <tr><td>gstack-autoplan</td><td>自动生成实施计划（跑完四轮评审）</td><td><span class="tag mid">常用</span></td><td>"自动评审这个方案"</td></tr>
+      <tr><td>gstack-cso</td><td>安全审计（密钥/依赖链/OWASP/CI/CD）</td><td><span class="tag mid">常用</span></td><td>"安全检查""漏洞扫描"</td></tr>
+      <tr><td>gstack-plan-devex-review</td><td>开发体验方案 review</td><td><span class="tag low">低频</span></td><td>"DX 方案评审"</td></tr>
+      <tr><td>gstack-plan-tune</td><td>调整计划 / 提问灵敏度</td><td><span class="tag low">低频</span></td><td>"别老问我""太多问题了"</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="ship">部署 & 发布</h2>
+  <table>
+    <thead><tr><th>Skill</th><th>用途</th><th>频度</th><th>触发方式</th></tr></thead>
+    <tbody>
+      <tr><td>gstack-ship</td><td>完整上线流程（测试/bump 版本/CHANGELOG/PR）</td><td><span class="tag high">高频</span></td><td>"发布""推到主干"</td></tr>
+      <tr><td>gstack-land-and-deploy</td><td>合并 + 等 CI + 生产验证</td><td><span class="tag mid">常用</span></td><td>"merge 并部署""上线"</td></tr>
+      <tr><td>gstack-canary</td><td>金丝雀发布 / 部署后监控</td><td><span class="tag mid">常用</span></td><td>"部署后盯着""监控一下"</td></tr>
+      <tr><td>gstack-document-release</td><td>发布后更新所有文档</td><td><span class="tag mid">常用</span></td><td>"更新文档""同步 docs"</td></tr>
+      <tr><td>gstack-document-generate</td><td>按 Diataxis 框架生成文档</td><td><span class="tag mid">常用</span></td><td>"写文档""写个教程"</td></tr>
+      <tr><td>gstack-landing-report</td><td>发布队列面板（当前 PR 占位/排队）</td><td><span class="tag low">低频</span></td><td>"看看发布队列"</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="workflow">工作流辅助</h2>
+  <table>
+    <thead><tr><th>Skill</th><th>用途</th><th>频度</th><th>触发方式</th></tr></thead>
+    <tbody>
+      <tr><td>gstack-context-save</td><td>保存当前工作上下文</td><td><span class="tag mid">常用</span></td><td>"保存进度"</td></tr>
+      <tr><td>gstack-context-restore</td><td>恢复上次保存的上下文</td><td><span class="tag mid">常用</span></td><td>"继续上次的""恢复上下文"</td></tr>
+      <tr><td>gstack-freeze</td><td>限制编辑范围到指定目录</td><td><span class="tag mid">常用</span></td><td>"只允许改这个目录"</td></tr>
+      <tr><td>gstack-careful</td><td>危险命令前强制确认</td><td><span class="tag mid">常用</span></td><td>"小心点""安全模式"</td></tr>
+      <tr><td>gstack-unfreeze</td><td>解除编辑限制</td><td><span class="tag low">低频</span></td><td>"解除限制"</td></tr>
+      <tr><td>gstack-guard</td><td>全安全模式（careful + freeze 叠加）</td><td><span class="tag low">低频</span></td><td>"最高安全""锁死"</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="tools">工具</h2>
+  <table>
+    <thead><tr><th>Skill</th><th>用途</th><th>频度</th><th>触发方式</th></tr></thead>
+    <tbody>
+      <tr><td>gstack-codex</td><td>OpenAI Codex 第二意见（审查/挑战/咨询）</td><td><span class="tag mid">常用</span></td><td>"codex review""第二意见"</td></tr>
+      <tr><td>gstack-health</td><td>项目健康度检查（类型/lint/测试综合评分）</td><td><span class="tag mid">常用</span></td><td>"代码质量怎么样"</td></tr>
+      <tr><td>gstack-benchmark-models</td><td>跨模型基准测试（Claude vs GPT vs Gemini）</td><td><span class="tag low">低频</span></td><td>"对比一下模型"</td></tr>
+      <tr><td>gstack-make-pdf</td><td>Markdown 转 PDF</td><td><span class="tag low">低频</span></td><td>"生成 PDF"</td></tr>
+      <tr><td>gstack-gstack-upgrade</td><td>升级 gstack 自身</td><td><span class="tag low">低频</span></td><td>"升级 gstack"</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="setup">配置安装</h2>
+  <table>
+    <thead><tr><th>Skill</th><th>用途</th><th>频度</th><th>触发方式</th></tr></thead>
+    <tbody>
+      <tr><td>gstack-setup-deploy</td><td>部署环境初始化</td><td><span class="tag low">低频</span></td><td>"配置部署设置"</td></tr>
+      <tr><td>gstack-setup-browser-cookies</td><td>导入真实浏览器 Cookie 到 headless 会话</td><td><span class="tag low">低频</span></td><td>"登录这个站点"</td></tr>
+      <tr><td>gstack-setup-gbrain</td><td>安装配置 gbrain 本地知识库</td><td><span class="tag low">低频</span></td><td>"安装 gbrain"</td></tr>
+      <tr><td>gstack-sync-gbrain</td><td>同步代码库到 gbrain 索引</td><td><span class="tag low">低频</span></td><td>"同步 gbrain""重建索引"</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="browser-infra">浏览器基础设施</h2>
+  <table>
+    <thead><tr><th>Skill</th><th>用途</th><th>频度</th><th>触发方式</th></tr></thead>
+    <tbody>
+      <tr><td>gstack-connect-chrome</td><td>启动 AI 控制的 Chromium，侧边栏实时活动流</td><td><span class="tag mid">常用</span></td><td>"打开浏览器""启动 Chrome"</td></tr>
+      <tr><td>gstack-open-gstack-browser</td><td>启动 GStack Browser</td><td><span class="tag mid">常用</span></td><td>"打开 gstack 浏览器"</td></tr>
+      <tr><td>gstack-pair-agent</td><td>配对远程 Agent 接入浏览器</td><td><span class="tag low">低频</span></td><td>"配对 agent""共享浏览器"</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="learn">学习与洞察</h2>
+  <table>
+    <thead><tr><th>Skill</th><th>用途</th><th>频度</th><th>触发方式</th></tr></thead>
+    <tbody>
+      <tr><td>gstack-learn</td><td>管理项目学习记录（搜索/清理/导出）</td><td><span class="tag mid">常用</span></td><td>"我们之前学到什么"</td></tr>
+      <tr><td>gstack-retro</td><td>周回顾（提交历史/工作模式/趋势）</td><td><span class="tag mid">常用</span></td><td>"这周做了什么""周回顾"</td></tr>
+      <tr><td>gstack-skillify</td><td>把工作流固化成新 skill</td><td><span class="tag low">低频</span></td><td>"固化这个流程""保存为技能"</td></tr>
+    </tbody>
+  </table>
+
+  </div><!-- /gstack-section -->
+
+  <!-- ========== SUPERPOWERS ========== -->
+  <div id="super-section">
+
+  <h2 id="sp-dev">开发流程</h2>
+  <table>
+    <thead><tr><th>Skill</th><th>用途</th><th>频度</th><th>触发方式</th></tr></thead>
+    <tbody>
+      <tr><td>superpowers:brainstorming</td><td>创意发散、功能设计前用</td><td><span class="tag high">高频</span></td><td>任何创造性工作之前</td></tr>
+      <tr><td>superpowers:writing-plans</td><td>制定实施计划（多步任务前用）</td><td><span class="tag high">高频</span></td><td>"写个方案"</td></tr>
+      <tr><td>superpowers:systematic-debugging</td><td>系统性排查 bug</td><td><span class="tag high">高频</span></td><td>遇到 bug 先走这个流程</td></tr>
+      <tr><td>superpowers:executing-plans</td><td>执行已有计划</td><td><span class="tag mid">常用</span></td><td>"执行这个计划"</td></tr>
+      <tr><td>superpowers:test-driven-development</td><td>TDD 流程（先写测试再写代码）</td><td><span class="tag mid">常用</span></td><td>写功能 / 修 bug 前</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="sp-review">代码审查</h2>
+  <table>
+    <thead><tr><th>Skill</th><th>用途</th><th>频度</th><th>触发方式</th></tr></thead>
+    <tbody>
+      <tr><td>superpowers:requesting-code-review</td><td>发起代码审查</td><td><span class="tag high">高频</span></td><td>完成任务 / 大功能 / 合并前</td></tr>
+      <tr><td>superpowers:receiving-code-review</td><td>接收并处理审查意见</td><td><span class="tag mid">常用</span></td><td>收到 review 反馈后</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="sp-exec">任务执行</h2>
+  <table>
+    <thead><tr><th>Skill</th><th>用途</th><th>频度</th><th>触发方式</th></tr></thead>
+    <tbody>
+      <tr><td>superpowers:verification-before-completion</td><td>声明完成前的验证检查</td><td><span class="tag high">高频</span></td><td>"我做完了""没问题了"</td></tr>
+      <tr><td>superpowers:dispatching-parallel-agents</td><td>拆分并行子任务给多个 Agent</td><td><span class="tag mid">常用</span></td><td>多个独立任务可同时做时</td></tr>
+      <tr><td>superpowers:subagent-driven-development</td><td>用子 Agent 并行执行计划</td><td><span class="tag mid">常用</span></td><td>"并行执行"</td></tr>
+      <tr><td>superpowers:finishing-a-development-branch</td><td>分支开发完成后的收尾流程</td><td><span class="tag mid">常用</span></td><td>开发完成、测试通过后</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="sp-meta">元技能</h2>
+  <table>
+    <thead><tr><th>Skill</th><th>用途</th><th>频度</th><th>触发方式</th></tr></thead>
+    <tbody>
+      <tr><td>superpowers:using-superpowers</td><td>介绍如何使用 skill 系统（每次对话开始时触发）</td><td><span class="tag high">高频</span></td><td>每次对话自动加载</td></tr>
+      <tr><td>superpowers:using-git-worktrees</td><td>Git worktree 隔离开发</td><td><span class="tag mid">常用</span></td><td>"开个 worktree""隔离开发"</td></tr>
+      <tr><td>superpowers:writing-skills</td><td>创建/编辑自定义 skill</td><td><span class="tag low">低频</span></td><td>"写个 skill""创建技能"</td></tr>
+    </tbody>
+  </table>
+
+  </div><!-- /super-section -->
+
+  <!-- toast -->
+  <div class="toast" id="toast"></div>
+
+</div>
+
+<script>
+// 点击行复制
+document.querySelectorAll('tbody tr').forEach(tr => {
+  tr.addEventListener('click', function() {
+    const cells = this.querySelectorAll('td');
+    const name = cells[0].textContent.trim();
+    const desc = cells[1].textContent.trim();
+    const text = name + ' — ' + desc;
+    navigator.clipboard.writeText(text).then(() => {
+      this.classList.add('copied');
+      setTimeout(() => this.classList.remove('copied'), 600);
+      showToast('已复制: ' + name);
+    });
+  });
+});
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.classList.remove('show'), 1500);
+}
+
+// 默认显示 gstack
+document.getElementById('super-section').style.display = 'none';
+
+function showGstack() {
+  document.getElementById('gstack-section').style.display = 'block';
+  document.getElementById('super-section').style.display = 'none';
+  document.getElementById('toc-gstack').style.display = '';
+  document.getElementById('toc-super').style.display = 'none';
+  document.querySelectorAll('.switch button').forEach(b => b.classList.remove('on'));
+  document.getElementById('btng').classList.add('on');
+  window.scrollTo({ top: 0, behavior: 'instant' });
+}
+function showSuper() {
+  document.getElementById('gstack-section').style.display = 'none';
+  document.getElementById('super-section').style.display = 'block';
+  document.getElementById('toc-gstack').style.display = 'none';
+  document.getElementById('toc-super').style.display = '';
+  document.querySelectorAll('.switch button').forEach(b => b.classList.remove('on'));
+  document.getElementById('btns').classList.add('on');
+  window.scrollTo({ top: 0, behavior: 'instant' });
+}
+
+// 回到顶部按钮 — tab 栏滚出视野时出现
+const btn = document.createElement('button');
+btn.className = 'back-top';
+btn.textContent = '↑';
+btn.title = '回到顶部';
+btn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+document.body.appendChild(btn);
+
+const tabBar = document.querySelector('.switch');
+const observer = new IntersectionObserver(([e]) => {
+  btn.classList.toggle('visible', !e.isIntersecting);
+}, { threshold: 0 });
+observer.observe(tabBar);
+</script>
+
+</body>
+</html>

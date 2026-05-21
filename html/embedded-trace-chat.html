@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>嵌入式追踪对话 · Embedded Trace Chat</title>
+<style>
+  :root {
+    --font-mono: "JetBrains Mono", "Fira Code", monospace;
+    --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    
+    --bg: #ffffff;
+    --fg: #0f172a;
+    --muted: #64748b;
+    --border: #e2e8f0;
+    --accent-gradient: linear-gradient(135deg, #4f46e5, #7c3aed);
+    
+    /* 柔和的内嵌终端颜色 */
+    --term-bg: #f8fafc;
+    --term-fg: #334155;
+    --term-line: #e2e8f0;
+    
+    --c-master: #4f46e5;
+    --c-hr: #9333ea;
+    --c-tech: #16a34a;
+    --c-mcp: #d97706;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f172a;
+      --fg: #f1f5f9;
+      --muted: #94a3b8;
+      --border: #1e293b;
+      --term-bg: #1e293b;
+      --term-fg: #f1f5f9;
+      --term-line: #334155;
+    }
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--bg);
+    color: var(--fg);
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .app-container {
+    width: 100%;
+    max-width: 900px;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    background: var(--bg);
+  }
+
+  /* --- 头部 --- */
+  header {
+    height: 64px;
+    padding: 0 32px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg);
+    z-index: 10;
+  }
+
+  .brand { font-weight: 800; font-size: 15px; letter-spacing: -0.02em; }
+  .status { font-size: 11px; font-weight: 700; color: #10b981; display: flex; align-items: center; gap: 6px; }
+  .status::before { content: ""; width: 8px; height: 8px; background: #10b981; border-radius: 50%; animation: pulse 2s infinite; }
+
+  /* --- 聊天流 --- */
+  .chat-flow {
+    flex: 1;
+    overflow-y: auto;
+    padding: 40px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 48px;
+  }
+
+  .msg-row { display: flex; gap: 16px; max-width: 95%; }
+  .msg-row.user { align-self: flex-end; flex-direction: row-reverse; width: 100%; }
+  .msg-row.assistant { align-self: flex-start; width: 100%; }
+
+  .avatar {
+    display: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    background: var(--accent-gradient);
+    color: white;
+    font-weight: 800;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  .assistant .avatar { background: var(--border); color: var(--muted); }
+
+  .msg-body { display: flex; flex-direction: column; gap: 12px; flex: 1; }
+  .user .msg-body { align-items: flex-end; }
+
+  .bubble {
+    padding: 14px 20px;
+    border-radius: 20px;
+    font-size: 15px;
+    line-height: 1.6;
+    max-width: 80%;
+  }
+
+  .user .bubble {
+    background: var(--accent-gradient);
+    color: white;
+    border-top-right-radius: 4px;
+    box-shadow: 0 4px 15px rgba(79, 70, 229, 0.2);
+  }
+
+  .assistant .bubble {
+    background: transparent;
+    color: var(--fg);
+    padding: 0;
+    max-width: 100%;
+  }
+
+  /* --- 内嵌追踪终端 (更轻量，更柔和) --- */
+  .trace-box {
+    margin-top: 16px;
+    background: var(--term-bg);
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--term-line);
+    display: flex;
+    flex-direction: column;
+    max-width: 100%;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .trace-header {
+    padding: 8px 16px;
+    background: rgba(0,0,0,0.02);
+    border-bottom: 1px solid var(--term-line);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+  }
+
+  .trace-title { font-family: var(--font-mono); font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+  .trace-content {
+    padding: 16px 20px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.8;
+    color: var(--term-fg);
+  }
+
+  .t-node { margin-bottom: 4px; opacity: 0; transform: translateY(4px); transition: all 0.3s; }
+  .t-node.visible { opacity: 1; transform: translateY(0); }
+
+  .t-children { margin-left: 8px; border-left: 1px solid var(--term-line); padding-left: 18px; margin-top: 4px; }
+
+  .role-master { color: var(--c-master); }
+  .role-hr { color: var(--c-hr); }
+  .role-tech { color: var(--c-tech); }
+  .role-mcp { color: var(--c-mcp); }
+
+  /* --- 输入区域 --- */
+  .input-pane { padding: 24px 32px 40px; }
+  .input-dock {
+    background: transparent;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+  }
+
+  .input-box {
+    flex: 1;
+    padding: 12px 18px;
+    background: var(--term-bg);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    color: var(--fg);
+    font-size: 14px;
+    font-family: var(--font-sans);
+    outline: none;
+    transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .input-box::placeholder {
+    color: var(--muted);
+    opacity: 0.65;
+  }
+
+  .input-box:focus {
+    border-color: #8b5cf6;
+    background: var(--bg);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.12);
+  }
+
+  .send-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--term-bg);
+    color: var(--muted);
+    border: 1px solid var(--border);
+    display: grid;
+    place-items: center;
+    cursor: not-allowed;
+    opacity: 0.5;
+    transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0;
+  }
+  
+  .send-btn.active {
+    background: #8b5cf6;
+    color: white;
+    border-color: #8b5cf6;
+    opacity: 1;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25);
+  }
+  
+  .send-btn.active:hover {
+    background: #7c3aed;
+    border-color: #7c3aed;
+    transform: scale(1.05);
+  }
+  .send-btn.active:active {
+    transform: scale(0.95);
+  }
+
+  @keyframes pulse { 0% { transform: scale(0.95); opacity: 0.8; } 50% { transform: scale(1.1); opacity: 1; } 100% { transform: scale(0.95); opacity: 0.8; } }
+</style>
+</head>
+<body>
+
+<div class="app-container">
+  <header>
+    <div class="brand">MULTI-AGENT COACH</div>
+    <div class="status">SYSTEM ONLINE</div>
+  </header>
+
+  <div class="chat-flow" id="chatFlow">
+    <div class="msg-row assistant">
+      <div class="avatar">MC</div>
+      <div class="msg-body">
+        <div class="bubble" id="welcomeBubble">你好。我是你的主控面试教练。我将协调多位专家 Agent 来协助你的面试练习。请问你想开始哪方面的模拟？</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="input-pane">
+    <div class="input-dock">
+      <input type="text" class="input-box" id="userInput" placeholder="输入指令，观察流式 Trace 与回答..." onkeydown="if(event.key==='Enter') sendMessage()" oninput="handleInput()">
+      <button class="send-btn" id="sendBtn" onclick="sendMessage()" disabled>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="19" x2="12" y2="5"></line>
+          <polyline points="5 12 12 5 19 12"></polyline>
+        </svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const chatFlow = document.getElementById('chatFlow');
+  const userInput = document.getElementById('userInput');
+  const sendBtn = document.getElementById('sendBtn');
+
+  function handleInput() {
+    const text = userInput.value.trim();
+    if (text.length > 0) {
+      sendBtn.classList.add('active');
+      sendBtn.removeAttribute('disabled');
+    } else {
+      sendBtn.classList.remove('active');
+      sendBtn.setAttribute('disabled', 'true');
+    }
+  }
+
+  async function sendMessage() {
+    const text = userInput.value.trim();
+    if (!text) return;
+
+    appendUserMsg(text);
+    userInput.value = '';
+    handleInput();
+
+    const { container, traceBody } = appendAssistantContainer();
+    chatFlow.scrollTop = chatFlow.scrollHeight;
+
+    await runIntegratedTrace(text, traceBody);
+
+    await streamResponse(container, "专家组已经完成了意图解析。我们将首先调用 RAG 考点库来匹配你提到的“分布式系统”相关真题。准备好了吗？我们将从你最熟悉的缓存一致性方案开始切入。");
+    chatFlow.scrollTop = chatFlow.scrollHeight;
+  }
+
+  function appendUserMsg(text) {
+    const row = document.createElement('div');
+    row.className = 'msg-row user';
+    row.innerHTML = `<div class="avatar">U</div><div class="msg-body"><div class="bubble">${text}</div></div>`;
+    chatFlow.appendChild(row);
+  }
+
+  function appendAssistantContainer() {
+    const row = document.createElement('div');
+    row.className = 'msg-row assistant';
+    row.innerHTML = `
+      <div class="avatar">MC</div>
+      <div class="msg-body">
+        <div class="answer-text" style="font-size:15px; min-height: 24px;">
+          <span style="color:var(--muted); font-size:13px;">[ 正在协调 Agent 专家组... ]</span>
+        </div>
+        <div class="trace-box">
+          <div class="trace-header" onclick="toggleTrace(this)">
+            <span class="trace-title">Orchestration Trace</span>
+            <span style="font-size:10px; color:var(--muted)">点击折叠细节</span>
+          </div>
+          <div class="trace-content"></div>
+        </div>
+      </div>
+    `;
+    chatFlow.appendChild(row);
+    return { container: row.querySelector('.msg-body'), traceBody: row.querySelector('.trace-content') };
+  }
+
+  function toggleTrace(header) {
+    const content = header.nextElementSibling;
+    content.style.display = content.style.display === 'none' ? 'block' : 'none';
+  }
+
+  async function streamResponse(container, text) {
+    const textEl = container.querySelector('.answer-text');
+    textEl.innerHTML = ''; 
+    textEl.style.color = "var(--fg)";
+    
+    const traceBox = container.querySelector('.trace-box');
+    traceBox.style.opacity = "0.7";
+    traceBox.style.transform = "scale(0.98)";
+
+    for (let i = 0; i < text.length; i++) {
+      textEl.innerHTML += text[i];
+      chatFlow.scrollTop = chatFlow.scrollHeight;
+      await sleep(30); 
+    }
+  }
+
+  async function addTraceNode(container, data) {
+    const node = document.createElement('div');
+    node.className = 't-node';
+    node.innerHTML = `
+      <div>
+        <span class="role-${data.role}" style="font-weight:800">[${data.label}]</span>
+        <span style="margin-left:4px;">${data.symbol} ${data.text}</span>
+      </div>
+      <div class="t-children"></div>
+    `;
+    container.appendChild(node);
+    setTimeout(() => node.classList.add('visible'), 50);
+    return node;
+  }
+
+  async function runIntegratedTrace(query, rootContainer) {
+    const m = await addTraceNode(rootContainer, { role: 'master', label: 'MASTER', symbol: '◈', text: '正在解析任务拓扑...' });
+    await sleep(600);
+    const mChildren = m.querySelector('.t-children');
+    await addTraceNode(mChildren, { role: 'hr', label: 'HR', symbol: '↳', text: '检索候选人背景画像...' });
+    await sleep(500);
+    const tech = await addTraceNode(mChildren, { role: 'tech', label: 'TECH', symbol: '↳', text: '构建技术深挖沙盘...' });
+    await sleep(400);
+    const tChildren = tech.querySelector('.t-children');
+    await addTraceNode(tChildren, { role: 'tech', label: 'TOOL', symbol: '⚙', text: 'RAG 检索本地考点 (k=5)' });
+    await sleep(700);
+    await addTraceNode(tChildren, { role: 'mcp', label: 'MCP', symbol: '⌬', text: '连接 GitHub 源码分析协议' });
+    await sleep(800);
+    await addTraceNode(rootContainer, { role: 'master', label: 'MASTER', symbol: '◈', text: '专家意见汇总完成。' });
+  }
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  // 页面加载时让欢迎词具有流式输出动画效果
+  window.addEventListener('DOMContentLoaded', async () => {
+    // 若处于 iframe 嵌入状态，隐藏 header 并消除 app 容器的左右边框，与父原型融为一体
+    if (window.self !== window.top) {
+      const headerEl = document.querySelector('header');
+      if (headerEl) headerEl.style.display = 'none';
+      const containerEl = document.querySelector('.app-container');
+      if (containerEl) containerEl.style.border = 'none';
+    }
+
+    const welcomeBubble = document.getElementById('welcomeBubble');
+    if (welcomeBubble) {
+      const text = welcomeBubble.textContent.trim();
+      welcomeBubble.innerHTML = '';
+      for (let i = 0; i < text.length; i++) {
+        welcomeBubble.innerHTML += text[i];
+        await sleep(30);
+      }
+    }
+  });
+</script>
+
+</body>
+</html>
