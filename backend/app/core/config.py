@@ -1,5 +1,11 @@
+from functools import lru_cache
+
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.core.logging import get_logger
+
+log = get_logger("app.core.config")
 
 
 class Settings(BaseSettings):
@@ -38,9 +44,15 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:3000"]
 
 
+def _warn_if_clerk_misconfigured(settings: Settings) -> None:
+    """配了公钥但缺 issuer 时告警：此时 JWT 的 issuer 不会被校验，是安全弱化。"""
+    if settings.clerk_jwt_key and not settings.clerk_issuer:
+        log.warning("clerk_issuer_missing")
+
+
+@lru_cache
 def get_settings() -> Settings:
-    """返回单例 Settings 实例，用于依赖注入。"""
+    """返回缓存的单例 Settings 实例，用于依赖注入（避免每请求重复解析配置）。"""
     s = Settings()
-    if not s.clerk_issuer and s.clerk_jwt_key:
-        pass
+    _warn_if_clerk_misconfigured(s)
     return s
