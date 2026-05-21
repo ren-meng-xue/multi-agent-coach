@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "test": "node scripts/assert-login-page.mjs",
+    "typecheck": "tsc --noEmit",
     "build": "next build",
     "start": "next start"
   },
