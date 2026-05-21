@@ -285,19 +285,19 @@ cd backend && .venv/bin/python -m pytest tests/
 前端测试：
 
 ```bash
-cd frontend && npm test
+cd frontend && pnpm test
 ```
 
 前端 typecheck：
 
 ```bash
-cd frontend && npm run typecheck
+cd frontend && pnpm typecheck
 ```
 
 前端构建（含 tsc + eslint）：
 
 ```bash
-cd frontend && npm run build
+cd frontend && pnpm build
 ```
 
 ---

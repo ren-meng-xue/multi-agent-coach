@@ -9,15 +9,9 @@ log = get_logger("app.core.auth")
 
 
 def get_clerk_public_key() -> str:
-    """读取 Clerk JWT 公钥，优先使用配置，开发环境兼容本地 clerk-public.pem。"""
+    """从配置读取 Clerk JWT 公钥。"""
     settings = get_settings()
-    if settings.clerk_jwt_key:
-        return settings.clerk_jwt_key
-    try:
-        with open("clerk-public.pem") as f:
-            return f.read()
-    except FileNotFoundError:
-        return ""
+    return settings.clerk_jwt_key
 
 
 def is_clerk_configured() -> bool:
