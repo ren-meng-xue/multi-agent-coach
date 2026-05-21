@@ -1,4 +1,4 @@
-"""验证 7 张业务表在 SQLAlchemy metadata 中正确注册，向量和 JSONB 字段类型正确。"""
+"""验证当前 ORM 表在 SQLAlchemy metadata 中正确注册。"""
 from app.db.base import Base
 from app.models import register_models
 
@@ -6,34 +6,15 @@ from app.models import register_models
 register_models()
 
 
-def test_seven_tables_registered():
-    """确保 7 张表都被 SQLAlchemy 发现。"""
+def test_users_table_registered():
+    """确保当前保留的 users 表被 SQLAlchemy 发现。"""
     table_names = set(Base.metadata.tables.keys())
-    expected = {
-        "users",
-        "rag_chunks",
-        "user_profile",
-        "interview_session",
-        "interview_message",
-        "star_stories",
-        "weakness_tags",
-    }
-    assert expected.issubset(table_names), f"missing: {expected - table_names}"
+    assert table_names == {"users"}
 
 
-def test_rag_chunks_has_vector_column():
-    """RAG 文档块必须有 embedding 向量列和 metadata JSONB 列。"""
-    from app.models.core import RagChunk
+def test_users_table_columns():
+    """确保 users 表只保留当前登录链路需要的基础字段。"""
+    from app.models.core import User
 
-    cols = {c.name for c in RagChunk.__table__.columns}
-    assert "embedding" in cols
-    assert "metadata" in cols
-
-
-def test_user_profile_has_history_jsonb():
-    """用户画像必须有 history JSONB 列和 profile_embedding 向量列。"""
-    from app.models.core import UserProfile
-
-    cols = {c.name: c.type.__class__.__name__ for c in UserProfile.__table__.columns}
-    assert "history" in cols
-    assert "profile_embedding" in cols
+    cols = {c.name for c in User.__table__.columns}
+    assert cols == {"id", "email", "created_at"}
