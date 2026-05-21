@@ -279,6 +279,10 @@ body{
   padding: 8px 13px;
   border-bottom: 0.5px solid var(--border);
   background: var(--bg2);
+  transition: background 0.2s;
+}
+.trace-top:hover{
+  background: var(--bg3);
 }
 .trace-top-left{
   display: flex;
@@ -869,17 +873,33 @@ function createTrace(container){
   const wrap = document.createElement('div');
   wrap.className = 'trace';
   wrap.innerHTML = `
-    <div class="trace-top">
+    <div class="trace-top" onclick="toggleTrace(${id})" style="cursor: pointer; transition: background 0.2s;" title="点击折叠/展开细节">
       <div class="trace-top-left">
         <div class="live" id="live-${id}"></div>
         <span class="trace-title" id="ttitle-${id}">专家组正在工作</span>
       </div>
-      <span class="trace-elapsed" id="tel-${id}">0.0s</span>
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <span class="trace-elapsed" id="tel-${id}">0.0s</span>
+        <i class="ti ti-chevron-up" id="ticon-${id}" style="font-size: 11px; color: var(--fg3); transition: transform 0.2s;"></i>
+      </div>
     </div>
     <div class="trace-body" id="tbody-${id}"></div>`;
   container.appendChild(wrap);
   scrollBot();
   return id;
+}
+
+function toggleTrace(id) {
+  const tbody = document.getElementById(`tbody-${id}`);
+  const ticon = document.getElementById(`ticon-${id}`);
+  if (!tbody) return;
+  if (tbody.style.display === 'none') {
+    tbody.style.display = 'flex';
+    if (ticon) ticon.style.transform = 'rotate(0deg)';
+  } else {
+    tbody.style.display = 'none';
+    if (ticon) ticon.style.transform = 'rotate(180deg)';
+  }
 }
 
 function addTraceRow(id, step){
