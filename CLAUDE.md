@@ -280,6 +280,12 @@ cd backend && .venv/bin/python -m pytest tests/
 
 ## 前端
 
+前端测试：
+
+```bash
+cd frontend && npm test
+```
+
 前端 typecheck：
 
 ```bash
