@@ -1287,26 +1287,7 @@
   .story-snip .st-desc { font-size: 12px; color: var(--text-tertiary); line-height: 1.6; }
   .story-snip .st-tags { display: flex; gap: 6px; margin-top: 8px; }
 
-  .plan-trio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 16px; }
-  .plan-card {
-    background: var(--bg-subtle); border: 1px solid var(--border-light);
-    border-radius: var(--radius); padding: 22px 20px; text-align: center;
-    transition: all var(--transition);
-  }
-  .plan-card.promo {
-    background: #fff; border-color: var(--accent-indigo);
-    box-shadow: 0 0 0 4px rgba(79,70,229,0.06), var(--shadow-md);
-    position: relative;
-  }
-  .plan-card.promo::before {
-    content: '推荐';
-    position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
-    background: var(--accent-indigo); color: #fff; font-size: 11px; font-weight: 700;
-    padding: 3px 14px; border-radius: 12px; letter-spacing: 0.04em;
-  }
-  .plan-card .pn { font-weight: 700; color: var(--text-primary); font-size: 16px; }
-  .plan-card .pp { font-size: 30px; font-weight: 700; color: var(--accent-indigo); margin: 6px 0; }
-  .plan-card .pf { font-size: 12px; color: var(--text-tertiary); line-height: 2.1; margin-bottom: 12px; }
+
 
   .btn-sm {
     padding: 6px 14px; border-radius: var(--radius-xs); border: 1px solid var(--border);
@@ -1577,7 +1558,7 @@
     .stat-row-cards { grid-template-columns: repeat(2, 1fr); }
     .chart-duo { grid-template-columns: 1fr; }
     .settings-duo { grid-template-columns: 1fr; }
-    .plan-trio { grid-template-columns: 1fr; }
+
     .score-quad { grid-template-columns: repeat(2, 1fr); }
     .nav-wrap { overflow-x: auto; }
     .header { flex-wrap: wrap; gap: 12px; }
@@ -1817,29 +1798,7 @@
         </div>
         <button class="btn-sm" style="width:100%;margin-top:10px;border-style:dashed">+ 添加新 STAR 故事</button>
       </div>
-      <div class="setting-card" style="grid-column:1/-1">
-        <h4>订阅方案</h4>
-        <div class="plan-trio">
-          <div class="plan-card">
-            <div class="pn">Free</div>
-            <div class="pp">免费</div>
-            <div class="pf">3 场/月<br>单 Agent 面试<br>基础评分<br>—</div>
-            <button class="btn-sm" style="width:100%">当前方案</button>
-          </div>
-          <div class="plan-card promo">
-            <div class="pn">Pro</div>
-            <div class="pp">¥49<span style="font-size:14px;color:var(--text-tertiary);font-weight:400">/月</span></div>
-            <div class="pf">无限面试场次<br>全部 8 个 Agent<br>深度复盘报告<br>长期记忆系统</div>
-            <button class="btn-sm filled" style="width:100%">升级 Pro</button>
-          </div>
-          <div class="plan-card">
-            <div class="pn">Enterprise</div>
-            <div class="pp">定制</div>
-            <div class="pf">Pro 全部功能<br>HR 反向筛选模式<br>私有化部署<br>专属题库</div>
-            <button class="btn-sm" style="width:100%">联系我们</button>
-          </div>
-        </div>
-      </div>
+
     </div>
   </div>
 
