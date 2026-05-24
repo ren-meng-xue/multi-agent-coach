@@ -10,7 +10,13 @@ export async function AppShell({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const { userId } = await auth();
+  // /login 和 /sign-up 不经过 Clerk 中间件，auth() 会抛出，此时视为未登录
+  let userId: string | null = null;
+  try {
+    ({ userId } = await auth());
+  } catch {
+    userId = null;
+  }
 
   return (
     <div className="mac-app">
