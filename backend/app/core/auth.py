@@ -1,6 +1,7 @@
 """Clerk JWT 鉴权中间件：从 Authorization header 解析 user_id，用于所有需要登录的接口。"""
 import jwt
 from fastapi import Header, HTTPException
+from jwt.types import Options
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
@@ -15,18 +16,35 @@ def get_clerk_public_key() -> str:
 
 
 def is_clerk_configured() -> bool:
-    """鉴权是否就绪：能取得公钥即可对外校验 token，供健康检查与鉴权共用同一判断。"""
-    return bool(get_clerk_public_key())
+    """鉴权是否就绪：公钥、issuer 与 token 用途校验项均已配置。"""
+    settings = get_settings()
+    return bool(
+        settings.clerk_jwt_key
+        and settings.clerk_issuer
+        and (settings.clerk_jwt_audience or settings.clerk_authorized_party)
+    )
 
 
-def decode_clerk_token(token: str, public_key: str, issuer: str = "") -> str:
+def decode_clerk_token(
+    token: str,
+    public_key: str,
+    issuer: str,
+    audience: str = "",
+    authorized_party: str = "",
+) -> str:
     """校验 Clerk RS256 JWT 并返回 sub 作为业务 user_id。"""
     if not public_key:
         log.warning("clerk_public_key_missing")
         raise HTTPException(status_code=401, detail="clerk jwt key is not configured")
+    if not issuer:
+        log.warning("clerk_issuer_missing")
+        raise HTTPException(status_code=401, detail="clerk issuer is not configured")
+    if not audience and not authorized_party:
+        log.warning("clerk_token_purpose_check_missing")
+        raise HTTPException(status_code=401, detail="clerk token audience is not configured")
 
-    options = {"verify_aud": False, "verify_iat": True}
-    decode_kwargs = {"issuer": issuer} if issuer else {}
+    # 强制要求 exp：PyJWT 仅在 exp 存在时才校验过期，缺 exp 的令牌会被当作永不过期而放行
+    options: Options = {"verify_aud": bool(audience), "verify_iat": True, "require": ["exp"]}
 
     try:
         payload = jwt.decode(
@@ -34,12 +52,16 @@ def decode_clerk_token(token: str, public_key: str, issuer: str = "") -> str:
             public_key,
             algorithms=["RS256"],
             options=options,
-            **decode_kwargs,
+            issuer=issuer,
+            audience=audience or None,
         )
         sub = payload.get("sub")
         if not sub:
             log.warning("clerk_token_missing_sub")
             raise HTTPException(status_code=401, detail="token missing sub claim")
+        if authorized_party and payload.get("azp") != authorized_party:
+            log.warning("clerk_token_invalid_authorized_party")
+            raise HTTPException(status_code=401, detail="invalid token authorized party")
         return sub
     except HTTPException:
         raise
@@ -60,7 +82,13 @@ async def get_current_user_id(
         raise HTTPException(status_code=401, detail="empty token")
 
     settings = get_settings()
-    return decode_clerk_token(token, get_clerk_public_key(), issuer=settings.clerk_issuer)
+    return decode_clerk_token(
+        token,
+        get_clerk_public_key(),
+        issuer=settings.clerk_issuer,
+        audience=settings.clerk_jwt_audience,
+        authorized_party=settings.clerk_authorized_party,
+    )
 
 
 async def get_optional_user_id(
@@ -71,5 +99,6 @@ async def get_optional_user_id(
         return None
     try:
         return await get_current_user_id(authorization=authorization)
-    except HTTPException:
+    except HTTPException as exc:
+        log.warning("optional_clerk_token_invalid", status_code=exc.status_code, detail=exc.detail)
         return None

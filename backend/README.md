@@ -52,9 +52,15 @@ http://localhost:8000
 - `FIRECRAWL_API_KEY`：Firecrawl API Key。
 - `CLERK_JWT_KEY`：Clerk JWT 公钥。
 - `CLERK_ISSUER`：Clerk issuer。
+- `CLERK_JWT_AUDIENCE`：JWT `aud` 期望值，推荐在 Clerk JWT Template 中配置。
+- `CLERK_AUTHORIZED_PARTY`：Clerk session token 的 `azp` 期望值；当 token 没有 `aud` 时用于校验来源。
 - `CORS_ORIGINS`：允许访问后端的前端来源。
 
 不要提交真实密钥、Token 或生产数据库地址。
+
+### 待办：上线前改用 JWKS 校验
+
+当前 `decode_clerk_token` 用 `CLERK_JWT_KEY` 里的固定 PEM 公钥验证 RS256 令牌。Clerk 会轮换签名密钥，固定公钥在轮换后会导致**全部令牌校验失败、用户集体登录失败**。上线前应改为从 Clerk 的 `<issuer>/.well-known/jwks.json` 拉取 JWKS、按 `kid` 选择公钥并带缓存（参考 PyJWT `PyJWKClient`）。
 
 ## 数据库初始化
 

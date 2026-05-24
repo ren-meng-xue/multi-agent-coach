@@ -7,12 +7,16 @@ def test_settings_loads_required_env(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     monkeypatch.setenv("FIRECRAWL_API_KEY", "fc-test")
     monkeypatch.setenv("CLERK_JWT_KEY", "-----BEGIN PUBLIC KEY-----\ntest\n-----END PUBLIC KEY-----")
+    monkeypatch.setenv("CLERK_ISSUER", "https://clerk.example.dev")
+    monkeypatch.setenv("CLERK_JWT_AUDIENCE", "multi-agent-coach")
     s = Settings()
     assert s.database_url == "postgresql+asyncpg://u:p@h:5432/db"
     assert s.redis_url == "redis://localhost:6379/0"
     assert s.openai_api_key.get_secret_value() == "sk-test"
     assert s.firecrawl_api_key.get_secret_value() == "fc-test"
     assert "PUBLIC KEY" in s.clerk_jwt_key
+    assert s.clerk_issuer == "https://clerk.example.dev"
+    assert s.clerk_jwt_audience == "multi-agent-coach"
     assert s.app_env in {"dev", "test", "prod"}
 
 
@@ -33,33 +37,16 @@ def test_get_settings_is_cached():
     assert get_settings() is get_settings()
 
 
-def test_warn_if_clerk_misconfigured_warns_when_issuer_missing():
-    """配了公钥但缺 issuer 时必须告警：此时 token 的 issuer 不会被校验。"""
-    import structlog
+def test_settings_supports_authorized_party_for_clerk_session_token(monkeypatch):
+    """Clerk session token 没有 aud 时，可通过 azp/authorized party 配置校验用途。"""
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://u:p@h:5432/db")
+    monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("FIRECRAWL_API_KEY", "fc-test")
+    monkeypatch.setenv("CLERK_JWT_KEY", "-----BEGIN PUBLIC KEY-----\ntest\n-----END PUBLIC KEY-----")
+    monkeypatch.setenv("CLERK_ISSUER", "https://clerk.example.dev")
+    monkeypatch.setenv("CLERK_AUTHORIZED_PARTY", "http://localhost:3000")
 
-    from app.core import config
+    s = Settings()
 
-    s = config.Settings(
-        clerk_jwt_key="-----BEGIN PUBLIC KEY-----\nx\n-----END PUBLIC KEY-----",
-        clerk_issuer="",
-    )
-    with structlog.testing.capture_logs() as logs:
-        config._warn_if_clerk_misconfigured(s)
-
-    assert any(e.get("event") == "clerk_issuer_missing" for e in logs)
-
-
-def test_warn_if_clerk_misconfigured_silent_when_issuer_set():
-    """issuer 已配置时不应告警。"""
-    import structlog
-
-    from app.core import config
-
-    s = config.Settings(
-        clerk_jwt_key="-----BEGIN PUBLIC KEY-----\nx\n-----END PUBLIC KEY-----",
-        clerk_issuer="https://clerk.example.dev",
-    )
-    with structlog.testing.capture_logs() as logs:
-        config._warn_if_clerk_misconfigured(s)
-
-    assert not any(e.get("event") == "clerk_issuer_missing" for e in logs)
+    assert s.clerk_authorized_party == "http://localhost:3000"
