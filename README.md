@@ -60,6 +60,22 @@ tail -f frontend.log
 
 注意：`dev.sh` 当前会清理匹配 `celery.*worker` 和 `uvicorn app.main:app` 的残留进程，并设置本地代理 `127.0.0.1:10808`。如果本机没有这个代理，需要调整脚本或改用下面的手动启动方式。
 
+### Claude Code MCP 环境
+
+Claude Code 的 PostgreSQL / Redis MCP 分为本地和生产两套入口，详细说明见 [`docs/claude-mcp.md`](./docs/claude-mcp.md)。
+
+本地 MCP：
+
+```bash
+scripts/claude-mcp-local.sh
+```
+
+生产 MCP：
+
+```bash
+scripts/claude-mcp-prod.sh
+```
+
 ### 手动启动前端
 
 ```bash
