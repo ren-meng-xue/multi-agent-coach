@@ -1,5 +1,5 @@
 """Celery 异步任务队列配置，用于后台 LLM 调用、向量索引等耗时操作。"""
-from celery import Celery
+from celery import Celery  # type: ignore[import-untyped]
 
 from app.core.config import get_settings
 

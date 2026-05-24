@@ -14,11 +14,11 @@ class Response(BaseModel, Generic[T]):
     data: T | dict = Field(default_factory=dict, description="响应数据")
 
     @classmethod
-    def ok(cls, data: T = None, msg: str = "success") -> "Response[T]":
+    def ok(cls, data: T | None = None, msg: str = "success") -> "Response[T]":
         """成功响应，code 固定为 200。"""
         return cls(code=200, msg=msg, data=data if data is not None else {})
 
     @classmethod
-    def fail(cls, code: int, msg: str, data: T = None) -> "Response[T]":
+    def fail(cls, code: int, msg: str, data: T | None = None) -> "Response[T]":
         """失败响应，code 自定义。"""
         return cls(code=code, msg=msg, data=data if data is not None else {})
