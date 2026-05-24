@@ -46,3 +46,28 @@ async def test_check_redis_logs_warning_on_failure(monkeypatch):
 
     assert ok is False
     assert any(e.get("event") == "health_redis_check_failed" for e in logs)
+
+
+async def test_check_redis_closes_client_when_ping_fails(monkeypatch):
+    """ping 抛错时仍必须关闭 Redis client，避免健康检查泄漏连接。"""
+    import redis.asyncio
+
+    class _FailingRedis:
+        closed = False
+
+        @staticmethod
+        def from_url(url, **kwargs):
+            return _FailingRedis()
+
+        async def ping(self):
+            raise RuntimeError("redis ping failed")
+
+        async def aclose(self):
+            _FailingRedis.closed = True
+
+    monkeypatch.setattr(redis.asyncio, "Redis", _FailingRedis)
+
+    ok = await health._check_redis("redis://localhost:6379/0")
+
+    assert ok is False
+    assert _FailingRedis.closed is True
