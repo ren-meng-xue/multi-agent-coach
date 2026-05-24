@@ -831,3 +831,48 @@ body::before {
   border-radius: 3px;
   background: var(--mac-border);
 }
+
+.interview-chat-scroll {
+  scrollbar-width: none;
+}
+
+.interview-chat-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* 自定义输入框的高级精细滚动条 */
+.custom-textarea-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-textarea-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-textarea-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(83, 74, 183, 0.15); /* 微微带点品牌主色调 */
+  border-radius: 99px;
+}
+
+.custom-textarea-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(83, 74, 183, 0.35);
+}
+
+.dark .custom-textarea-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.dark .custom-textarea-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+/* Firefox 滚动条适配 */
+.custom-textarea-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(83, 74, 183, 0.15) transparent;
+}
+
+.dark .custom-textarea-scrollbar {
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+

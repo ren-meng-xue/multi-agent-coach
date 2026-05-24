@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     openai_model_chat: str = "gpt-4o"
     openai_model_coach: str = "gpt-4o-mini"
     openai_model_embedding: str = "text-embedding-3-small"
+    # LLM 调用超时（秒），避免单次请求长时间挂起拖垮连接
+    llm_timeout_seconds: int = 30
 
     # Firecrawl 爬取
     firecrawl_api_key: SecretStr

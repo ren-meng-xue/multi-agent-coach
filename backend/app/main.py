@@ -9,10 +9,12 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.v1 import auth as auth_v1
 from app.api.v1 import health as health_v1
+from app.api.v1 import interview as interview_v1
 from app.core.config import get_settings
 from app.core.exceptions import AppException
 from app.core.logging import configure_logging, get_logger
 from app.schemas.response import Response
+from app.services.interview_chat import close_client as close_interview_chat_client
 
 settings = get_settings()
 configure_logging(level=settings.log_level, json_output=(settings.app_env != "dev"))
@@ -24,6 +26,7 @@ async def lifespan(app: FastAPI):
     """应用启动/关闭时的生命周期事件。"""
     log.info("startup", app_env=settings.app_env)
     yield
+    await close_interview_chat_client()
     log.info("shutdown")
 
 
@@ -105,3 +108,4 @@ async def global_exception_handler(request, exc: Exception):
 # 挂载路由
 app.include_router(health_v1.router, prefix="/api/v1", tags=["health"])
 app.include_router(auth_v1.router, prefix="/api/v1", tags=["auth"])
+app.include_router(interview_v1.router, prefix="/api/v1", tags=["interview"])

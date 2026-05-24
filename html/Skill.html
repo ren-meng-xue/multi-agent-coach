@@ -79,7 +79,7 @@
 <div class="wrap">
 
   <h1>技能参考</h1>
-  <p class="sub">gstack 48 个 + superpowers 14 个。调用：<code>/技能名</code>，点击行复制</p>
+  <p class="sub">gstack 53 个 + superpowers 14 个。调用：<code>/技能名</code>，点击行复制</p>
 
   <div class="switch">
     <button id="btng" class="on" onclick="showGstack()">gstack</button>
@@ -94,6 +94,7 @@
     <a href="#tools">工具</a>
     <a href="#setup">配置安装</a>
     <a href="#browser-infra">浏览器基础设施</a>
+    <a href="#ios">iOS 真机测试</a>
     <a href="#learn">学习与洞察</a>
   </div>
   <div class="toc" id="toc-super" style="display:none">
@@ -197,6 +198,18 @@
       <tr><td>gstack-connect-chrome</td><td>启动 AI 控制的 Chromium，侧边栏实时活动流</td><td><span class="tag mid">常用</span></td><td>"打开浏览器""启动 Chrome"</td></tr>
       <tr><td>gstack-open-gstack-browser</td><td>启动 GStack Browser</td><td><span class="tag mid">常用</span></td><td>"打开 gstack 浏览器"</td></tr>
       <tr><td>gstack-pair-agent</td><td>配对远程 Agent 接入浏览器</td><td><span class="tag low">低频</span></td><td>"配对 agent""共享浏览器"</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="ios">iOS 真机测试</h2>
+  <table>
+    <thead><tr><th>Skill</th><th>用途</th><th>频度</th><th>触发方式</th></tr></thead>
+    <tbody>
+      <tr><td>gstack-ios-qa</td><td>真机 iOS QA（SwiftUI，截图→分析→操作→验证循环）</td><td><span class="tag low">低频</span></td><td>"测我的 iPhone app""ios qa"</td></tr>
+      <tr><td>gstack-ios-fix</td><td>自动修复 iOS bug 并真机验证（找 bug→修→确认闭环）</td><td><span class="tag low">低频</span></td><td>"修这个 iOS bug""自动修 iPhone app"</td></tr>
+      <tr><td>gstack-ios-design-review</td><td>真机 iOS 视觉设计审计（对照 Apple HIG / DESIGN.md）</td><td><span class="tag low">低频</span></td><td>"审查 iOS 设计""设计 QA iPhone app"</td></tr>
+      <tr><td>gstack-ios-sync</td><td>重新生成 iOS 调试桥（同步上游模板与类型化访问器）</td><td><span class="tag low">低频</span></td><td>"重新同步 iOS 调试桥""重生成 iOS accessors"</td></tr>
+      <tr><td>gstack-ios-clean</td><td>移除 DebugBridge 调试桥与所有 #if DEBUG 接线</td><td><span class="tag low">低频</span></td><td>"清理 iOS 调试桥""移除 DebugBridge"</td></tr>
     </tbody>
   </table>
 
