@@ -269,3 +269,65 @@ async def test_reset_does_not_affect_completed_sessions(db):
 
     await db.refresh(session)
     assert session.status == "completed"
+
+
+@pytest.mark.asyncio
+async def test_get_user_interview_context_new_user(db):
+    """没有任何历史 session：is_returning=False，字段全为 None，count=0。"""
+    from app.services.interview_turn import (
+        ensure_user_exists,
+        get_user_interview_context,
+    )
+
+    user_id = f"user_ctx_new_{uuid4().hex}"
+    await ensure_user_exists(db, user_id=user_id)
+
+    result = await get_user_interview_context(db, user_id=user_id)
+
+    assert result["is_returning"] is False
+    assert result["target_role"] is None
+    assert result["session_count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_get_user_interview_context_returning_user(db):
+    """有含 target_role 的历史 session：is_returning=True，返回最近的 role。"""
+    from app.services.interview_turn import (
+        ensure_user_exists,
+        get_user_interview_context,
+    )
+
+    user_id = f"user_ctx_ret_{uuid4().hex}"
+    await ensure_user_exists(db, user_id=user_id)
+
+    session = InterviewSession(user_id=user_id, status="completed", target_role="AI Agent 工程师")
+    db.add(session)
+    await db.flush()
+
+    result = await get_user_interview_context(db, user_id=user_id)
+
+    assert result["is_returning"] is True
+    assert result["target_role"] == "AI Agent 工程师"
+    assert result["session_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_get_user_interview_context_ignores_sessions_without_role(db):
+    """所有 session 的 target_role 均为 None 时，仍视为新用户。"""
+    from app.services.interview_turn import (
+        ensure_user_exists,
+        get_user_interview_context,
+    )
+
+    user_id = f"user_ctx_norole_{uuid4().hex}"
+    await ensure_user_exists(db, user_id=user_id)
+
+    session = InterviewSession(user_id=user_id, status="abandoned", target_role=None)
+    db.add(session)
+    await db.flush()
+
+    result = await get_user_interview_context(db, user_id=user_id)
+
+    assert result["is_returning"] is False
+    assert result["target_role"] is None
+    assert result["session_count"] == 1

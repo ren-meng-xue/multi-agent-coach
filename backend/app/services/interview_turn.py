@@ -141,6 +141,44 @@ def _build_state(
     }
 
 
+async def get_user_interview_context(db: AsyncSession, *, user_id: str) -> dict:
+    """返回 Coach 页面所需的用户上下文：最近有效 session 的岗位信息与历史场次数。"""
+    count_result = await db.execute(
+        select(func.count())
+        .select_from(InterviewSession)
+        .where(InterviewSession.user_id == user_id)
+    )
+    session_count = count_result.scalar_one()
+
+    latest_result = await db.execute(
+        select(InterviewSession)
+        .where(
+            InterviewSession.user_id == user_id,
+            InterviewSession.target_role.is_not(None),
+        )
+        .order_by(InterviewSession.started_at.desc())
+        .limit(1)
+    )
+    latest = latest_result.scalar_one_or_none()
+
+    if latest is None:
+        return {
+            "is_returning": False,
+            "target_role": None,
+            "target_company": None,
+            "user_background": None,
+            "session_count": session_count,
+        }
+
+    return {
+        "is_returning": True,
+        "target_role": latest.target_role,
+        "target_company": latest.target_company,
+        "user_background": latest.user_background,
+        "session_count": session_count,
+    }
+
+
 async def reset_interview_session(db: AsyncSession, *, user_id: str) -> None:
     """放弃当前用户所有进行中的面试 session，允许重新开始。"""
     result = await db.execute(
