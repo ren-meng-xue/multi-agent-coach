@@ -328,4 +328,24 @@ describe("InterviewChat", () => {
       expect(mockStreamInterviewChat).toHaveBeenCalled();
     });
   });
+
+  it("从 sessionStorage 读取上下文后显示确认消息", () => {
+    sessionStorage.setItem(
+      "interview_context",
+      JSON.stringify({ target_role: "前端工程师", user_background: "Vue 项目" }),
+    );
+
+    render(<InterviewChat />);
+
+    expect(screen.getByText(/前端工程师/)).toBeInTheDocument();
+    expect(sessionStorage.getItem("interview_context")).toBeNull();
+  });
+
+  it("没有 sessionStorage 上下文时显示通用开场白", () => {
+    sessionStorage.removeItem("interview_context");
+
+    render(<InterviewChat />);
+
+    expect(screen.getByText(/面试岗位/)).toBeInTheDocument();
+  });
 });

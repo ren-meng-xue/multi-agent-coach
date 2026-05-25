@@ -15,11 +15,17 @@ import { ReportCard } from "./report-card";
 import { Button } from "@/components/ui/button";
 import { Copy, Check } from "lucide-react";
 
-const OPENING_MESSAGE: InterviewChatMessage = {
-  role: "assistant",
-  content:
-    "你好！在开始之前，请告诉我你想练习的面试岗位、公司，或者你想练习的具体项目背景与技术主题？（例如：AI Agent 工程师，或者分布式系统的架构设计）",
-};
+function buildOpeningMessage(
+  context: { target_role?: string; user_background?: string } | null,
+): string {
+  if (context?.target_role) {
+    const bg = context.user_background
+      ? `背景：${context.user_background.slice(0, 40)}。`
+      : "";
+    return `好，今天练「${context.target_role}」。${bg}准备好了发消息开始。`;
+  }
+  return "你好！在开始之前，请告诉我你想练习的面试岗位、公司，或者你想练习的具体项目背景与技术主题？（例如：AI Agent 工程师，或者分布式系统的架构设计）";
+}
 
 const INITIAL_PROGRESS: InterviewProgressState = {
   stage: "opening",
@@ -30,7 +36,26 @@ const INITIAL_PROGRESS: InterviewProgressState = {
 /** 面试房间的单面试官流式聊天主体。 */
 export function InterviewChat() {
   const { isLoaded, isSignedIn, getToken } = useAuth();
-  const [messages, setMessages] = useState<InterviewChatMessage[]>([OPENING_MESSAGE]);
+
+  // 1. 在组件顶层读取一次上下文，供初始消息和首次 reset 使用
+  const initialContextRef = useRef<{ target_role?: string; user_background?: string } | null>(null);
+  const [messages, setMessages] = useState<InterviewChatMessage[]>(() => {
+    if (typeof window === "undefined") return [{ role: "assistant", content: buildOpeningMessage(null) }];
+    
+    const raw = sessionStorage.getItem("interview_context");
+    if (raw) {
+      sessionStorage.removeItem("interview_context");
+      try {
+        const ctx = JSON.parse(raw);
+        initialContextRef.current = ctx;
+        return [{ role: "assistant", content: buildOpeningMessage(ctx) }];
+      } catch {
+        return [{ role: "assistant", content: buildOpeningMessage(null) }];
+      }
+    }
+    return [{ role: "assistant", content: buildOpeningMessage(null) }];
+  });
+
   const [progress, setProgress] = useState<InterviewProgressState>(INITIAL_PROGRESS);
   const [isStreaming, setIsStreaming] = useState(false);
   const [report, setReport] = useState<InterviewReport | null>(null);
@@ -52,10 +77,18 @@ export function InterviewChat() {
     isResettingRef.current = true;
     getToken({ skipCache: true })
       .then(async (token) => {
-        if (token) await resetInterviewSession({ token });
+        if (token) {
+          await resetInterviewSession({ 
+            token, 
+            target_role: initialContextRef.current?.target_role,
+            user_background: initialContextRef.current?.user_background,
+          });
+        }
       })
       .finally(() => {
         isResettingRef.current = false;
+        // 首次 reset 后清空 ref，后续 handleNewRound 不再携带旧上下文
+        initialContextRef.current = null;
       });
   }, [isLoaded, isSignedIn, getToken]);
 
@@ -107,7 +140,7 @@ export function InterviewChat() {
   function handleNewRound() {
     abortRef.current?.abort();
     discardBufferedDelta();
-    setMessages([OPENING_MESSAGE]);
+    setMessages([{ role: "assistant", content: buildOpeningMessage(null) }]);
     setProgress(INITIAL_PROGRESS);
     setReport(null);
     isResettingRef.current = true;
