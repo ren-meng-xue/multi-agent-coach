@@ -21,6 +21,14 @@ export interface InterviewReport {
   improvements: string[];
 }
 
+export type UserContextResponse = {
+  is_returning: boolean;
+  target_role: string | null;
+  target_company: string | null;
+  user_background: string | null;
+  session_count: number;
+};
+
 type StreamInterviewChatOptions = {
   token: string;
   message: string;
@@ -98,15 +106,48 @@ function handleSseEvent(
   }
 }
 
-/** 放弃当前面试 session，让用户可以从头开始。失败时静默忽略，不影响 UI。 */
-export async function resetInterviewSession({ token }: { token: string }): Promise<void> {
+/** 返回 Coach 页面所需的用户上下文，判断新老用户。 */
+export async function fetchInterviewContext({
+  token,
+}: {
+  token: string;
+}): Promise<UserContextResponse> {
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL;
+  if (!baseUrl) throw new Error("缺少后端接口配置");
+
+  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/interview/context`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!response.ok) throw new Error("获取用户信息失败");
+  return response.json() as Promise<UserContextResponse>;
+}
+
+/** 放弃当前面试 session，可携带 Coach 收集的上下文预建新 session。失败时静默忽略，不影响 UI。 */
+export async function resetInterviewSession({
+  token,
+  target_role,
+  user_background,
+}: {
+  token: string;
+  target_role?: string;
+  user_background?: string;
+}): Promise<void> {
   const baseUrl = process.env.NEXT_PUBLIC_API_URL;
   if (!baseUrl) return;
+
+  const body: Record<string, string> = {};
+  if (target_role) body.target_role = target_role;
+  if (user_background) body.user_background = user_background;
 
   try {
     await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/interview/reset`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
     });
   } catch {
     // 网络错误不阻塞 UI 初始化

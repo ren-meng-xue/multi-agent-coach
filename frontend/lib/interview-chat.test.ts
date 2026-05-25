@@ -188,3 +188,91 @@ describe("resetInterviewSession", () => {
     await expect(resetInterviewSession({ token: "test-token" })).resolves.toBeUndefined();
   });
 });
+
+describe("fetchInterviewContext", () => {
+  beforeEach(() => {
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "http://localhost:8000");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("调用 GET /context 并返回用户上下文", async () => {
+    const payload = {
+      is_returning: true,
+      target_role: "AI Agent 工程师",
+      target_company: null,
+      user_background: "LangGraph 系统",
+      session_count: 7,
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { fetchInterviewContext } = await import("./interview-chat");
+    const result = await fetchInterviewContext({ token: "test-token" });
+
+    expect(result.is_returning).toBe(true);
+    expect(result.target_role).toBe("AI Agent 工程师");
+    expect(result.session_count).toBe(7);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/v1/interview/context",
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer test-token" }),
+      }),
+    );
+  });
+
+  it("HTTP 失败时抛出错误", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 401 })));
+    const { fetchInterviewContext } = await import("./interview-chat");
+    await expect(fetchInterviewContext({ token: "bad" })).rejects.toThrow("获取用户信息失败");
+  });
+});
+
+describe("resetInterviewSession with context", () => {
+  beforeEach(() => {
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "http://localhost:8000");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("携带 target_role 时发送 JSON body", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ status: "ok" }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { resetInterviewSession } = await import("./interview-chat");
+    await resetInterviewSession({
+      token: "test-token",
+      target_role: "前端工程师",
+      user_background: "Vue 项目",
+    });
+
+    const call = fetchMock.mock.calls[0];
+    const body = JSON.parse(call[1].body);
+    expect(body.target_role).toBe("前端工程师");
+    expect(body.user_background).toBe("Vue 项目");
+  });
+
+  it("不携带 target_role 时 body 为空对象", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ status: "ok" }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { resetInterviewSession } = await import("./interview-chat");
+    await resetInterviewSession({ token: "test-token" });
+
+    const call = fetchMock.mock.calls[0];
+    const body = JSON.parse(call[1].body);
+    expect(body).toEqual({});
+  });
+});
