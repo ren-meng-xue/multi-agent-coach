@@ -151,6 +151,19 @@
   --mac-radius-xs: 6px;
   --mac-radius-xl: 28px;
   --mac-transition: 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  --mac-accent-emerald: #059669;
+  --mac-accent-emerald-light: #ecfdf5;
+  --mac-accent-amber: #d97706;
+  --mac-accent-amber-light: #fffbeb;
+  --mac-accent-violet: #7c3aed;
+  --mac-accent-violet-light: #f5f3ff;
+  --mac-accent-rose: #e11d48;
+  --mac-accent-rose-light: #fff1f2;
+  --mac-accent-indigo-light: #eef2ff;
+  --mac-radius: 14px;
+  --mac-radius-sm: 10px;
+  --mac-radius-lg: 20px;
+  --mac-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 body {
@@ -831,3 +844,166 @@ body::before {
   border-radius: 3px;
   background: var(--mac-border);
 }
+
+.interview-chat-scroll {
+  scrollbar-width: none;
+}
+
+.interview-chat-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* 自定义输入框的高级精细滚动条 */
+.custom-textarea-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-textarea-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-textarea-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(83, 74, 183, 0.15); /* 微微带点品牌主色调 */
+  border-radius: 99px;
+}
+
+.custom-textarea-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(83, 74, 183, 0.35);
+}
+
+.dark .custom-textarea-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.dark .custom-textarea-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+/* Firefox 滚动条适配 */
+.custom-textarea-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(83, 74, 183, 0.15) transparent;
+}
+
+.dark .custom-textarea-scrollbar {
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+
+/* === Coach 页面专用的极简微过渡和呼吸动画 === */
+/* ============ Dashboard Styles ============ */
+.mac-stat-row-cards {
+display: grid;
+grid-template-columns: repeat(4, 1fr);
+gap: 16px;
+margin-bottom: 20px;
+}
+
+.mac-stat-card {
+background: #ffffff;
+border: 1px solid var(--mac-border-light);
+border-radius: var(--mac-radius);
+padding: 22px 20px;
+text-align: center;
+box-shadow: var(--mac-shadow-xs);
+transition: all var(--mac-transition);
+}
+
+.mac-stat-card:hover {
+transform: translateY(-2px);
+box-shadow: var(--mac-shadow-md);
+}
+
+.mac-stat-card .num {
+font-size: 34px;
+font-weight: 700;
+color: var(--mac-text-primary);
+letter-spacing: -0.02em;
+line-height: 1;
+}
+
+.mac-stat-card .lbl {
+font-size: 12px;
+color: var(--mac-text-tertiary);
+margin-top: 6px;
+font-weight: 500;
+}
+
+.mac-stat-card.c1 .num { color: var(--mac-accent-indigo); }
+.mac-stat-card.c2 .num { color: var(--mac-accent-emerald); }
+.mac-stat-card.c3 .num { color: var(--mac-accent-amber); }
+.mac-stat-card.c4 .num { color: var(--mac-accent-violet); }
+
+.mac-chart-duo {
+display: grid;
+grid-template-columns: 1fr 1fr;
+gap: 20px;
+margin-bottom: 20px;
+}
+
+.mac-chart-box {
+background: #ffffff;
+border: 1px solid var(--mac-border-light);
+border-radius: var(--mac-radius);
+padding: 24px;
+box-shadow: var(--mac-shadow-xs);
+}
+
+.mac-chart-box h4 {
+font-size: 15px;
+font-weight: 600;
+color: var(--mac-text-primary);
+margin-bottom: 18px;
+}
+
+.mac-tag-cloud-box {
+background: #ffffff;
+border: 1px solid var(--mac-border-light);
+border-radius: var(--mac-radius);
+padding: 24px;
+box-shadow: var(--mac-shadow-xs);
+}
+
+.mac-tag-cloud-box h4 {
+font-size: 15px;
+font-weight: 600;
+color: var(--mac-text-primary);
+margin-bottom: 14px;
+}
+
+.mac-tag-cluster {
+display: flex;
+flex-wrap: wrap;
+gap: 8px;
+}
+
+.mac-tag-pill {
+padding: 5px 13px;
+border-radius: 18px;
+font-size: 12px;
+font-weight: 500;
+border: 1px solid;
+}
+
+.mac-tag-pill.severe {
+background: var(--mac-accent-rose-light);
+color: var(--mac-accent-rose);
+border-color: rgba(225, 29, 72, 0.2);
+}
+
+.mac-tag-pill.warn {
+background: var(--mac-accent-amber-light);
+color: var(--mac-accent-amber);
+border-color: rgba(217, 119, 6, 0.22);
+}
+
+.mac-tag-pill.info {
+background: var(--mac-accent-indigo-light);
+color: var(--mac-accent-indigo);
+border-color: rgba(79, 70, 229, 0.15);
+}
+
+@media (max-width: 960px) {
+.mac-stat-row-cards { grid-template-columns: repeat(2, 1fr); }
+.mac-chart-duo { grid-template-columns: 1fr; }
+}
+

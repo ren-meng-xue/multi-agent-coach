@@ -6,6 +6,21 @@
 
 ---
 
+# 确认与许可约定
+
+1. 当用户回复以下任一简短内容时，即视为「用户已确认 / 允许继续当前待办操作」：
+   - `ok`
+   - `1`
+   - `好` / `可以` / `继续` / `确认`
+
+2. 这类回复等价于本规范中「询问用户是否 commit」「等待用户确认后再 commit」等环节所要求的用户确认，收到后可直接继续执行对应操作。
+
+3. 边界条件：
+   - 该约定仅用于「确认/许可」语义，不改变其他 Git 规则与开发流程要求（例如仍禁止 `git push` / `git merge` / `git rebase` 等自动执行）。
+   - 若当前没有明确的待确认操作，收到此类回复时必须先澄清要确认的是什么，不得擅自臆测执行。
+
+---
+
 # Git 规则
 
 1. 永远不要使用：
@@ -327,3 +342,21 @@ cd frontend && pnpm build
 10. 总结风险与变更
 
 11. 等待用户确认后再 commit
+
+## Skill routing
+
+When the user's request matches an available skill, invoke it via the Skill tool. When in doubt, invoke the skill.
+
+Key routing rules:
+- Product ideas/brainstorming → invoke /office-hours
+- Strategy/scope → invoke /plan-ceo-review
+- Architecture → invoke /plan-eng-review
+- Design system/plan review → invoke /design-consultation or /plan-design-review
+- Full review pipeline → invoke /autoplan
+- Bugs/errors → invoke /investigate
+- QA/testing site behavior → invoke /qa or /qa-only
+- Code review/diff check → invoke /review
+- Visual polish → invoke /design-review
+- Ship/deploy/PR → invoke /ship or /land-and-deploy
+- Save progress → invoke /context-save
+- Resume context → invoke /context-restore

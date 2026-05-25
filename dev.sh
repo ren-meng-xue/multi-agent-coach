@@ -1,9 +1,9 @@
 #!/bin/bash
 unset VIRTUAL_ENV
 
-export http_proxy=http://127.0.0.1:10808
-export https_proxy=http://127.0.0.1:10808
-export ALL_PROXY=http://127.0.0.1:10808
+export http_proxy=http://127.0.0.1:7897
+export https_proxy=http://127.0.0.1:7897
+export ALL_PROXY=http://127.0.0.1:7897
 
 BACKEND_PORT=8000
 FRONTEND_PORT=3000

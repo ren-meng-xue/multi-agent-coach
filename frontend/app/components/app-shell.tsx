@@ -1,16 +1,17 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
-import { UserButton } from "@clerk/nextjs";
-import { auth } from "@clerk/nextjs/server";
+import { UserButton, useAuth } from "@clerk/nextjs";
 import { MainNav } from "./nav";
 
 /** 渲染全站页眉和主内容外壳。 */
-export async function AppShell({
+export function AppShell({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const { userId } = await auth();
+  const { userId } = useAuth();
 
   return (
     <div className="mac-app">

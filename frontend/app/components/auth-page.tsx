@@ -102,7 +102,7 @@ export function AuthPage({ mode }: Readonly<{ mode: AuthMode }>) {
                     path="/login"
                     routing="path"
                     signUpUrl="/sign-up"
-                    fallbackRedirectUrl="/dashboard"
+                    fallbackRedirectUrl="/interview"
                   />
                 ) : (
                   <SignUp
@@ -110,7 +110,7 @@ export function AuthPage({ mode }: Readonly<{ mode: AuthMode }>) {
                     path="/sign-up"
                     routing="path"
                     signInUrl="/login"
-                    fallbackRedirectUrl="/dashboard"
+                    fallbackRedirectUrl="/interview"
                   />
                 )}
               </AuthCardRouter>
