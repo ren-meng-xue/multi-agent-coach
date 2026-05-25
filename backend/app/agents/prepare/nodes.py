@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import BaseModel
+
 from app.agents.prepare.state import PrepareState
 from app.core.logging import get_logger
 
@@ -102,3 +104,53 @@ async def memory_search_node(state: PrepareState) -> PrepareState:
         story_count=len(star_stories),
     )
     return {**state, "weak_areas": weak_areas, "star_stories": star_stories}
+
+
+def _llm(streaming: bool = False, timeout: int = 30) -> Any:
+    from langchain_openai import ChatOpenAI
+
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    return ChatOpenAI(
+        model=settings.openai_model_chat,
+        api_key=settings.openai_api_key,
+        timeout=timeout,
+        streaming=streaming,
+    )
+
+
+
+class _JDContextModel(BaseModel):
+    company: str = ""
+    role: str = ""
+    key_skills: list[str] = []
+    focus_areas: list[str] = []
+    difficulty: str = "medium"
+
+
+async def jd_analysis_node(state: PrepareState) -> PrepareState:
+    """JD 文本 → 结构化 JDContext。无 JD 时直接跳过。"""
+    from langchain_core.messages import SystemMessage
+
+    from app.agents.prepare.prompts import JD_ANALYSIS_SYSTEM_PROMPT
+    from app.agents.prepare.state import JDContext
+
+    jd_raw = state.get("jd_raw")
+    if not jd_raw:
+        return {**state, "jd_context": None}
+
+    prompt = JD_ANALYSIS_SYSTEM_PROMPT.format(jd_raw=jd_raw[:4000])
+    model = _llm().with_structured_output(_JDContextModel)
+    output: _JDContextModel = await model.ainvoke([SystemMessage(content=prompt)])
+
+    jd_context: JDContext = {
+        "company": output.company,
+        "role": output.role,
+        "key_skills": output.key_skills,
+        "focus_areas": output.focus_areas,
+        "difficulty": output.difficulty,
+    }
+    log.info("jd_analysis_done", role=output.role, skills_count=len(output.key_skills))
+    return {**state, "jd_context": jd_context}
+

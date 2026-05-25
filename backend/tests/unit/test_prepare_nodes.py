@@ -50,3 +50,40 @@ async def test_memory_search_empty_when_no_history():
 
     assert result["weak_areas"] == []
     assert result["star_stories"] == []
+
+
+@pytest.mark.asyncio
+async def test_jd_analysis_returns_jd_context():
+    """有 JD 文本时应返回结构化 JDContext。"""
+    from app.agents.prepare.nodes import jd_analysis_node
+
+    state: PrepareState = {
+        "user_id": "u1",
+        "jd_raw": "招聘高级后端工程师，要求熟悉 Python、分布式系统、Kafka",
+        "user_direction": "后端工程师",
+    }
+
+    mock_output = MagicMock()
+    mock_output.company = "字节跳动"
+    mock_output.role = "高级后端工程师"
+    mock_output.key_skills = ["Python", "分布式系统", "Kafka"]
+    mock_output.focus_areas = ["系统设计", "高并发"]
+    mock_output.difficulty = "hard"
+
+    with patch("app.agents.prepare.nodes._llm") as mock_llm:
+        mock_llm.return_value.with_structured_output.return_value.ainvoke = AsyncMock(return_value=mock_output)
+        result = await jd_analysis_node(state)
+
+    assert result["jd_context"] is not None
+    assert result["jd_context"]["key_skills"] == ["Python", "分布式系统", "Kafka"]
+    assert result["jd_context"]["difficulty"] == "hard"
+
+
+@pytest.mark.asyncio
+async def test_jd_analysis_skips_when_no_jd():
+    """无 JD 时跳过，不调 LLM，jd_context 为 None。"""
+    from app.agents.prepare.nodes import jd_analysis_node
+
+    state: PrepareState = {"user_id": "u1", "jd_raw": None}
+    result = await jd_analysis_node(state)
+    assert result.get("jd_context") is None
