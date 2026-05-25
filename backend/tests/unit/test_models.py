@@ -7,9 +7,9 @@ register_models()
 
 
 def test_users_table_registered():
-    """确保当前保留的 users 表被 SQLAlchemy 发现。"""
+    """确保核心业务表被 SQLAlchemy 发现。"""
     table_names = set(Base.metadata.tables.keys())
-    assert table_names == {"users"}
+    assert table_names == {"users", "interview_sessions", "interview_messages"}
 
 
 def test_users_table_columns():
@@ -18,3 +18,40 @@ def test_users_table_columns():
 
     cols = {c.name for c in User.__table__.columns}
     assert cols == {"id", "email", "created_at"}
+
+
+def test_interview_sessions_table_columns():
+    """确保面试 Session 表包含状态机和用户上下文字段。"""
+    from app.models.core import InterviewSession
+
+    cols = {c.name for c in InterviewSession.__table__.columns}
+    assert cols == {
+        "id",
+        "user_id",
+        "status",
+        "stage",
+        "target_role",
+        "target_company",
+        "user_background",
+        "total_questions",
+        "question_count",
+        "followup_count",
+        "started_at",
+        "completed_at",
+    }
+
+
+def test_interview_messages_table_columns():
+    """确保面试消息表包含恢复上下文所需字段。"""
+    from app.models.core import InterviewMessage
+
+    cols = {c.name for c in InterviewMessage.__table__.columns}
+    assert cols == {
+        "id",
+        "session_id",
+        "role",
+        "content",
+        "question_number",
+        "is_followup",
+        "created_at",
+    }

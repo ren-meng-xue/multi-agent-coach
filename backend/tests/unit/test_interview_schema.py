@@ -2,7 +2,13 @@
 import pytest
 from pydantic import ValidationError
 
-from app.schemas.interview import MAX_CONTENT_LEN, MAX_MESSAGES, ChatMessage, ChatRequest
+from app.schemas.interview import (
+    MAX_CONTENT_LEN,
+    MAX_MESSAGES,
+    ChatMessage,
+    ChatRequest,
+    TurnRequest,
+)
 
 
 def test_valid_request_passes():
@@ -58,3 +64,21 @@ def test_too_many_messages_rejected():
     msgs = [ChatMessage(role="user", content="hi") for _ in range(MAX_MESSAGES + 1)]
     with pytest.raises(ValidationError):
         ChatRequest(messages=msgs)
+
+
+def test_valid_turn_request_passes():
+    """统一入口只需要本轮用户输入。"""
+    req = TurnRequest(message="我想练 AI Agent 工程师面试")
+    assert req.message == "我想练 AI Agent 工程师面试"
+
+
+def test_blank_turn_message_rejected():
+    """统一入口 message 不能为空。"""
+    with pytest.raises(ValidationError):
+        TurnRequest(message="   ")
+
+
+def test_turn_message_too_long_rejected():
+    """统一入口单轮 message 也要限制长度。"""
+    with pytest.raises(ValidationError):
+        TurnRequest(message="x" * (MAX_CONTENT_LEN + 1))

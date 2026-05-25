@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { streamInterviewChat } from "./interview-chat";
+import { streamInterviewChat, resetInterviewSession } from "./interview-chat";
 
 function makeSseStream(text: string): ReadableStream<Uint8Array> {
   return new ReadableStream({
@@ -20,11 +20,12 @@ describe("streamInterviewChat", () => {
     vi.restoreAllMocks();
   });
 
-  it("读取 SSE delta 并按顺序回调文本", async () => {
+  it("调用统一 turn 入口，读取 state 与 delta 事件", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
         makeSseStream(
-          'event: delta\ndata: {"text":"你可以"}\n\n' +
+          'event: state\ndata: {"stage":"interview","question_count":1,"total_questions":5}\n\n' +
+            'event: delta\ndata: {"text":"你可以"}\n\n' +
             'event: delta\ndata: {"text":"先介绍项目"}\n\n' +
             "event: done\ndata: {}\n\n",
         ),
@@ -34,22 +35,25 @@ describe("streamInterviewChat", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const chunks: string[] = [];
+    const states: unknown[] = [];
     await streamInterviewChat({
       token: "test-token",
-      messages: [{ role: "user", content: "练后端" }],
+      message: "练后端",
       onDelta: (text) => chunks.push(text),
+      onState: (state) => states.push(state),
     });
 
     expect(chunks).toEqual(["你可以", "先介绍项目"]);
+    expect(states).toEqual([{ stage: "interview", question_count: 1, total_questions: 5 }]);
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://localhost:8000/api/v1/interview/chat",
+      "http://localhost:8000/api/v1/interview/turn",
       expect.objectContaining({
         method: "POST",
         headers: {
           Authorization: "Bearer test-token",
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ messages: [{ role: "user", content: "练后端" }] }),
+        body: JSON.stringify({ message: "练后端" }),
       }),
     );
   });
@@ -72,7 +76,7 @@ describe("streamInterviewChat", () => {
     const chunks: string[] = [];
     await streamInterviewChat({
       token: "test-token",
-      messages: [{ role: "user", content: "练后端" }],
+      message: "练后端",
       onDelta: (text) => chunks.push(text),
     });
 
@@ -93,7 +97,7 @@ describe("streamInterviewChat", () => {
     await expect(
       streamInterviewChat({
         token: "test-token",
-        messages: [{ role: "user", content: "练后端" }],
+        message: "练后端",
         onDelta: vi.fn(),
       }),
     ).rejects.toThrow("AI 暂时无法响应");
@@ -105,9 +109,82 @@ describe("streamInterviewChat", () => {
     await expect(
       streamInterviewChat({
         token: "bad-token",
-        messages: [{ role: "user", content: "练后端" }],
+        message: "练后端",
         onDelta: vi.fn(),
       }),
     ).rejects.toThrow("请求失败，请稍后重试");
+  });
+
+  it("收到 report 事件时调用 onReport 回调", async () => {
+    const reportPayload = {
+      overall_score: 7.5,
+      technical_depth: 4.0,
+      quantified_results: 3.0,
+      failure_tradeoffs: 4.0,
+      structure: 3.5,
+      highlights: ["表达清晰"],
+      improvements: ["可补充量化数据"],
+    };
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          makeSseStream(
+            `event: state\ndata: {"stage":"closing","question_count":5,"total_questions":5}\n\n` +
+              `event: report\ndata: ${JSON.stringify(reportPayload)}\n\n` +
+              `event: done\ndata: {}\n\n`,
+          ),
+          { status: 200 },
+        ),
+      ),
+    );
+
+    const reports: unknown[] = [];
+    await streamInterviewChat({
+      token: "test-token",
+      message: "第五题",
+      onDelta: vi.fn(),
+      onReport: (report) => reports.push(report),
+    });
+
+    expect(reports).toHaveLength(1);
+    expect(reports[0]).toMatchObject({ overall_score: 7.5, highlights: ["表达清晰"] });
+  });
+});
+
+describe("resetInterviewSession", () => {
+  beforeEach(() => {
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "http://localhost:8000");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("调用 reset 端点并传入 Bearer token", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ status: "ok" }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await resetInterviewSession({ token: "test-token" });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/v1/interview/reset",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: "Bearer test-token",
+        }),
+      }),
+    );
+  });
+
+  it("HTTP 失败时静默忽略（不抛错）", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 500 })));
+
+    await expect(resetInterviewSession({ token: "test-token" })).resolves.toBeUndefined();
   });
 });
