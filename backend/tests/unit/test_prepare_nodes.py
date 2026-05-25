@@ -148,3 +148,100 @@ async def test_question_gen_weak_areas_first():
 
     priorities = [q["priority"] for q in result["prepared_questions"]]
     assert priorities[0] <= priorities[-1]  # 第一题优先级最高
+
+
+@pytest.mark.asyncio
+async def test_master_detects_direction_from_user_input():
+    from app.agents.prepare.nodes import master_node
+
+    state: PrepareState = {
+        "user_id": "u1",
+        "user_direction": "AI Agent 工程师",
+        "jd_raw": None,
+        "weak_areas": [],
+        "star_stories": [],
+    }
+
+    mock_decision = MagicMock()
+    mock_decision.direction = "AI Agent 工程师"
+    mock_decision.chain = ["question_gen"]
+    mock_decision.need_direction = False
+
+    with patch("app.agents.prepare.nodes._llm") as mock_llm:
+        # reasoning stream
+        mock_stream = MagicMock()
+        mock_stream.content = "• 找到方向"
+        mock_llm.return_value.with_config.return_value.astream = MagicMock(
+            return_value=aiter([mock_stream])
+        )
+        # decision structured output
+        mock_llm.return_value.with_structured_output.return_value.ainvoke = AsyncMock(
+            return_value=mock_decision
+        )
+        result = await master_node(state)
+
+    assert result["direction"] == "AI Agent 工程师"
+    assert "question_gen" in result["chain"]
+    assert result["need_direction"] is False
+
+
+@pytest.mark.asyncio
+async def test_master_sets_need_direction_when_no_input():
+    from app.agents.prepare.nodes import master_node
+
+    state: PrepareState = {
+        "user_id": "new_user",
+        "user_direction": None,
+        "jd_raw": None,
+        "weak_areas": [],
+        "star_stories": [],
+    }
+
+    mock_decision = MagicMock()
+    mock_decision.direction = ""
+    mock_decision.chain = ["question_gen"]
+    mock_decision.need_direction = True
+
+    with patch("app.agents.prepare.nodes._llm") as mock_llm:
+        mock_stream = MagicMock()
+        mock_stream.content = "• 未找到方向"
+        mock_llm.return_value.with_config.return_value.astream = MagicMock(
+            return_value=aiter([mock_stream])
+        )
+        mock_llm.return_value.with_structured_output.return_value.ainvoke = AsyncMock(
+            return_value=mock_decision
+        )
+        result = await master_node(state)
+
+    assert result["need_direction"] is True
+
+
+@pytest.mark.asyncio
+async def test_master_includes_memory_search_when_has_history():
+    from app.agents.prepare.nodes import master_node
+
+    state: PrepareState = {
+        "user_id": "u1",
+        "user_direction": "后端工程师",
+        "jd_raw": None,
+        "weak_areas": ["量化不足"],  # 已有历史
+        "star_stories": [],
+    }
+
+    mock_decision = MagicMock()
+    mock_decision.direction = "后端工程师"
+    mock_decision.chain = ["memory_search", "question_gen"]
+    mock_decision.need_direction = False
+
+    with patch("app.agents.prepare.nodes._llm") as mock_llm:
+        mock_stream = MagicMock()
+        mock_stream.content = "• 发现历史记录"
+        mock_llm.return_value.with_config.return_value.astream = MagicMock(
+            return_value=aiter([mock_stream])
+        )
+        mock_llm.return_value.with_structured_output.return_value.ainvoke = AsyncMock(
+            return_value=mock_decision
+        )
+        result = await master_node(state)
+
+    assert "memory_search" in result["chain"]

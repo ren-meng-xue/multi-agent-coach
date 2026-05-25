@@ -224,3 +224,62 @@ async def question_gen_node(state: PrepareState) -> PrepareState:
     return {**state, "prepared_questions": questions}
 
 
+class _MasterDecision(BaseModel):
+    direction: str = ""
+    chain: list[str] = []
+    need_direction: bool = False
+
+
+async def master_node(state: PrepareState) -> PrepareState:
+    """识别练习方向，决定调用链。流式输出推理 bullets，结构化输出决策。"""
+    from langchain_core.messages import SystemMessage
+
+    from app.agents.prepare.prompts import (
+        MASTER_DECISION_PROMPT,
+        MASTER_REASONING_PROMPT,
+    )
+
+    user_direction = state.get("user_direction") or ""
+    jd_raw = state.get("jd_raw") or ""
+    weak_areas = state.get("weak_areas") or []
+    star_stories = state.get("star_stories") or []
+
+    context = f"""
+用户档案：
+  - 目标岗位/方向：{user_direction or "未设置"}
+  - 是否提供 JD：{"是" if jd_raw else "否"}
+  - 历史薄弱点：{", ".join(weak_areas) if weak_areas else "无（新用户或未查询）"}
+  - 故事库项目数：{len(star_stories)}
+""".strip()
+
+    # Phase 1: 流式推理（供 SSE 捕获，用户可见）
+    reasoning_prompt = MASTER_REASONING_PROMPT.format(context=context)
+    model_stream = _llm(streaming=True).with_config(tags=["prepare_master_stream"])
+    async for _ in model_stream.astream([SystemMessage(content=reasoning_prompt)]):
+        pass  # 流由 astream_events 在 graph 层捕获，此处只触发
+
+    # Phase 2: 结构化决策（快速，非流式）
+    decision_prompt = MASTER_DECISION_PROMPT.format(context=context)
+    model_decision = _llm().with_structured_output(_MasterDecision)
+    decision: _MasterDecision = await model_decision.ainvoke(
+        [SystemMessage(content=decision_prompt)]
+    )
+
+    # 保证 question_gen 始终在 chain 末尾
+    chain = list(dict.fromkeys(decision.chain + ["question_gen"]))
+
+    log.info(
+        "master_done",
+        direction=decision.direction,
+        chain=chain,
+        need_direction=decision.need_direction,
+    )
+    return {
+        **state,
+        "direction": decision.direction,
+        "chain": chain,
+        "need_direction": decision.need_direction,
+    }
+
+
+
