@@ -82,3 +82,50 @@ def test_turn_message_too_long_rejected():
     """统一入口单轮 message 也要限制长度。"""
     with pytest.raises(ValidationError):
         TurnRequest(message="x" * (MAX_CONTENT_LEN + 1))
+
+
+def test_user_context_response_new_user():
+    """新用户：is_returning=False，role/company/background 均为 None，session_count=0。"""
+    from app.schemas.interview import UserContextResponse
+
+    resp = UserContextResponse(
+        is_returning=False,
+        target_role=None,
+        target_company=None,
+        user_background=None,
+        session_count=0,
+    )
+    assert resp.is_returning is False
+    assert resp.session_count == 0
+
+
+def test_user_context_response_returning_user():
+    """老用户：is_returning=True，role 有值。"""
+    from app.schemas.interview import UserContextResponse
+
+    resp = UserContextResponse(
+        is_returning=True,
+        target_role="AI Agent 工程师",
+        target_company="字节跳动",
+        user_background="LangGraph 系统",
+        session_count=7,
+    )
+    assert resp.is_returning is True
+    assert resp.target_role == "AI Agent 工程师"
+
+
+def test_reset_request_allows_empty_body():
+    """ResetRequest 的两个字段均为可选，空 body 等价于 {}。"""
+    from app.schemas.interview import ResetRequest
+
+    req = ResetRequest()
+    assert req.target_role is None
+    assert req.user_background is None
+
+
+def test_reset_request_with_context():
+    """ResetRequest 可携带岗位与背景。"""
+    from app.schemas.interview import ResetRequest
+
+    req = ResetRequest(target_role="前端工程师", user_background="Vue 项目")
+    assert req.target_role == "前端工程师"

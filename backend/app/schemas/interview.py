@@ -56,3 +56,20 @@ class TurnRequest(BaseModel):
         if len(text) > MAX_CONTENT_LEN:
             raise ValueError(f"message 长度不能超过 {MAX_CONTENT_LEN}")
         return text
+
+
+class UserContextResponse(BaseModel):
+    """GET /interview/context 的响应：用于 Coach 页面判断新老用户。"""
+
+    is_returning: bool
+    target_role: str | None
+    target_company: str | None
+    user_background: str | None
+    session_count: int
+
+
+class ResetRequest(BaseModel):
+    """POST /interview/reset 的可选请求体：携带 Coach 收集的上下文。"""
+
+    target_role: str | None = None
+    user_background: str | None = None
