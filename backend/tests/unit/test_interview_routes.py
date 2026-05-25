@@ -191,3 +191,99 @@ def test_reset_requires_auth():
         headers={"Authorization": "Bearer invalid-token"},
     )
     assert resp.status_code == 401
+
+
+async def _fake_get_context(db, *, user_id):
+    return {
+        "is_returning": True,
+        "target_role": "AI Agent 工程师",
+        "target_company": None,
+        "user_background": "LangGraph 系统",
+        "session_count": 7,
+    }
+
+
+async def _fake_get_context_new(db, *, user_id):
+    return {
+        "is_returning": False,
+        "target_role": None,
+        "target_company": None,
+        "user_background": None,
+        "session_count": 0,
+    }
+
+
+def test_context_returns_returning_user_data():
+    """GET /context 老用户：is_returning=True，含 target_role。"""
+    app.dependency_overrides[get_current_user_id] = _fake_user
+    app.dependency_overrides[get_db] = _fake_db
+    try:
+        with patch("app.api.v1.interview.get_user_interview_context", _fake_get_context):
+            resp = TestClient(app).get("/api/v1/interview/context")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["is_returning"] is True
+    assert body["target_role"] == "AI Agent 工程师"
+    assert body["session_count"] == 7
+
+
+def test_context_returns_new_user_data():
+    """GET /context 新用户：is_returning=False，role 为 null。"""
+    app.dependency_overrides[get_current_user_id] = _fake_user
+    app.dependency_overrides[get_db] = _fake_db
+    try:
+        with patch("app.api.v1.interview.get_user_interview_context", _fake_get_context_new):
+            resp = TestClient(app).get("/api/v1/interview/context")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert resp.status_code == 200
+    assert resp.json()["is_returning"] is False
+
+
+def test_context_requires_auth():
+    """GET /context 无效 token 必须 401。"""
+    resp = TestClient(app).get(
+        "/api/v1/interview/context",
+        headers={"Authorization": "Bearer invalid"},
+    )
+    assert resp.status_code == 401
+
+
+def test_reset_with_context_passes_role_to_service():
+    """POST /reset 携带 target_role 时，service 以正确参数被调用。"""
+    app.dependency_overrides[get_current_user_id] = _fake_user
+    app.dependency_overrides[get_db] = _fake_db
+    mock_reset = AsyncMock()
+    try:
+        with patch("app.api.v1.interview.reset_interview_session", mock_reset):
+            resp = TestClient(app).post(
+                "/api/v1/interview/reset",
+                json={"target_role": "前端工程师", "user_background": "Vue 项目"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert resp.status_code == 200
+    mock_reset.assert_awaited_once()
+    _, kwargs = mock_reset.call_args
+    assert kwargs["target_role"] == "前端工程师"
+    assert kwargs["user_background"] == "Vue 项目"
+
+
+def test_reset_without_body_still_works():
+    """POST /reset 不带 body 时仍然返回 {status: ok}（保持向后兼容）。"""
+    app.dependency_overrides[get_current_user_id] = _fake_user
+    app.dependency_overrides[get_db] = _fake_db
+    mock_reset = AsyncMock()
+    try:
+        with patch("app.api.v1.interview.reset_interview_session", mock_reset):
+            resp = TestClient(app).post("/api/v1/interview/reset")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "ok"}

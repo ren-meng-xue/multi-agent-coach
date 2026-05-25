@@ -8,9 +8,13 @@ from sse_starlette.sse import EventSourceResponse
 
 from app.core.auth import get_current_user_id
 from app.db.session import get_db
-from app.schemas.interview import ChatRequest, TurnRequest
+from app.schemas.interview import ChatRequest, ResetRequest, TurnRequest, UserContextResponse
 from app.services.interview_chat import stream_interview_reply
-from app.services.interview_turn import reset_interview_session, stream_interview_turn
+from app.services.interview_turn import (
+    get_user_interview_context,
+    reset_interview_session,
+    stream_interview_turn,
+)
 
 router = APIRouter(prefix="/interview")
 
@@ -30,7 +34,6 @@ async def chat(
                 yield {"event": "delta", "data": json.dumps({"text": text}, ensure_ascii=False)}
             yield {"event": "done", "data": "{}"}
         except Exception:
-            # service 层已记 error 日志，这里转成用户可见的 error 事件（绝不静默吞）
             yield {
                 "event": "error",
                 "data": json.dumps(
@@ -74,11 +77,27 @@ async def turn(
     return EventSourceResponse(event_gen())
 
 
+@router.get("/context", response_model=UserContextResponse)
+async def get_context(
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> UserContextResponse:
+    """返回 Coach 页面所需的用户上下文：判断新老用户、展示历史岗位信息。"""
+    data = await get_user_interview_context(db, user_id=user_id)
+    return UserContextResponse(**data)
+
+
 @router.post("/reset")
 async def reset(
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
+    req: ResetRequest | None = None,
 ) -> dict:
-    """放弃当前进行中的面试，允许用户重新开始。"""
-    await reset_interview_session(db, user_id=user_id)
+    """放弃当前进行中的面试；可携带 Coach 收集的岗位上下文预建新 session。"""
+    await reset_interview_session(
+        db,
+        user_id=user_id,
+        target_role=req.target_role if req else None,
+        user_background=req.user_background if req else None,
+    )
     return {"status": "ok"}
