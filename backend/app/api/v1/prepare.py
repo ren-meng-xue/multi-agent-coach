@@ -53,6 +53,11 @@ async def prepare_start(
         return StreamingResponse(_err(), media_type="text/event-stream")
     except Exception as exc:
         log.error("jd_extract_failed", error=str(exc))
+        err_msg = "JD 提取失败，请手动粘贴 JD 文本后重试。"
+
+        async def _generic_err():
+            yield f"data: {json.dumps({'event': 'error', 'data': {'message': err_msg, 'code': 'jd_extract_failed'}}, ensure_ascii=False)}\n\n"
+        return StreamingResponse(_generic_err(), media_type="text/event-stream")
 
     state: PrepareState = {
         "user_id": user_id,

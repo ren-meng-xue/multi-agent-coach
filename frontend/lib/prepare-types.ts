@@ -1,3 +1,11 @@
+export interface JDContext {
+  company: string;
+  role: string;
+  key_skills: string[];
+  focus_areas: string[];
+  difficulty: "easy" | "medium" | "hard" | "faang";
+}
+
 export interface PreparedQuestion {
   id: number;
   question: string;

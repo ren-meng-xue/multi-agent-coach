@@ -4,12 +4,23 @@ from __future__ import annotations
 
 from typing import Any
 
+from openai import APIConnectionError, APITimeoutError, InternalServerError, RateLimitError
 from pydantic import BaseModel
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from app.agents.prepare.state import PrepareState
 from app.core.logging import get_logger
 
 log = get_logger("app.agents.prepare.nodes")
+
+_RETRYABLE = (APIConnectionError, APITimeoutError, InternalServerError, RateLimitError)
+
+_retry_llm = retry(
+    retry=retry_if_exception_type(_RETRYABLE),
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=0.5, max=4),
+    reraise=True,
+)
 
 
 # ─────────────────────────────────────────────
@@ -142,7 +153,12 @@ async def jd_analysis_node(state: PrepareState) -> PrepareState:
 
     prompt = JD_ANALYSIS_SYSTEM_PROMPT.format(jd_raw=jd_raw[:4000])
     model = _llm().with_structured_output(_JDContextModel)
-    output: _JDContextModel = await model.ainvoke([SystemMessage(content=prompt)])
+
+    @_retry_llm
+    async def _invoke() -> _JDContextModel:
+        return await model.ainvoke([SystemMessage(content=prompt)])  # type: ignore[return-value]
+
+    output: _JDContextModel = await _invoke()
 
     jd_context: JDContext = {
         "company": output.company,
@@ -261,9 +277,12 @@ async def master_node(state: PrepareState) -> PrepareState:
     # Phase 2: 结构化决策（快速，非流式）
     decision_prompt = MASTER_DECISION_PROMPT.format(context=context)
     model_decision = _llm().with_structured_output(_MasterDecision)
-    decision: _MasterDecision = await model_decision.ainvoke(
-        [SystemMessage(content=decision_prompt)]
-    )
+
+    @_retry_llm
+    async def _invoke_decision() -> _MasterDecision:
+        return await model_decision.ainvoke([SystemMessage(content=decision_prompt)])  # type: ignore[return-value]
+
+    decision: _MasterDecision = await _invoke_decision()
 
     # 保证 question_gen 始终在 chain 末尾
     chain = list(dict.fromkeys(decision.chain + ["question_gen"]))

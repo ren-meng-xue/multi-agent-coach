@@ -101,6 +101,7 @@ export function InterviewChat() {
     }
   }, [report, isStreaming]);
   const abortRef = useRef<AbortController | null>(null);
+  const prepAbortRef = useRef<AbortController | null>(null);
   const assistantIndexRef = useRef<number | null>(null);
   const deltaBufferRef = useRef("");
   const frameRef = useRef<number | null>(null);
@@ -138,6 +139,10 @@ export function InterviewChat() {
   }, [isLoaded, isSignedIn, getToken]);
 
   async function runPrepare(ctx: { target_role?: string; user_background?: string; jd_text?: string; jd_url?: string }) {
+    prepAbortRef.current?.abort();
+    const abortController = new AbortController();
+    prepAbortRef.current = abortController;
+
     try {
       const token = isDevAuthBypassEnabled ? DEV_AUTH_BYPASS_TOKEN : (await getToken() ?? "");
       for await (const ev of startPrepareStreamFetch({
@@ -146,10 +151,13 @@ export function InterviewChat() {
         userBackground: ctx.user_background,
         jdText: ctx.jd_text,
         jdUrl: ctx.jd_url,
+        signal: abortController.signal,
       })) {
+        if (abortController.signal.aborted) break;
         handlePrepareEvent(ev);
       }
     } catch (err) {
+      if (abortController.signal.aborted) return;
       console.error("Preparation stream failed:", err);
       setPrepStatus(null);
     }
@@ -176,17 +184,6 @@ export function InterviewChat() {
           n.id === data.node ? { ...n, tokens: n.tokens + (data.text ?? "") } : n
         )
       );
-
-      if (data.need_direction) {
-        setPrepStatus("waiting_direction");
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            content: "你好！我为你检测了历史表现，发现你目前还没有设置本次练习的明确岗位。请告诉我你想练习什么岗位或面试方向？（如「AI Agent 工程师」）",
-          },
-        ]);
-      }
     }
 
     if (event === "node_done") {
@@ -197,6 +194,17 @@ export function InterviewChat() {
             : n
         )
       );
+      // need_direction 由 master node_done 携带，在这里处理
+      if (data.node === "master" && data.need_direction) {
+        setPrepStatus("waiting_direction");
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: "你好！我为你检测了历史表现，发现你目前还没有设置本次练习的明确岗位。请告诉我你想练习什么岗位或面试方向？（如「AI Agent 工程师」）",
+          },
+        ]);
+      }
     }
 
     if (event === "done") {
@@ -265,6 +273,7 @@ export function InterviewChat() {
   useEffect(() => {
     return () => {
       abortRef.current?.abort();
+      prepAbortRef.current?.abort();
       if (frameRef.current !== null) {
         window.cancelAnimationFrame(frameRef.current);
       }

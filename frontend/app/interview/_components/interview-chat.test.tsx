@@ -339,7 +339,7 @@ describe("InterviewChat", () => {
     });
   });
 
-  it("从 sessionStorage 读取上下文后显示确认消息", () => {
+  it("从 sessionStorage 读取上下文后，messages 初始化为空（走准备流水线）", () => {
     sessionStorage.setItem(
       "interview_context",
       JSON.stringify({ target_role: "前端工程师", user_background: "Vue 项目" }),
@@ -347,8 +347,10 @@ describe("InterviewChat", () => {
 
     render(<InterviewChat />);
 
-    expect(screen.getByText(/前端工程师/)).toBeInTheDocument();
-    expect(sessionStorage.getItem("interview_context")).toBeNull();
+    // Phase 3: 有 target_role 时走多 Agent 准备流，首屏消息为空，不显示旧的开场消息
+    expect(screen.queryByText(/前端工程师/)).not.toBeInTheDocument();
+    // 通用开场白也不显示（由 PreparationCard 接管）
+    expect(screen.queryByText(/面试岗位/)).not.toBeInTheDocument();
   });
 
   it("没有 sessionStorage 上下文时显示通用开场白", () => {

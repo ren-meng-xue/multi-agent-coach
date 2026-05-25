@@ -76,7 +76,7 @@ type StreamInterviewChatOptions = {
   token: string;
   message: string;
   preparedQuestions?: import("./prepare-types").PreparedQuestion[];
-  jdContext?: any;
+  jdContext?: import("./prepare-types").JDContext | null;
   signal?: AbortSignal;
   onDelta: (text: string) => void;
   onState?: (state: InterviewProgressState) => void;
@@ -238,6 +238,7 @@ export async function* startPrepareStreamFetch(params: {
   jdText?: string;
   jdUrl?: string;
   jdFile?: File;
+  signal?: AbortSignal;
 }): AsyncGenerator<import("./prepare-types").PrepareSSEEvent, void, unknown> {
   const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
   const form = new FormData();
@@ -251,6 +252,7 @@ export async function* startPrepareStreamFetch(params: {
     method: "POST",
     headers: { Authorization: `Bearer ${params.token}` },
     body: form,
+    signal: params.signal,
   });
 
   if (!resp.ok || !resp.body) throw new Error("Prepare stream failed");
