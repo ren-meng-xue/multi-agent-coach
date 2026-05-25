@@ -2,20 +2,62 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { streamInterviewChat, type InterviewChatMessage } from "@/lib/interview-chat";
+import {
+  streamInterviewChat,
+  resetInterviewSession,
+  type InterviewChatMessage,
+  type InterviewProgressState,
+  type InterviewReport,
+} from "@/lib/interview-chat";
 import { MessageBubble } from "./message-bubble";
 import { ChatInput } from "./chat-input";
+import { ReportCard } from "./report-card";
+import { Button } from "@/components/ui/button";
+import { Copy, Check } from "lucide-react";
+
+const OPENING_MESSAGE: InterviewChatMessage = {
+  role: "assistant",
+  content:
+    "你好！在开始之前，请告诉我你想练习的面试岗位、公司，或者你想练习的具体项目背景与技术主题？（例如：AI Agent 工程师，或者分布式系统的架构设计）",
+};
+
+const INITIAL_PROGRESS: InterviewProgressState = {
+  stage: "opening",
+  question_count: 0,
+  total_questions: 5,
+};
 
 /** 面试房间的单面试官流式聊天主体。 */
 export function InterviewChat() {
-  const { getToken } = useAuth();
-  const [messages, setMessages] = useState<InterviewChatMessage[]>([]);
+  const { isLoaded, isSignedIn, getToken } = useAuth();
+  const [messages, setMessages] = useState<InterviewChatMessage[]>([OPENING_MESSAGE]);
+  const [progress, setProgress] = useState<InterviewProgressState>(INITIAL_PROGRESS);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [report, setReport] = useState<InterviewReport | null>(null);
+  const [copied, setCopied] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const assistantIndexRef = useRef<number | null>(null);
   const deltaBufferRef = useRef("");
   const frameRef = useRef<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const hasResetRef = useRef(false);
+  // 防止 reset 完成前用户提前发消息重用旧 session
+  const isResettingRef = useRef(false);
+
+  // 页面加载时 abandon 旧 session，确保每次进入都是全新一轮
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || hasResetRef.current) return;
+
+    hasResetRef.current = true;
+    isResettingRef.current = true;
+    getToken({ skipCache: true })
+      .then(async (token) => {
+        if (token) await resetInterviewSession({ token });
+      })
+      .finally(() => {
+        isResettingRef.current = false;
+      });
+  }, [isLoaded, isSignedIn, getToken]);
 
   useEffect(() => {
     return () => {
@@ -28,7 +70,7 @@ export function InterviewChat() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView?.({ block: "end" });
-  }, [messages]);
+  }, [messages, report]);
 
   function flushBufferedDelta() {
     const text = deltaBufferRef.current;
@@ -62,8 +104,43 @@ export function InterviewChat() {
     }
   }
 
+  function handleNewRound() {
+    abortRef.current?.abort();
+    discardBufferedDelta();
+    setMessages([OPENING_MESSAGE]);
+    setProgress(INITIAL_PROGRESS);
+    setReport(null);
+    isResettingRef.current = true;
+    getToken()
+      .then(async (token) => {
+        if (token) await resetInterviewSession({ token });
+      })
+      .finally(() => {
+        isResettingRef.current = false;
+      });
+  }
+
+  async function handleCopyChat() {
+    if (messages.length === 0) return;
+
+    const chatText = messages
+      .map((msg) => {
+        const roleName = msg.role === "user" ? "求职者" : "面试官";
+        return `【${roleName}】：${msg.content}`;
+      })
+      .join("\n\n");
+
+    try {
+      await navigator.clipboard.writeText(chatText);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy chat: ", err);
+    }
+  }
+
   async function handleSend(content: string) {
-    if (!content || isStreaming) return;
+    if (!content || isStreaming || isResettingRef.current) return;
 
     abortRef.current?.abort();
     const abortController = new AbortController();
@@ -86,8 +163,10 @@ export function InterviewChat() {
 
       await streamInterviewChat({
         token,
-        messages: [...messages, userMessage],
+        message: content,
         signal: abortController.signal,
+        onState: setProgress,
+        onReport: setReport,
         onDelta: (text) => {
           deltaBufferRef.current += text;
           scheduleDeltaFlush();
@@ -120,27 +199,97 @@ export function InterviewChat() {
       />
 
       <div className="relative z-10 flex min-h-0 w-full flex-col">
-        <header className="flex h-14 shrink-0 items-center border-b border-black/10 px-5 dark:border-white/10">
-          <h1 className="bg-gradient-to-br from-[#534AB7] to-rose-600 bg-clip-text text-sm font-bold text-transparent">
-            AI 模拟面试舱 · Agent Cabin
-          </h1>
+        <header className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-black/10 px-5 py-3 dark:border-white/10">
+          <div>
+            <h1 className="bg-gradient-to-br from-[#534AB7] to-rose-600 bg-clip-text text-sm font-bold text-transparent">
+              AI 模拟面试舱 · Agent Cabin
+            </h1>
+            <p className="mt-1 text-xs text-black/45 dark:text-white/45">
+              {formatStageLabel(progress.stage)}
+            </p>
+          </div>
+          <div className="flex items-center gap-4">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCopyChat}
+              disabled={messages.length === 0}
+              className="gap-1.5 border-black/10 text-xs font-medium hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5 disabled:pointer-events-none disabled:opacity-50"
+              title="复制当前全部会话内容"
+            >
+              {copied ? (
+                <>
+                  <Check className="size-3.5 text-green-600 dark:text-green-500" />
+                  <span>已复制</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="size-3.5 text-black/60 dark:text-white/60" />
+                  <span>复制会话</span>
+                </>
+              )}
+            </Button>
+            <InterviewProgress progress={progress} />
+          </div>
         </header>
 
         <div className="interview-chat-scroll flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-5 py-5">
           {messages.map((message, index) => (
             <MessageBubble
-              // 当前阶段没有服务端消息 ID，顺序列表只追加或替换末尾 assistant 内容。
               key={`${message.role}-${index}`}
               message={message}
               isPending={isStreaming && index === messages.length - 1}
             />
           ))}
+          {report && (
+            <>
+              <div className="flex items-center gap-3 py-1" role="separator" aria-label="面试结束">
+                <div className="flex-1 border-t border-black/10 dark:border-white/10" />
+                <span className="shrink-0 text-xs text-black/35 dark:text-white/35">面试结束 · 评估报告</span>
+                <div className="flex-1 border-t border-black/10 dark:border-white/10" />
+              </div>
+              <ReportCard report={report} />
+            </>
+          )}
           <div ref={messagesEndRef} />
         </div>
 
+        {progress.stage === "closing" && (
+          <div className="shrink-0 px-5 pb-3">
+            <Button variant="outline" onClick={handleNewRound}>
+              开始新一轮面试
+            </Button>
+          </div>
+        )}
         <ChatInput onSend={handleSend} isStreaming={isStreaming} />
       </div>
     </section>
   );
 }
 
+function InterviewProgress({ progress }: { progress: InterviewProgressState }) {
+  const total = Math.max(progress.total_questions, 1);
+  const current = Math.min(Math.max(progress.question_count, 0), total);
+  const percent = progress.stage === "closing" ? 100 : Math.round((current / total) * 100);
+
+  return (
+    <div className="flex min-w-[168px] flex-col gap-1.5" aria-label="面试进度">
+      <div className="flex items-center justify-between text-xs font-medium text-black/60 dark:text-white/60">
+        <span>{progress.stage === "opening" ? "准备中" : `第 ${current}/${total} 题`}</span>
+        <span>{percent}%</span>
+      </div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+        <div
+          className="h-full rounded-full bg-[#534AB7] transition-[width] duration-300"
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function formatStageLabel(stage: InterviewProgressState["stage"]) {
+  if (stage === "opening") return "开场信息收集中";
+  if (stage === "closing") return "本轮面试已结束";
+  return "正式面试进行中";
+}

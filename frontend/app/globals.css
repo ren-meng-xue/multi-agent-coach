@@ -876,3 +876,20 @@ body::before {
   scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
 }
 
+/* === Coach 页面专用的极简微过渡和呼吸动画 === */
+@keyframes coachPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.4;
+  }
+  50% {
+    transform: scale(1.6);
+    opacity: 1;
+  }
+}
+
+.animate-coach-pulse {
+  animation: coachPulse 1.4s ease-in-out infinite;
+}
+
+

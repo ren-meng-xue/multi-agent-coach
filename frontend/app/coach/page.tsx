@@ -1,6 +1,12 @@
-import { PlaceholderPage } from "../components/app-shell";
+import { AppShell } from "../components/app-shell";
+import { CoachDashboard } from "./coach-dashboard";
 
-/** 渲染 Coach 路由占位页。 */
+/** 渲染 Coach 交互页面。 */
 export default function CoachPage() {
-  return <PlaceholderPage eyebrow="Coach" title="Coach" />;
+  return (
+    <AppShell>
+      <CoachDashboard />
+    </AppShell>
+  );
 }
+

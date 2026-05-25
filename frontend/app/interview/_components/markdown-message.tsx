@@ -10,7 +10,11 @@ type Block =
   | { type: "paragraph"; lines: string[] }
   | { type: "unordered-list"; items: string[] }
   | { type: "ordered-list"; items: string[] }
-  | { type: "code"; language: string; content: string };
+  | { type: "blockquote"; lines: string[] }
+  | { type: "todo-list"; items: { checked: boolean; text: string }[] }
+  | { type: "code"; language: string; content: string }
+  | { type: "heading"; level: number; text: string }
+  | { type: "thematic-break" };
 
 /** 渲染面试回复常见 Markdown 子集，不使用 HTML 注入，避免模型输出变成可执行内容。 */
 export function MarkdownMessage({ content, isUser }: MarkdownMessageProps) {
@@ -28,7 +32,7 @@ function parseMarkdownBlocks(content: string): Block[] {
   const blocks: Block[] = [];
   let paragraph: string[] = [];
   let listItems: string[] = [];
-  let listType: "unordered-list" | "ordered-list" | null = null;
+  let listType: "unordered-list" | "ordered-list" | "todo-list" | "blockquote" | null = null;
   let codeLines: string[] = [];
   let codeLanguage = "";
   let inCodeBlock = false;
@@ -42,7 +46,20 @@ function parseMarkdownBlocks(content: string): Block[] {
 
   function flushList() {
     if (listType && listItems.length) {
-      blocks.push({ type: listType, items: listItems });
+      if (listType === "blockquote") {
+        blocks.push({ type: "blockquote", lines: listItems });
+      } else if (listType === "todo-list") {
+        const todoItems = listItems.map((item) => {
+          const match = item.match(/^\[([ xX])\]\s*(.+)$/);
+          return {
+            checked: match ? match[1].toLowerCase() === "x" : false,
+            text: match ? match[2] : item,
+          };
+        });
+        blocks.push({ type: "todo-list", items: todoItems });
+      } else {
+        blocks.push({ type: listType, items: listItems });
+      }
       listItems = [];
       listType = null;
     }
@@ -80,17 +97,62 @@ function parseMarkdownBlocks(content: string): Block[] {
       continue;
     }
 
-    const unordered = line.match(/^\s*[-*]\s+(.+)$/);
-    if (unordered) {
+    // 1. 匹配分割线 (--- 或 *** 或 ___)
+    const hrMatch = line.match(/^\s*([-*_])\1{2,}\s*$/);
+    if (hrMatch) {
       flushParagraph();
-      if (listType !== "unordered-list") {
-        flushList();
-        listType = "unordered-list";
-      }
-      listItems.push(unordered[1]);
+      flushList();
+      blocks.push({ type: "thematic-break" });
       continue;
     }
 
+    // 2. 匹配标题 (### 标题 或 ## 标题 或 # 标题)
+    const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
+    if (headingMatch) {
+      flushParagraph();
+      flushList();
+      blocks.push({
+        type: "heading",
+        level: headingMatch[1].length,
+        text: headingMatch[2],
+      });
+      continue;
+    }
+
+    // 3. 匹配 blockquote (▎, ▌, ▍, |, > 等前缀)
+    const quoteMatch = line.match(/^\s*[▎▌▍|>\u2588-\u258f]\s*(.*)$/);
+    if (quoteMatch) {
+      flushParagraph();
+      if (listType !== "blockquote") {
+        flushList();
+        listType = "blockquote";
+      }
+      listItems.push(quoteMatch[1]);
+      continue;
+    }
+
+    // 2. 无序列表（含 Todo List 判断）
+    const unordered = line.match(/^\s*[-*]\s+(.+)$/);
+    if (unordered) {
+      flushParagraph();
+      const todoMatch = unordered[1].match(/^\[([ xX])\]\s*(.+)$/);
+      if (todoMatch) {
+        if (listType !== "todo-list") {
+          flushList();
+          listType = "todo-list";
+        }
+        listItems.push(unordered[1]);
+      } else {
+        if (listType !== "unordered-list") {
+          flushList();
+          listType = "unordered-list";
+        }
+        listItems.push(unordered[1]);
+      }
+      continue;
+    }
+
+    // 3. 有序列表
     const ordered = line.match(/^\s*\d+[.)]\s+(.+)$/);
     if (ordered) {
       flushParagraph();
@@ -115,12 +177,121 @@ function parseMarkdownBlocks(content: string): Block[] {
   return blocks.length ? blocks : [{ type: "paragraph", lines: [content] }];
 }
 
+function smartJoinParagraphLines(lines: string[]): string {
+  let result = "";
+  for (let i = 0; i < lines.length; i++) {
+    const current = lines[i];
+    const next = lines[i + 1];
+
+    result += current;
+    if (next !== undefined) {
+      const trimmedCurrent = current.trim();
+      const trimmedNext = next.trim();
+
+      if (trimmedCurrent === "" || trimmedNext === "") {
+        // 如果有任意一行是空行，说明是真正的段落分行，保留换行
+        result += "\n";
+      } else {
+        // 如果当前行以中文或英文句号、感叹号、问号、冒号、分号、收尾括号、引号等结束，说明是故意换行，应保留换行
+        const isSentenceEnd = /[。！？：；”）”〉》】\]\.\?!\:;\)"]$/.test(trimmedCurrent);
+        if (isSentenceEnd) {
+          result += "\n";
+        } else {
+          // 两个都是非空行，且当前行不是句子结尾，说明这是一个硬折行，必须进行智能合并
+          const hasChinese = /[\u4e00-\u9fa5]/.test(trimmedCurrent) || /[\u4e00-\u9fa5]/.test(trimmedNext);
+          if (hasChinese) {
+            // 只要有任意一方是中文，直接拼接消除换行
+          } else {
+            // 纯英文或西文字符相连，用空格连接
+            if (/[a-zA-Z0-9,\.\?!]$/.test(trimmedCurrent) && /^[a-zA-Z0-9]/.test(trimmedNext)) {
+              result += " ";
+            } else {
+              // 其他符号拼接，保留紧凑
+            }
+          }
+        }
+      }
+    }
+  }
+  return result;
+}
+
 function renderBlock(block: Block, index: number, isUser: boolean): ReactNode {
+  if (block.type === "heading") {
+    const Tag = `h${block.level}` as "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
+    const sizeClass = {
+      h1: "text-lg font-extrabold text-zinc-900 dark:text-zinc-100 mt-4 mb-2 first:mt-0",
+      h2: "text-base font-bold text-zinc-900 dark:text-zinc-100 mt-3 mb-1.5 first:mt-0",
+      h3: "text-sm font-semibold text-zinc-900 dark:text-zinc-100 mt-2.5 mb-1 first:mt-0",
+      h4: "text-sm font-medium text-zinc-900 dark:text-zinc-100 mt-2 mb-1 first:mt-0",
+      h5: "text-xs font-semibold text-zinc-900 dark:text-zinc-100 mt-2 mb-1 first:mt-0",
+      h6: "text-xs font-medium text-zinc-900 dark:text-zinc-100 mt-2 mb-1 first:mt-0",
+    }[Tag];
+
+    return (
+      <Tag key={index} className={cn(sizeClass, isUser && "text-white")}>
+        {renderInline(block.text, isUser)}
+      </Tag>
+    );
+  }
+
+  if (block.type === "thematic-break") {
+    return (
+      <hr
+        key={index}
+        className={cn(
+          "my-4 border-t border-black/10 dark:border-white/10",
+          isUser && "border-white/20"
+        )}
+      />
+    );
+  }
+
   if (block.type === "paragraph") {
     return (
       <p key={index} className="whitespace-pre-wrap">
-        {renderInline(block.lines.join("\n"), isUser)}
+        {renderInline(smartJoinParagraphLines(block.lines), isUser)}
       </p>
+    );
+  }
+
+  if (block.type === "blockquote") {
+    return (
+      <blockquote
+        key={index}
+        className={cn(
+          "border-l-3 border-[#534AB7]/40 bg-zinc-100/50 dark:bg-zinc-800/30 pl-3.5 py-1.5 pr-2 my-2 rounded-r-lg text-sm leading-relaxed",
+          isUser ? "text-white/90 border-white/40 bg-white/10" : "text-zinc-700 dark:text-zinc-300",
+        )}
+      >
+        {renderInline(smartJoinParagraphLines(block.lines), isUser)}
+      </blockquote>
+    );
+  }
+
+  if (block.type === "todo-list") {
+    return (
+      <ul key={index} className="space-y-2 my-2 pl-1">
+        {block.items.map((item, itemIndex) => (
+          <li key={itemIndex} className="flex items-start gap-2.5 text-sm">
+            <input
+              type="checkbox"
+              checked={item.checked}
+              readOnly
+              className="mt-1 size-3.5 shrink-0 rounded border-black/10 accent-[#534AB7] dark:border-white/10"
+            />
+            <span
+              className={cn(
+                item.checked
+                  ? "text-zinc-400 line-through decoration-zinc-400/50"
+                  : "text-zinc-800 dark:text-zinc-200",
+              )}
+            >
+              {renderInline(item.text, isUser)}
+            </span>
+          </li>
+        ))}
+      </ul>
     );
   }
 
@@ -183,7 +354,19 @@ function renderInline(text: string, isUser: boolean): ReactNode[] {
         </code>,
       );
     } else {
-      nodes.push(<strong key={key}>{value.slice(2, -2)}</strong>);
+      nodes.push(
+        <strong
+          key={key}
+          className={cn(
+            "font-extrabold",
+            isUser
+              ? "text-white border-b border-white/40"
+              : "text-[#534AB7] dark:text-[#9A91FB] bg-[#534AB7]/5 dark:bg-[#9A91FB]/10 px-1 py-0.5 rounded",
+          )}
+        >
+          {value.slice(2, -2)}
+        </strong>,
+      );
     }
 
     lastIndex = match.index + value.length;
