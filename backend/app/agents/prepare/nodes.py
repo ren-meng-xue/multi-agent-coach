@@ -154,3 +154,73 @@ async def jd_analysis_node(state: PrepareState) -> PrepareState:
     log.info("jd_analysis_done", role=output.role, skills_count=len(output.key_skills))
     return {**state, "jd_context": jd_context}
 
+
+async def question_gen_node(state: PrepareState) -> PrepareState:
+    """基于方向 + 薄弱点 + 故事库生成 5 道定制题目（流式输出）。"""
+    import json
+    import re
+
+    from langchain_core.messages import SystemMessage
+
+    from app.agents.prepare.prompts import QUESTION_GEN_SYSTEM_PROMPT
+    from app.agents.prepare.state import PreparedQuestion
+
+    direction = state.get("direction") or state.get("user_direction") or "通用软件工程师"
+    target_role = state.get("user_direction") or direction
+    weak_areas = state.get("weak_areas") or []
+    star_stories = state.get("star_stories") or []
+    jd_context = state.get("jd_context")
+
+    jd_block = ""
+    if jd_context:
+        jd_block = f"JD 考点：{', '.join(jd_context.get('focus_areas', []))}\n技术栈：{', '.join(jd_context.get('key_skills', []))}"
+
+    weak_block = f"历史薄弱点（优先出题）：{', '.join(weak_areas)}" if weak_areas else ""
+
+    stories_block = ""
+    if star_stories:
+        titles = [s["title"] for s in star_stories[:3]]
+        stories_block = f"候选人真实项目（可以针对这些项目出具体问题）：{', '.join(titles)}"
+
+    prompt = QUESTION_GEN_SYSTEM_PROMPT.format(
+        count=5,
+        direction=direction,
+        target_role=target_role,
+        jd_context_block=jd_block,
+        weak_areas_block=weak_block,
+        star_stories_block=stories_block,
+    )
+
+    # 流式调用，tagged 供 SSE 捕获
+    model = _llm(streaming=True).with_config(tags=["prepare_question_gen_stream"])
+    full_text = ""
+    async for chunk in model.astream([SystemMessage(content=prompt)]):
+        content = chunk.content if isinstance(chunk.content, str) else ""
+        full_text += content
+
+    # 解析 JSON 数组
+    questions: list[PreparedQuestion] = []
+    try:
+        json_match = re.search(r"\[.*\]", full_text, re.DOTALL)
+        if json_match:
+            raw_list = json.loads(json_match.group())
+            questions = sorted(
+                [
+                    {
+                        "id": int(q.get("id", i + 1)),
+                        "question": str(q["question"]),
+                        "category": q.get("category", "technical"),
+                        "focus_area": str(q.get("focus_area", "")),
+                        "priority": int(q.get("priority", 5)),
+                    }
+                    for i, q in enumerate(raw_list)
+                ],
+                key=lambda x: x["priority"],
+            )
+    except (json.JSONDecodeError, KeyError) as exc:
+        log.error("question_gen_parse_failed", error=str(exc), raw=full_text[:200])
+
+    log.info("question_gen_done", count=len(questions))
+    return {**state, "prepared_questions": questions}
+
+

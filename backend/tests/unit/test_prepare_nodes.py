@@ -87,3 +87,64 @@ async def test_jd_analysis_skips_when_no_jd():
     state: PrepareState = {"user_id": "u1", "jd_raw": None}
     result = await jd_analysis_node(state)
     assert result.get("jd_context") is None
+
+
+# 测试辅助：模拟 async iterator
+async def aiter(items):
+    for item in items:
+        yield item
+
+
+@pytest.mark.asyncio
+async def test_question_gen_returns_5_questions():
+    from app.agents.prepare.nodes import question_gen_node
+
+    state: PrepareState = {
+        "user_id": "u1",
+        "direction": "AI Agent 工程师",
+        "user_direction": "AI Agent 工程师",
+        "weak_areas": ["量化结果欠缺"],
+        "star_stories": [],
+        "jd_context": None,
+    }
+
+    mock_content = '[{"id":1,"question":"Q1","category":"technical","focus_area":"RAG","priority":1},{"id":2,"question":"Q2","category":"behavioral","focus_area":"量化","priority":1},{"id":3,"question":"Q3","category":"technical","focus_area":"Agent","priority":2},{"id":4,"question":"Q4","category":"system_design","focus_area":"架构","priority":3},{"id":5,"question":"Q5","category":"technical","focus_area":"LangGraph","priority":3}]'
+
+    with patch("app.agents.prepare.nodes._llm") as mock_llm:
+        mock_chunk = MagicMock()
+        mock_chunk.content = mock_content
+        mock_llm.return_value.with_config.return_value.astream = MagicMock(
+            return_value=aiter([mock_chunk])
+        )
+        result = await question_gen_node(state)
+
+    assert len(result["prepared_questions"]) == 5
+    assert result["prepared_questions"][0]["priority"] == 1
+
+
+@pytest.mark.asyncio
+async def test_question_gen_weak_areas_first():
+    """薄弱点相关题目 priority 应为最低数值（最高优先级）。"""
+    from app.agents.prepare.nodes import question_gen_node
+
+    state: PrepareState = {
+        "user_id": "u1",
+        "direction": "后端工程师",
+        "user_direction": "后端工程师",
+        "weak_areas": ["量化结果欠缺", "系统设计薄弱"],
+        "star_stories": [],
+        "jd_context": None,
+    }
+
+    mock_content = '[{"id":1,"question":"量化题","category":"behavioral","focus_area":"量化","priority":1},{"id":2,"question":"系统设计题","category":"system_design","focus_area":"设计","priority":1},{"id":3,"question":"Q3","category":"technical","focus_area":"Python","priority":3},{"id":4,"question":"Q4","category":"technical","focus_area":"DB","priority":3},{"id":5,"question":"Q5","category":"behavioral","focus_area":"团队","priority":4}]'
+
+    with patch("app.agents.prepare.nodes._llm") as mock_llm:
+        mock_chunk = MagicMock()
+        mock_chunk.content = mock_content
+        mock_llm.return_value.with_config.return_value.astream = MagicMock(
+            return_value=aiter([mock_chunk])
+        )
+        result = await question_gen_node(state)
+
+    priorities = [q["priority"] for q in result["prepared_questions"]]
+    assert priorities[0] <= priorities[-1]  # 第一题优先级最高
