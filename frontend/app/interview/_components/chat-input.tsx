@@ -127,6 +127,7 @@ export function ChatInput({ onSend, isStreaming, onUploadFile }: ChatInputProps)
   const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const isComposingRef = useRef(false);
 
   // 全局 Fixed 悬浮 Tooltip 状态，用于脱离 DOM 容器限制，自由飘浮于输入框上方外界
   const [globalTooltip, setGlobalTooltip] = useState<{
@@ -178,9 +179,14 @@ export function ChatInput({ onSend, isStreaming, onUploadFile }: ChatInputProps)
     };
   }, [attachments]);
 
-  // 4. 回车发送，Shift + Enter 换行
+  // 4. 回车发送，Shift + Enter 换行，避开输入法（IME）确认确认候选字的回车
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === "Enter" && !event.shiftKey) {
+    // 只有在非输入法合成状态且没有按下 Shift 键时，才触发回车发送
+    if (
+      event.key === "Enter" &&
+      !event.shiftKey &&
+      !isComposingRef.current
+    ) {
       event.preventDefault();
       const form = event.currentTarget.form;
       if (form) {
@@ -450,6 +456,14 @@ export function ChatInput({ onSend, isStreaming, onUploadFile }: ChatInputProps)
               disabled={isStreaming || isUploading}
               onChange={(event) => setValue(event.target.value)}
               onKeyDown={handleKeyDown}
+              onCompositionStart={() => (isComposingRef.current = true)}
+              onCompositionEnd={() => {
+                // 使用 setTimeout 是为了让 handleKeyDown 能在合成结束的那一刻依然看到合成状态，
+                // 避免某些浏览器下 compositionEnd 先于 keydown 触发导致的回车误发。
+                setTimeout(() => {
+                  isComposingRef.current = false;
+                }, 0);
+              }}
               onPaste={handlePaste}
               placeholder="输入方向、题目或粘贴 JD..."
               value={value}
