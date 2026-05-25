@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
 from app.core.auth import get_current_user_id
+from app.core.logging import get_logger
 from app.db.session import get_db
 from app.schemas.interview import (
     ChatRequest,
@@ -24,6 +25,7 @@ from app.services.interview_turn import (
 )
 
 router = APIRouter(prefix="/interview")
+log = get_logger("app.api.v1.interview")
 
 
 @router.post("/chat")
@@ -79,7 +81,8 @@ async def turn(
                     "event": event["event"],
                     "data": json.dumps(event["data"], ensure_ascii=False),
                 }
-        except Exception:
+        except Exception as exc:
+            log.error("interview_turn_failed", error=str(exc), exc_info=True)
             yield {
                 "event": "error",
                 "data": json.dumps(
