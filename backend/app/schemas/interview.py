@@ -40,3 +40,19 @@ class ChatRequest(BaseModel):
         if self.messages[-1].role != "user":
             raise ValueError("最后一条消息必须是 user")
         return self
+
+
+class TurnRequest(BaseModel):
+    """统一面试入口请求：前端只提交本轮用户输入，历史由后端按 user_id 管理。"""
+
+    message: str
+
+    @field_validator("message")
+    @classmethod
+    def _message_not_blank(cls, v: str) -> str:
+        text = v.strip()
+        if not text:
+            raise ValueError("message 不能为空")
+        if len(text) > MAX_CONTENT_LEN:
+            raise ValueError(f"message 长度不能超过 {MAX_CONTENT_LEN}")
+        return text

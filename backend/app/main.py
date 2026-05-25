@@ -7,16 +7,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.agents.interviewer.graph import (
+    close_interviewer_checkpointer,
+    setup_interviewer_checkpointer,
+)
 from app.api.v1 import auth as auth_v1
 from app.api.v1 import health as health_v1
 from app.api.v1 import interview as interview_v1
-from app.core.config import get_settings
+from app.core.config import configure_langsmith_environment, get_settings
 from app.core.exceptions import AppException
 from app.core.logging import configure_logging, get_logger
 from app.schemas.response import Response
 from app.services.interview_chat import close_client as close_interview_chat_client
 
 settings = get_settings()
+configure_langsmith_environment(settings)
 configure_logging(level=settings.log_level, json_output=(settings.app_env != "dev"))
 log = get_logger("app.main")
 
@@ -25,7 +30,9 @@ log = get_logger("app.main")
 async def lifespan(app: FastAPI):
     """应用启动/关闭时的生命周期事件。"""
     log.info("startup", app_env=settings.app_env)
+    await setup_interviewer_checkpointer(settings.database_url)
     yield
+    await close_interviewer_checkpointer()
     await close_interview_chat_client()
     log.info("shutdown")
 

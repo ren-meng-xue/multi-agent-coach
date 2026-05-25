@@ -3,11 +3,14 @@ import json
 from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
 from app.core.auth import get_current_user_id
-from app.schemas.interview import ChatRequest
+from app.db.session import get_db
+from app.schemas.interview import ChatRequest, TurnRequest
 from app.services.interview_chat import stream_interview_reply
+from app.services.interview_turn import reset_interview_session, stream_interview_turn
 
 router = APIRouter(prefix="/interview")
 
@@ -35,4 +38,47 @@ async def chat(
                 ),
             }
 
+    return EventSourceResponse(
+        event_gen(),
+        headers={
+            "Deprecation": "true",
+            "Link": '</api/v1/interview/turn>; rel="successor-version"',
+            "X-Deprecated-Endpoint": "Use /api/v1/interview/turn",
+        },
+    )
+
+
+@router.post("/turn")
+async def turn(
+    req: TurnRequest,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> EventSourceResponse:
+    """统一面试入口：前端只传本轮 message，后端按 Clerk user_id 管内部 run。"""
+
+    async def event_gen() -> AsyncIterator[dict[str, str]]:
+        try:
+            async for event in stream_interview_turn(req.message, user_id=user_id, db=db):
+                yield {
+                    "event": event["event"],
+                    "data": json.dumps(event["data"], ensure_ascii=False),
+                }
+        except Exception:
+            yield {
+                "event": "error",
+                "data": json.dumps(
+                    {"message": "AI 暂时无法响应，请稍后重试"}, ensure_ascii=False
+                ),
+            }
+
     return EventSourceResponse(event_gen())
+
+
+@router.post("/reset")
+async def reset(
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """放弃当前进行中的面试，允许用户重新开始。"""
+    await reset_interview_session(db, user_id=user_id)
+    return {"status": "ok"}

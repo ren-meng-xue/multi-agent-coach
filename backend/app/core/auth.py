@@ -54,20 +54,28 @@ def decode_clerk_token(
             options=options,
             issuer=issuer,
             audience=audience or None,
+            leeway=10,  # 允许 10 秒的时间漂移缓冲，彻底解决服务器与本地时钟不同步导致的 iat / exp 校验 401
         )
         sub = payload.get("sub")
         if not sub:
             log.warning("clerk_token_missing_sub")
             raise HTTPException(status_code=401, detail="token missing sub claim")
         if authorized_party and payload.get("azp") != authorized_party:
-            log.warning("clerk_token_invalid_authorized_party")
-            raise HTTPException(status_code=401, detail="invalid token authorized party")
+            log.warning(
+                "clerk_token_invalid_authorized_party",
+                got=payload.get("azp"),
+                expected=authorized_party,
+            )
+            raise HTTPException(
+                status_code=401,
+                detail=f"invalid token authorized party: got '{payload.get('azp')}', expected '{authorized_party}'",
+            )
         return sub
     except HTTPException:
         raise
     except jwt.PyJWTError as exc:
         log.warning("clerk_token_invalid", error=str(exc))
-        raise HTTPException(status_code=401, detail="invalid token") from exc
+        raise HTTPException(status_code=401, detail=f"invalid token: {exc}") from exc
 
 
 async def get_current_user_id(
