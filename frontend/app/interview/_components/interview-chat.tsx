@@ -33,6 +33,9 @@ const INITIAL_PROGRESS: InterviewProgressState = {
   total_questions: 5,
 };
 
+const DEV_AUTH_BYPASS_TOKEN = "dev-auth-bypass-token";
+const isDevAuthBypassEnabled = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "1";
+
 /** 面试房间的单面试官流式聊天主体。 */
 export function InterviewChat() {
   const { isLoaded, isSignedIn, getToken } = useAuth();
@@ -71,11 +74,11 @@ export function InterviewChat() {
 
   // 页面加载时 abandon 旧 session，确保每次进入都是全新一轮
   useEffect(() => {
-    if (!isLoaded || !isSignedIn || hasResetRef.current) return;
+    if (!isLoaded || (!isSignedIn && !isDevAuthBypassEnabled) || hasResetRef.current) return;
 
     hasResetRef.current = true;
     isResettingRef.current = true;
-    getToken({ skipCache: true })
+    getInterviewToken({ getToken, skipCache: true })
       .then(async (token) => {
         if (token) {
           await resetInterviewSession({ 
@@ -144,7 +147,7 @@ export function InterviewChat() {
     setProgress(INITIAL_PROGRESS);
     setReport(null);
     isResettingRef.current = true;
-    getToken()
+    getInterviewToken({ getToken })
       .then(async (token) => {
         if (token) await resetInterviewSession({ token });
       })
@@ -189,7 +192,7 @@ export function InterviewChat() {
     setIsStreaming(true);
 
     try {
-      const token = await getToken();
+      const token = await getInterviewToken({ getToken });
       if (!token) {
         throw new Error("登录状态已失效，请重新登录后再试");
       }
@@ -298,6 +301,17 @@ export function InterviewChat() {
       </div>
     </section>
   );
+}
+
+async function getInterviewToken({
+  getToken,
+  skipCache,
+}: {
+  getToken: ReturnType<typeof useAuth>["getToken"];
+  skipCache?: boolean;
+}) {
+  if (isDevAuthBypassEnabled) return DEV_AUTH_BYPASS_TOKEN;
+  return getToken(skipCache ? { skipCache: true } : undefined);
 }
 
 function InterviewProgress({ progress }: { progress: InterviewProgressState }) {

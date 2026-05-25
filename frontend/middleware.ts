@@ -14,7 +14,14 @@ const isProtectedApiRoute = createRouteMatcher([
   "/trpc(.*)",
 ]);
 
+const isDevAuthBypassEnabled =
+  process.env.NODE_ENV !== "production" && process.env.DEV_AUTH_BYPASS === "1";
+
 export default clerkMiddleware(async (auth, req) => {
+  if (isDevAuthBypassEnabled) {
+    return;
+  }
+
   if (isProtectedApiRoute(req)) {
     const { userId } = await auth();
     if (!userId) {

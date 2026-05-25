@@ -261,11 +261,10 @@ describe("InterviewChat", () => {
     
     // 1. isComposing = true 时，回车不发送
     await userEvent.type(input, "输入中");
+    fireEvent.compositionStart(input); // 显式设置 isComposingRef = true
     fireEvent.keyDown(input, {
       key: "Enter",
       code: "Enter",
-      isComposing: true,
-      nativeEvent: { isComposing: true },
     });
     
     // 等待以确保没有任何异步调用发生
@@ -273,11 +272,13 @@ describe("InterviewChat", () => {
     expect(mockStreamInterviewChat).not.toHaveBeenCalled();
 
     // 2. isComposing = false 时，回车正常发送
+    fireEvent.compositionEnd(input);
+    // 等待 setTimeout 0 清除状态
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
     fireEvent.keyDown(input, {
       key: "Enter",
       code: "Enter",
-      isComposing: false,
-      nativeEvent: { isComposing: false },
     });
 
     await waitFor(() => {

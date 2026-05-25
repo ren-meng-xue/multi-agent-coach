@@ -90,6 +90,10 @@ async def get_current_user_id(
         raise HTTPException(status_code=401, detail="empty token")
 
     settings = get_settings()
+    if settings.dev_auth_bypass and token == "dev-auth-bypass-token":
+        log.warning("dev_auth_bypass_enabled", user_id=settings.dev_auth_user_id)
+        return settings.dev_auth_user_id
+
     return decode_clerk_token(
         token,
         get_clerk_public_key(),
