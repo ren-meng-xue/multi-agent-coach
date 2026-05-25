@@ -11,9 +11,11 @@ from app.agents.interviewer.graph import (
     close_interviewer_checkpointer,
     setup_interviewer_checkpointer,
 )
+from app.api import coach as coach_api
 from app.api.v1 import auth as auth_v1
 from app.api.v1 import health as health_v1
 from app.api.v1 import interview as interview_v1
+from app.api.v1 import user as user_v1
 from app.core.config import configure_langsmith_environment, get_settings
 from app.core.exceptions import AppException
 from app.core.logging import configure_logging, get_logger
@@ -116,3 +118,5 @@ async def global_exception_handler(request, exc: Exception):
 app.include_router(health_v1.router, prefix="/api/v1", tags=["health"])
 app.include_router(auth_v1.router, prefix="/api/v1", tags=["auth"])
 app.include_router(interview_v1.router, prefix="/api/v1", tags=["interview"])
+app.include_router(user_v1.router, prefix="/api/v1", tags=["user"])
+app.include_router(coach_api.router, prefix="/api", tags=["coach"])

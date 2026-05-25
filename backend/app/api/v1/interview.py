@@ -8,8 +8,15 @@ from sse_starlette.sse import EventSourceResponse
 
 from app.core.auth import get_current_user_id
 from app.db.session import get_db
-from app.schemas.interview import ChatRequest, ResetRequest, TurnRequest, UserContextResponse
+from app.schemas.interview import (
+    ChatRequest,
+    InterviewHistoryResponse,
+    ResetRequest,
+    TurnRequest,
+    UserContextResponse,
+)
 from app.services.interview_chat import stream_interview_reply
+from app.services.interview_history import get_interview_history
 from app.services.interview_turn import (
     get_user_interview_context,
     reset_interview_session,
@@ -101,3 +108,13 @@ async def reset(
         user_background=req.user_background if req else None,
     )
     return {"status": "ok"}
+
+
+@router.get("/history", response_model=InterviewHistoryResponse)
+async def get_history(
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+    limit: int = 10,
+) -> InterviewHistoryResponse:
+    """获取用户的面试历史记录。"""
+    return await get_interview_history(db, user_id=user_id, limit=limit)

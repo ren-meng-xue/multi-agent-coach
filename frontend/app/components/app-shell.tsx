@@ -1,22 +1,17 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
-import { UserButton } from "@clerk/nextjs";
-import { auth } from "@clerk/nextjs/server";
+import { UserButton, useAuth } from "@clerk/nextjs";
 import { MainNav } from "./nav";
 
 /** 渲染全站页眉和主内容外壳。 */
-export async function AppShell({
+export function AppShell({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // /login 和 /sign-up 不经过 Clerk 中间件，auth() 会抛出，此时视为未登录
-  let userId: string | null = null;
-  try {
-    ({ userId } = await auth());
-  } catch {
-    userId = null;
-  }
+  const { userId } = useAuth();
 
   return (
     <div className="mac-app">

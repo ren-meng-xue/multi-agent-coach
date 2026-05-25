@@ -233,6 +233,44 @@ describe("fetchInterviewContext", () => {
   });
 });
 
+describe("fetchCoachOpeningMessage", () => {
+  beforeEach(() => {
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "http://localhost:8000");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("调用 GET /api/coach/opening-message 并返回结构化开场词", async () => {
+    const payload = {
+      greeting: "欢迎回来",
+      weakness_summary: "你在结果量化方面不足，项目收益说得不够具体。",
+      evidence: "这个短板在你过去 7 场面试中出现了 5 场。",
+      focus_today: "今天重点练量化表达。",
+      cta_type: "returning",
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { fetchCoachOpeningMessage } = await import("./interview-chat");
+    const result = await fetchCoachOpeningMessage({ token: "test-token" });
+
+    expect(result.greeting).toBe("欢迎回来");
+    expect(result.weakness_summary).toBe("你在结果量化方面不足，项目收益说得不够具体。");
+    expect(result.evidence).toBe("这个短板在你过去 7 场面试中出现了 5 场。");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/coach/opening-message",
+      expect.objectContaining({
+        headers: { Authorization: "Bearer test-token" },
+      }),
+    );
+  });
+});
+
 describe("resetInterviewSession with context", () => {
   beforeEach(() => {
     vi.stubEnv("NEXT_PUBLIC_API_URL", "http://localhost:8000");

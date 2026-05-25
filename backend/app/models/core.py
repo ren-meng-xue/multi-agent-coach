@@ -3,9 +3,11 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     CheckConstraint,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -26,6 +28,8 @@ class User(Base):
     __tablename__ = "users"
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True)
+    target_role: Mapped[str | None] = mapped_column(String(255))
+    work_years: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -33,6 +37,39 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    stories: Mapped[list["UserStory"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
+
+class UserStory(Base):
+    """用户的 STAR 故事库，用于面试时提取项目细节。"""
+
+    __tablename__ = "user_stories"
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[str | None] = mapped_column(String(255))
+    tags: Mapped[list[str] | None] = mapped_column(JSON)
+    content_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    user: Mapped[User] = relationship(back_populates="stories")
 
 
 class InterviewSession(Base):
@@ -47,6 +84,10 @@ class InterviewSession(Base):
         CheckConstraint(
             "stage IN ('opening', 'interview', 'closing')",
             name="ck_interview_sessions_stage",
+        ),
+        CheckConstraint(
+            "pass_fail IS NULL OR pass_fail IN ('pass', 'fail', 'partial')",
+            name="ck_interview_sessions_pass_fail",
         ),
         CheckConstraint("total_questions > 0", name="ck_interview_sessions_total_questions"),
         CheckConstraint("question_count >= 0", name="ck_interview_sessions_question_count"),
@@ -96,6 +137,10 @@ class InterviewSession(Base):
         server_default=func.now(),
     )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    score: Mapped[float | None] = mapped_column(Float)
+    pass_fail: Mapped[str | None] = mapped_column(String(20))
+    key_issues: Mapped[list[str] | None] = mapped_column(JSON)
+    report_json: Mapped[dict | None] = mapped_column(JSON)
 
     user: Mapped[User] = relationship(back_populates="interview_sessions")
     messages: Mapped[list["InterviewMessage"]] = relationship(

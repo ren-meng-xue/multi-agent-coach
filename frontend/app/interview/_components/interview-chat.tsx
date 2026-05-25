@@ -20,11 +20,20 @@ function buildOpeningMessage(
 ): string {
   if (context?.target_role) {
     const bg = context.user_background
-      ? `背景：${context.user_background.slice(0, 40)}。`
+      ? `背景：${context.user_background.slice(0, 40)}...`
       : "";
-    return `好，今天练「${context.target_role}」。${bg}准备好了发消息开始。`;
+    
+    return `好，今天练「**${context.target_role}**」。${bg}\n\n` +
+           `本场面试包含 **5 道核心技术题**，我会针对每个回答进行 **1-2 轮深度追问**。全部结束后，系统会为你生成一份 **结构化的评估报告**。\n\n` +
+           `准备好了吗？发消息「开始」我们立即进入第一题。`;
   }
-  return "你好！在开始之前，请告诉我你想练习的面试岗位、公司，或者你想练习的具体项目背景与技术主题？（例如：AI Agent 工程师，或者分布式系统的架构设计）";
+  return "你好！在开始之前，请告诉我你想练习的面试岗位、公司，或特定的技术主题。\n\n" +
+         "**你可以这样发起：**\n\n" +
+         "**前端开发**（例如：React 性能优化、大厂面试）\n\n" +
+         "**后端开发**（例如：Java/Go 微服务、高并发架构）\n\n" +
+         "**移动端开发**（例如：iOS/Android 实战、跨端架构）\n\n" +
+         "**Python AI Agent**（例如：RAG 优化、Agent 编排）\n\n" +
+         "请直接输入你的目标（例如：「我想面字节的前端岗位」），我们将立即开始。";
 }
 
 const INITIAL_PROGRESS: InterviewProgressState = {
@@ -62,7 +71,20 @@ export function InterviewChat() {
   const [progress, setProgress] = useState<InterviewProgressState>(INITIAL_PROGRESS);
   const [isStreaming, setIsStreaming] = useState(false);
   const [report, setReport] = useState<InterviewReport | null>(null);
+  const [showReportDelayed, setShowReportDelayed] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // 当报告数据到达且流式结束时，延迟显示报告卡片，增加节奏感
+  useEffect(() => {
+    if (report && !isStreaming) {
+      const timer = setTimeout(() => {
+        setShowReportDelayed(true);
+      }, 800);
+      return () => clearTimeout(timer);
+    } else {
+      setShowReportDelayed(false);
+    }
+  }, [report, isStreaming]);
   const abortRef = useRef<AbortController | null>(null);
   const assistantIndexRef = useRef<number | null>(null);
   const deltaBufferRef = useRef("");
@@ -182,9 +204,19 @@ export function InterviewChat() {
     const abortController = new AbortController();
     abortRef.current = abortController;
 
+    // 修复 Bug：如果上一轮已结束并生成了报告，再次说话时自动开启新一轮，清空旧视觉状态
+    const shouldReset = !!report || progress.stage === "closing";
+    
     const userMessage: InterviewChatMessage = { role: "user", content };
-    const assistantIndex = messages.length + 1;
-    const nextMessages = [...messages, userMessage, { role: "assistant" as const, content: "" }];
+    const assistantIndex = shouldReset ? 1 : messages.length + 1;
+    const nextMessages = shouldReset 
+      ? [userMessage, { role: "assistant" as const, content: "" }]
+      : [...messages, userMessage, { role: "assistant" as const, content: "" }];
+
+    if (shouldReset) {
+      setReport(null);
+      setProgress(INITIAL_PROGRESS);
+    }
 
     assistantIndexRef.current = assistantIndex;
     discardBufferedDelta();
@@ -238,7 +270,7 @@ export function InterviewChat() {
         <header className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-black/10 px-5 py-3 dark:border-white/10">
           <div>
             <h1 className="bg-gradient-to-br from-[#534AB7] to-rose-600 bg-clip-text text-sm font-bold text-transparent">
-              AI 模拟面试舱 · Agent Cabin
+              AI 智能面试室 · IntelRoom
             </h1>
             <p className="mt-1 text-xs text-black/45 dark:text-white/45">
               {formatStageLabel(progress.stage)}
@@ -247,22 +279,17 @@ export function InterviewChat() {
           <div className="flex items-center gap-4">
             <Button
               variant="outline"
-              size="sm"
+              size="icon-sm"
               onClick={handleCopyChat}
               disabled={messages.length === 0}
-              className="gap-1.5 border-black/10 text-xs font-medium hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5 disabled:pointer-events-none disabled:opacity-50"
+              className="border-black/10 hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5 disabled:pointer-events-none disabled:opacity-50"
               title="复制当前全部会话内容"
+              aria-label={copied ? "已复制" : "复制会话"}
             >
               {copied ? (
-                <>
-                  <Check className="size-3.5 text-green-600 dark:text-green-500" />
-                  <span>已复制</span>
-                </>
+                <Check className="size-3.5 text-green-600 dark:text-green-500" />
               ) : (
-                <>
-                  <Copy className="size-3.5 text-black/60 dark:text-white/60" />
-                  <span>复制会话</span>
-                </>
+                <Copy className="size-3.5 text-black/60 dark:text-white/60" />
               )}
             </Button>
             <InterviewProgress progress={progress} />
@@ -277,24 +304,30 @@ export function InterviewChat() {
               isPending={isStreaming && index === messages.length - 1}
             />
           ))}
-          {report && (
-            <>
-              <div className="flex items-center gap-3 py-1" role="separator" aria-label="面试结束">
+          {showReportDelayed && report && (
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-1000">
+              <div className="flex items-center gap-3 py-4" role="separator" aria-label="面试结束">
                 <div className="flex-1 border-t border-black/10 dark:border-white/10" />
-                <span className="shrink-0 text-xs text-black/35 dark:text-white/35">面试结束 · 评估报告</span>
+                <span className="shrink-0 text-xs font-medium text-black/35 dark:text-white/35">面试结束 · 评估报告已生成</span>
                 <div className="flex-1 border-t border-black/10 dark:border-white/10" />
               </div>
               <ReportCard report={report} />
-            </>
+            </div>
           )}
           <div ref={messagesEndRef} />
         </div>
 
-        {progress.stage === "closing" && (
-          <div className="shrink-0 px-5 pb-3">
-            <Button variant="outline" onClick={handleNewRound}>
-              开始新一轮面试
+        {progress.stage === "closing" && showReportDelayed && (
+          <div className="shrink-0 px-5 pb-8 animate-in fade-in duration-700 delay-300">
+            <Button 
+              onClick={handleNewRound}
+              className="h-11 w-full bg-[#534AB7] text-sm font-bold text-white shadow-lg shadow-[#534AB7]/20 hover:bg-[#534AB7]/90 active:scale-[0.98] dark:bg-[#534AB7] dark:hover:bg-[#534AB7]/90"
+            >
+              开启下一场模拟面试
             </Button>
+            <p className="mt-2 text-center text-[10px] text-black/30 dark:text-white/30">
+              点击上方按钮，重新设置目标岗位与背景
+            </p>
           </div>
         )}
         <ChatInput onSend={handleSend} isStreaming={isStreaming} />
@@ -315,6 +348,8 @@ async function getInterviewToken({
 }
 
 function InterviewProgress({ progress }: { progress: InterviewProgressState }) {
+  if (progress.stage === "opening") return null;
+
   const total = Math.max(progress.total_questions, 1);
   const current = Math.min(Math.max(progress.question_count, 0), total);
   const percent = progress.stage === "closing" ? 100 : Math.round((current / total) * 100);
@@ -322,7 +357,7 @@ function InterviewProgress({ progress }: { progress: InterviewProgressState }) {
   return (
     <div className="flex min-w-[168px] flex-col gap-1.5" aria-label="面试进度">
       <div className="flex items-center justify-between text-xs font-medium text-black/60 dark:text-white/60">
-        <span>{progress.stage === "opening" ? "准备中" : `第 ${current}/${total} 题`}</span>
+        <span>{`第 ${current}/${total} 题`}</span>
         <span>{percent}%</span>
       </div>
       <div className="h-1.5 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
@@ -336,7 +371,7 @@ function InterviewProgress({ progress }: { progress: InterviewProgressState }) {
 }
 
 function formatStageLabel(stage: InterviewProgressState["stage"]) {
-  if (stage === "opening") return "开场信息收集中";
+  if (stage === "opening") return "待命 · 准备开始";
   if (stage === "closing") return "本轮面试已结束";
   return "正式面试进行中";
 }

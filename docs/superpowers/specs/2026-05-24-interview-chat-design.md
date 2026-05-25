@@ -110,7 +110,7 @@ system prompt（中文面试官，定为模块常量）：
 
 - 主色紫 `#534AB7`；用户气泡：紫→`#7c3aed` 渐变、白字、圆角 `14px 14px 3px 14px`、右对齐。
 - AI 气泡：浅灰底（`--bg2`）、细边框、圆角 `14px 14px 14px 3px`、左对齐。
-- 顶部品牌栏：`AI 模拟面试舱 · Agent Cabin`，紫→玫红渐变文字（右侧的 pills / 题号**不做**）。
+- 顶部品牌栏：`AI 智能面试室 · IntelRoom`，紫→玫红渐变文字（右侧的 pills / 题号**不做**）。
 - 极光背景：右上角 `radial-gradient` + `blur`，绝对定位、`pointer-events:none`。
 - 输入框：圆角 pill，聚焦时紫色描边 + 光晕；发送钮 44px 圆形，有内容时切紫色激活态。
 - typing：三个小圆点错位 `bounce`。

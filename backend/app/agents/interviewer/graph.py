@@ -43,16 +43,38 @@ def route_after_briefing(state: InterviewState) -> str:
 
 
 def route_after_decide(state: InterviewState) -> str:
-    """Route after LLM decision, with hard guards for completion and followup limit.
+    """Route after LLM decision.
 
-    Closing is only allowed when question_count reaches total_questions — the LLM's
-    own "closing" decision is intentionally ignored to prevent premature termination.
+    Hard guards take precedence: only close when question quota is met.
+    LLM's closing decision is honored only if questions are exhausted.
     """
-    if state.get("question_count", 0) >= state.get("total_questions", 5):
-        return "closing"
     action = state.get("decision_action")
-    if action == "followup" and state.get("followup_count", 0) < state.get("max_followups", 2):
+    question_count = state.get("question_count", 0)
+    total_questions = state.get("total_questions", 6)
+    followup_count = state.get("followup_count", 0)
+    max_followups = state.get("max_followups", 5)
+
+    questions_exhausted = question_count >= total_questions
+    followups_exhausted = followup_count >= max_followups
+
+    # 题目未完成时，忽略 LLM 的 closing 决定，强制继续出题
+    if action == "closing" and not questions_exhausted:
+        return "ask_question"
+
+    # 达到硬性上限时无条件关闭
+    if questions_exhausted and followups_exhausted:
+        return "closing"
+
+    if action == "closing":
+        return "closing"
+
+    if action == "followup" and not followups_exhausted:
         return "followup"
+
+    # 最后一题追问完毕或 LLM 选择 next_question
+    if questions_exhausted:
+        return "closing"
+
     return "ask_question"
 
 

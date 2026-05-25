@@ -9,7 +9,7 @@ register_models()
 def test_users_table_registered():
     """确保核心业务表被 SQLAlchemy 发现。"""
     table_names = set(Base.metadata.tables.keys())
-    assert table_names == {"users", "interview_sessions", "interview_messages"}
+    assert table_names == {"users", "user_stories", "interview_sessions", "interview_messages"}
 
 
 def test_users_table_columns():
@@ -17,7 +17,7 @@ def test_users_table_columns():
     from app.models.core import User
 
     cols = {c.name for c in User.__table__.columns}
-    assert cols == {"id", "email", "created_at"}
+    assert cols == {"id", "email", "target_role", "work_years", "created_at"}
 
 
 def test_interview_sessions_table_columns():
@@ -38,6 +38,10 @@ def test_interview_sessions_table_columns():
         "followup_count",
         "started_at",
         "completed_at",
+        "score",
+        "pass_fail",
+        "key_issues",
+        "report_json",
     }
 
 

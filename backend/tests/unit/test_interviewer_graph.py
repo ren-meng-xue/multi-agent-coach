@@ -109,6 +109,7 @@ async def test_interview_answer_can_route_to_followup(monkeypatch):
             action="followup",
             reason="缺少量化结果",
             followup_question="你能补充具体指标吗？",
+            depth_analysis="尚未覆盖量化指标",
         )
 
     monkeypatch.setattr("app.agents.interviewer.nodes.decide_next_action", fake_decide)
@@ -248,6 +249,8 @@ async def test_report_node_returns_structured_report(monkeypatch):
             structure=3.5,
             highlights=["设计清晰", "表达有条理"],
             improvements=["缺少量化数据", "可补充失败案例"],
+            key_concepts=["分布式系统"],
+            common_mistakes=["缺少量化"],
         )
 
     monkeypatch.setattr("app.agents.interviewer.nodes.generate_report_output", fake_generate_report)
@@ -477,7 +480,7 @@ async def test_llm_closing_decision_ignored_when_questions_remain(monkeypatch):
     """LLM 错误地决定 closing 时，若题目未完成，路由层应忽略该决定并继续出题。"""
 
     async def fake_decide(state):
-        return DecideNextOutput(action="closing", reason="感觉回答完了")
+        return DecideNextOutput(action="closing", reason="感觉回答完了", depth_analysis="话题已充分覆盖")
 
     async def fake_question(state):
         return "第二题：请描述你遇到的最大技术挑战。"
@@ -520,6 +523,8 @@ async def test_closing_turn_returns_report_in_state(monkeypatch):
             structure=4.0,
             highlights=["整体表现良好"],
             improvements=["可补充更多细节"],
+            key_concepts=["系统设计"],
+            common_mistakes=["缺少量化"],
         )
 
     monkeypatch.setattr("app.agents.interviewer.nodes.generate_closing_reply", fake_closing)

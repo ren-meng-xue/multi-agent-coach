@@ -139,17 +139,16 @@ if (token) await resetInterviewSession({ token, ...context });
 | 场景 | 前端显示的开场消息 |
 |---|---|
 | 从 coach 跳转，携带 `target_role` | `"好，今天练 {target_role}。{user_background 摘要（如有）}准备好了发消息开始。"` |
-| 直接访问 `/interview`，无 sessionStorage | 原文不变：`"你好！在开始之前，请告诉我你想练习的面试岗位..."` |
+| 直接访问 `/interview`，无 sessionStorage | 显示引导信息：`"你好！在开始之前，请告诉我你想练习的面试岗位..."` (包含列表形式的示例) |
 
 **实现：**
 
 ```typescript
 function buildOpeningMessage(context: { target_role?: string; user_background?: string } | null) {
   if (context?.target_role) {
-    const bg = context.user_background ? `背景：${context.user_background.slice(0, 40)}。` : "";
-    return `好，今天练「${context.target_role}」。${bg}准备好了发消息开始。`;
+    // ... (处理已有上下文逻辑)
   }
-  return "你好！在开始之前，请告诉我你想练习的面试岗位、公司，或者你想练习的具体项目背景与技术主题？";
+  return "你好！在开始之前，请告诉我你想练习的面试岗位、公司，或特定的技术主题。\n\n**你可以这样发起：**\n\n**前端开发**（例如：React 性能优化）\n\n**后端开发**（例如：Java/Go 微服务）\n\n**移动端开发**（例如：iOS/Android 实战）\n\n**Python AI Agent**（例如：RAG 优化）\n\n请直接输入你的目标，我们将立即开始。";
 }
 ```
 

@@ -27,6 +27,7 @@ class DecideNextOutput(BaseModel):
     """Structured output from decide_next."""
 
     action: Literal["followup", "next_question", "closing"]
+    depth_analysis: str  # 分析当前话题的深挖价值：已覆盖哪些能力，还剩哪些值得挖掘的盲点
     reason: str
     followup_question: str = ""
 
@@ -60,14 +61,39 @@ def _chat_model() -> ChatOpenAI:
 
 
 def _state_messages(state: InterviewState) -> list[BaseMessage]:
-    return state.get("messages", [])
+    """获取消息列表，并根据 state 中的背景信息注入上下文系统消息。"""
+    messages = state.get("messages", [])
+    
+    # 构造上下文摘要
+    context_parts = []
+    if state.get("target_role"):
+        context_parts.append(f"目标岗位：{state['target_role']}")
+    if state.get("target_company"):
+        context_parts.append(f"目标公司：{state['target_company']}")
+    if state.get("user_background"):
+        context_parts.append(f"项目背景/技术主题：{state['user_background']}")
+    
+    # 注入进度信息
+    q_count = state.get("question_count", 0)
+    q_total = state.get("total_questions", 6)
+    if q_count > 0:
+        context_parts.append(f"当前进度：第 {q_count} 题 / 共 {q_total} 题")
+    
+    if context_parts:
+        # 将背景信息作为系统提示注入，确保节点 LLM 感知
+        context_summary = "【当前已确定的面试背景信息】：\n" + "\n".join(context_parts)
+        return [SystemMessage(content=context_summary)] + messages
+        
+    return messages
 
 
 async def _generate_text(system_prompt: str, state: InterviewState) -> str:
     """Generate one assistant message from the current state."""
     chunks: list[str] = []
     model = _chat_model().with_config(tags=["interviewer_answer_stream"])
-    async for chunk in model.astream([SystemMessage(content=system_prompt), *_state_messages(state)]):
+    # 将节点特定的指令放在最后，确保模型能够优先遵循最新节点的动作（如结束面试）
+    messages = _state_messages(state) + [SystemMessage(content=system_prompt)]
+    async for chunk in model.astream(messages):
         chunks.append(_content_to_text(chunk.content))
     return "".join(chunks).strip()
 
@@ -101,7 +127,7 @@ async def detect_briefing_intent(state: InterviewState) -> BriefingIntentOutput:
     """Detect candidate intent during the briefing stage."""
     model = _chat_model().with_structured_output(BriefingIntentOutput)
     output = await model.ainvoke(
-        [SystemMessage(content=BRIEFING_INTENT_SYSTEM_PROMPT), *_state_messages(state)]
+        [*_state_messages(state), SystemMessage(content=BRIEFING_INTENT_SYSTEM_PROMPT)]
     )
     if isinstance(output, BriefingIntentOutput):
         return output
@@ -115,10 +141,25 @@ async def generate_not_ready_reply(state: InterviewState) -> str:
 
 
 async def extract_opening_info(state: InterviewState) -> OpeningInfoOutput:
-    """Extract whether opening has enough information to start the interview."""
+    """提取开场信息，若 state 中已存在关键信息则直接返回 True。"""
+    # 优先检查 state 中是否已有预设信息
+    target_role = state.get("target_role", "").strip()
+    target_company = state.get("target_company", "").strip()
+    user_background = state.get("user_background", "").strip()
+    
+    # 只要岗位或背景中有一项，就认为开场信息已足够开启面试（对应 prompt 中的逻辑）
+    if target_role or user_background:
+        return OpeningInfoOutput(
+            complete=True,
+            target_role=target_role,
+            target_company=target_company,
+            user_background=user_background,
+        )
+
+    # 若没有任何信息，再尝试从对话历史中抽取
     model = _chat_model().with_structured_output(OpeningInfoOutput)
     output = await model.ainvoke(
-        [SystemMessage(content=OPENING_INFO_SYSTEM_PROMPT), *_state_messages(state)]
+        [SystemMessage(content=OPENING_INFO_SYSTEM_PROMPT), *state.get("messages", [])]
     )
     if isinstance(output, OpeningInfoOutput):
         return output
@@ -136,17 +177,24 @@ async def generate_question_reply(state: InterviewState) -> str:
 
 async def decide_next_action(state: InterviewState) -> DecideNextOutput:
     """Judge the latest answer and choose followup, next question, or closing."""
-    if state.get("question_count", 0) >= state.get("total_questions", 5):
-        return DecideNextOutput(action="closing", reason="已完成全部题目")
-    if state.get("followup_count", 0) >= state.get("max_followups", 2):
-        return DecideNextOutput(action="next_question", reason="已达到本题追问上限")
+    # 硬性防护只作为最后的保险，防止无限追问（例如死循环）
+    if state.get("question_count", 0) >= state.get("total_questions", 6) and state.get("followup_count", 0) >= state.get("max_followups", 5):
+        return DecideNextOutput(
+            action="closing",
+            depth_analysis="已达到系统硬性上限",
+            reason="安全退出"
+        )
 
     model = _chat_model().with_structured_output(DecideNextOutput)
-    output = await model.ainvoke([SystemMessage(content=DECIDE_SYSTEM_PROMPT), *_state_messages(state)])
+    output = await model.ainvoke([*_state_messages(state), SystemMessage(content=DECIDE_SYSTEM_PROMPT)])
     if isinstance(output, DecideNextOutput):
         return output
     log.warning("interviewer_decide_unexpected_output", output=str(output))
-    return DecideNextOutput(action="next_question", reason="结构化判断结果异常，进入下一题")
+    return DecideNextOutput(
+        action="next_question",
+        depth_analysis="异常降级",
+        reason="结构化判断结果异常，进入下一题"
+    )
 
 
 async def generate_closing_reply(state: InterviewState) -> str:
@@ -159,9 +207,9 @@ async def load_context_node(state: InterviewState) -> InterviewState:
     return {
         "stage": state.get("stage") or "opening",
         "question_count": state.get("question_count", 0),
-        "total_questions": state.get("total_questions", 5),
+        "total_questions": state.get("total_questions", 6), # 包含开场自我介绍
         "followup_count": state.get("followup_count", 0),
-        "max_followups": state.get("max_followups", 2),
+        "max_followups": state.get("max_followups", 5), # 允许深度追问
         "opening_complete": state.get("opening_complete", False) or bool(
             state.get("target_role")
             or state.get("target_company")
@@ -273,13 +321,15 @@ class ReportOutput(BaseModel):
     structure: float
     highlights: list[str]
     improvements: list[str]
+    key_concepts: list[str]
+    common_mistakes: list[str]
 
 
 async def generate_report_output(state: InterviewState) -> ReportOutput | None:
     """Call LLM with structured output to generate interview assessment."""
     model = _chat_model().with_structured_output(ReportOutput)
     output = await model.ainvoke(
-        [SystemMessage(content=REPORT_SYSTEM_PROMPT), *_state_messages(state)]
+        [*_state_messages(state), SystemMessage(content=REPORT_SYSTEM_PROMPT)]
     )
     if isinstance(output, ReportOutput):
         return output

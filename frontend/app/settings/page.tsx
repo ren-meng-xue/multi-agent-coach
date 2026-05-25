@@ -1,6 +1,11 @@
-import { PlaceholderPage } from "../components/app-shell";
+import { AppShell } from "../components/app-shell";
+import { SettingsView } from "./settings-view";
 
-/** 渲染设置与故事库路由占位页。 */
+/** 渲染设置与故事库页面。 */
 export default function SettingsPage() {
-  return <PlaceholderPage eyebrow="Settings" title="设置 & 故事库" />;
+  return (
+    <AppShell>
+      <SettingsView />
+    </AppShell>
+  );
 }

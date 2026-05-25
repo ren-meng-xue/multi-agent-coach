@@ -13,6 +13,7 @@ from app.agents.interviewer.graph import stream_interviewer_turn_events
 from app.agents.interviewer.state import InterviewState
 from app.core.logging import get_logger
 from app.models.core import InterviewMessage, InterviewSession, User
+from app.services.coach_opening import invalidate_coach_opening_cache
 
 log = get_logger("app.services.interview_turn")
 ABANDON_AFTER = timedelta(hours=24)
@@ -142,41 +143,54 @@ def _build_state(
 
 
 async def get_user_interview_context(db: AsyncSession, *, user_id: str) -> dict:
-    """返回 Coach 页面所需的用户上下文：最近有效 session 的岗位信息与历史场次数。"""
-    count_result = await db.execute(
+    """返回 Coach 页面所需的用户上下文：优先使用 User 表持久化配置，回退至最近 session。"""
+    user = await ensure_user_exists(db, user_id=user_id)
+    
+    completed_count_result = await db.execute(
+        select(func.count())
+        .select_from(InterviewSession)
+        .where(
+            InterviewSession.user_id == user_id,
+            InterviewSession.status == "completed",
+        )
+    )
+    completed_count = completed_count_result.scalar_one()
+
+    total_count_result = await db.execute(
         select(func.count())
         .select_from(InterviewSession)
         .where(InterviewSession.user_id == user_id)
     )
-    session_count = count_result.scalar_one()
+    session_count = total_count_result.scalar_one()
 
-    latest_result = await db.execute(
-        select(InterviewSession)
-        .where(
-            InterviewSession.user_id == user_id,
-            InterviewSession.target_role.is_not(None),
-        )
-        .order_by(InterviewSession.started_at.desc())
-        .limit(1)
-    )
-    latest = latest_result.scalar_one_or_none()
-
-    if latest is None:
-        return {
-            "is_returning": False,
-            "target_role": None,
-            "target_company": None,
-            "user_background": None,
-            "session_count": session_count,
-        }
-
-    return {
-        "is_returning": True,
-        "target_role": latest.target_role,
-        "target_company": latest.target_company,
-        "user_background": latest.user_background,
+    # 基础返回结构
+    ctx = {
+        "is_returning": completed_count > 0,
+        "target_role": user.target_role,
+        "work_years": user.work_years,
+        "target_company": None,
+        "user_background": None,
         "session_count": session_count,
     }
+
+    # 如果 User 表没设岗位，尝试从最近 session 捞
+    if not ctx["target_role"]:
+        latest_result = await db.execute(
+            select(InterviewSession)
+            .where(
+                InterviewSession.user_id == user_id,
+                InterviewSession.target_role.is_not(None),
+            )
+            .order_by(InterviewSession.started_at.desc())
+            .limit(1)
+        )
+        latest = latest_result.scalar_one_or_none()
+        if latest:
+            ctx["target_role"] = latest.target_role
+            ctx["target_company"] = latest.target_company
+            ctx["user_background"] = latest.user_background
+
+    return ctx
 
 
 async def reset_interview_session(
@@ -203,6 +217,7 @@ async def reset_interview_session(
         log.info("interview_session_reset", user_id=user_id, session_id=str(session.id))
 
     if target_role:
+        await ensure_user_exists(db, user_id=user_id)
         new_session = InterviewSession(
             user_id=user_id,
             target_role=target_role,
@@ -265,9 +280,27 @@ async def stream_interview_turn(
     session.user_background = output.get("user_background", session.user_background)
     session.question_count = output.get("question_count", session.question_count)
     session.followup_count = output.get("followup_count", session.followup_count)
+    report_data = output.get("report")
     if session.stage == "closing":
         session.status = "completed"
         session.completed_at = datetime.now(UTC)
+        # 面试结束，标记 Coach 缓存失效，确保下次进入生成最新诊断
+        await invalidate_coach_opening_cache(user_id=user_id)
+        if isinstance(report_data, dict) and report_data:
+            score = float(report_data.get("overall_score", 0))
+            improvements = report_data.get("improvements", [])
+            session.score = score
+            
+            # 细化通过逻辑：7分通过，6分待定，6分以下未过
+            if score >= 7.0:
+                session.pass_fail = "pass"
+            elif score >= 6.0:
+                session.pass_fail = "partial"
+            else:
+                session.pass_fail = "fail"
+                
+            session.key_issues = improvements if isinstance(improvements, list) else []
+            session.report_json = report_data
 
     yield {
         "event": "state",
@@ -298,9 +331,7 @@ async def stream_interview_turn(
     )
     await db.commit()
 
-    if session.stage == "closing":
-        report_data = output.get("report")
-        if report_data:
-            yield {"event": "report", "data": report_data}
+    if session.stage == "closing" and report_data:
+        yield {"event": "report", "data": report_data}
 
     yield {"event": "done", "data": {}}

@@ -1,33 +1,450 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@clerk/nextjs";
-import { fetchInterviewContext, resetInterviewSession, type UserContextResponse } from "@/lib/interview-chat";
+import {
+  fetchCoachOpeningMessage,
+  fetchInterviewContext,
+  fetchInterviewHistory,
+  resetInterviewSession,
+  type CoachOpeningMessageResponse,
+  type UserContextResponse,
+  type InterviewHistoryItem,
+} from "@/lib/interview-chat";
+import { updateUserProfile } from "@/lib/user";
 
-// 7 场历史面试 Mock 数据（本期仍用于展示卡片，但场次总数改用 contextData.session_count）
-const MOCK_HISTORY = [
-  { id: 37, score: 7.2, trend: "↗ +0.4", type: "improving", date: "5月15日 · 多 Agent" },
-  { id: 36, score: 6.8, trend: "↘ -0.3", type: "declining", date: "5月12日 · 多 Agent" },
-  { id: 35, score: 7.1, trend: "→ 0", type: "flat", date: "5月10日 · 单 Agent" },
-  { id: 34, score: 7.1, trend: "↗ +0.5", type: "improving", date: "5月8日 · 多 Agent" },
-  { id: 33, score: 6.6, trend: "↘ -0.4", type: "declining", date: "5月6日 · 多 Agent" },
-  { id: 32, score: 7.0, trend: "→ 0", type: "flat", date: "5月4日 · 单 Agent" },
-  { id: 31, score: 7.0, trend: "↗ +0.6", type: "improving", date: "5月2日 · 多 Agent" },
-];
+type MemorySession = {
+  id: string | number;
+  sessionIndex: number;
+  date: string;
+  topic: string;
+  targetRole: string;
+  score: number;
+  passFail: "pass" | "fail" | "partial";
+  trend: "up" | "down" | "flat";
+  dimensions: {
+    label: string;
+    score: number;
+  }[];
+  highlights: string[];
+  improvements: string[];
+  keyConcepts: string[];
+  commonMistakes: string[];
+};
+
+/** 将后端历史记录项映射为前端展示用的 MemorySession。 */
+function mapHistoryItemToSession(item: InterviewHistoryItem, index: number, total: number): MemorySession {
+  const report = item.report || {};
+  
+  // 维度映射
+  const dimensions = [
+    { label: "技术深度", score: report.technical_depth || 0 },
+    { label: "量化结果", score: report.quantified_results || 0 },
+    { label: "失败降级", score: report.failure_tradeoffs || 0 },
+    { label: "结构表达", score: report.structure || 0 },
+  ];
+
+  // 如果没有报告数据，尝试使用基础分
+  const displayScore = item.score || report.overall_score || 0;
+
+  return {
+    id: item.id,
+    sessionIndex: total - index,
+    date: item.date,
+    topic: item.topic,
+    targetRole: item.target_role,
+    score: displayScore,
+    passFail: item.pass_fail as "pass" | "fail" | "partial",
+    trend: "flat", // 简单处理
+    dimensions,
+    highlights: report.highlights || [],
+    improvements: report.improvements || item.key_issues || [],
+    keyConcepts: report.key_concepts || [],
+    commonMistakes: report.common_mistakes || [],
+  };
+}
+
+const COACH_MEMORY_PREVIEW_LIMIT = 2;
+const DEV_AUTH_BYPASS_TOKEN = "dev-auth-bypass-token";
+const isDevAuthBypassEnabled = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "1";
+const EMPHASIS_CLASS =
+  "text-[#4f46e5] px-0.5 bg-[linear-gradient(180deg,transparent_62%,rgba(79,70,229,0.16)_62%)] font-sans";
+const WARNING_EMPHASIS_CLASS =
+  "text-[#e11d48] px-0.5 bg-[linear-gradient(180deg,transparent_62%,rgba(225,29,72,0.16)_62%)] font-sans";
+const COACH_WARNING_TERMS = ["缺少具体例证", "缺乏具体实例", "不够具体", "缺少量化", "缺乏量化", "说服力"];
+const COACH_FOCUS_TERMS = ["开放性问题", "具体例子", "项目证据", "结果数据", "复盘结论", "量化表达"];
+
+function CoachHighlightedText({ text }: { text: string }) {
+  const termPattern = [...COACH_WARNING_TERMS, ...COACH_FOCUS_TERMS]
+    .map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|");
+  const highlightPattern = new RegExp(`([0-9]+|[一二三四五六七八九十百千万两]+)\\s*(场|次|个|轮|题|分)|${termPattern}`, "g");
+  const nodes: React.ReactNode[] = [];
+  let lastIndex = 0;
+
+  for (const match of text.matchAll(highlightPattern)) {
+    if (match.index === undefined) continue;
+    if (match.index > lastIndex) {
+      nodes.push(text.slice(lastIndex, match.index));
+    }
+
+    const matchedText = match[0];
+    const isWarning = match[1] !== undefined || COACH_WARNING_TERMS.includes(matchedText);
+    nodes.push(
+      <span key={`${matchedText}-${match.index}`} className={isWarning ? WARNING_EMPHASIS_CLASS : EMPHASIS_CLASS}>
+        {matchedText}
+      </span>,
+    );
+    lastIndex = match.index + matchedText.length;
+  }
+
+  if (lastIndex < text.length) {
+    nodes.push(text.slice(lastIndex));
+  }
+
+  return <>{nodes}</>;
+}
+
+function CoachOpeningCopy({
+  coachMessage,
+  fallbackUserState,
+  fallbackSessionCount,
+}: {
+  coachMessage: CoachOpeningMessageResponse | null;
+  fallbackUserState: "returning" | "new";
+  fallbackSessionCount: number;
+}) {
+  // 统一数据：如果 LLM 返回的文案中包含错误的场次数字，强制替换为真实场次以保持一致性。
+  const unifyMessage = (text: string | null) => {
+    if (!text) return null;
+    // 匹配类似 "22 场" 或 "22场" 的模式，并替换为真实场次
+    return text.replace(/(\d+)\s*场/, `${fallbackSessionCount} 场`);
+  };
+
+  if (coachMessage) {
+    return (
+      <div>
+        <p>
+          <CoachHighlightedText text={unifyMessage(coachMessage.greeting) || ""} />
+        </p>
+        {coachMessage.weakness_summary && (
+          <p className="mt-3.5">
+            <CoachHighlightedText text={unifyMessage(coachMessage.weakness_summary) || ""} />
+          </p>
+        )}
+        {coachMessage.evidence && (
+          <p className="mt-3.5">
+            <CoachHighlightedText text={unifyMessage(coachMessage.evidence) || ""} />
+          </p>
+        )}
+        <p className="mt-3.5">
+          <CoachHighlightedText text={unifyMessage(coachMessage.focus_today) || ""} />
+        </p>
+      </div>
+    );
+  }
+
+  if (fallbackUserState === "returning") {
+    return (
+      <div>
+        <p>欢迎回来。</p>
+        <p className="mt-3.5">
+          我看了你过去 {fallbackSessionCount} 场面试，发现一个挺要命的规律 ——<br />
+          你讲项目时，<span className={WARNING_EMPHASIS_CLASS}>结果指标永远是模糊的</span>，7 场里有{" "}
+          <span className={WARNING_EMPHASIS_CLASS}>5 场</span> 都被扣。
+        </p>
+        <p className="mt-3.5">
+          今天我想让你重练，<span className={EMPHASIS_CLASS}>这次你必须给我数字</span>。
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <p>你好。我还不认识你。</p>
+      <p className="mt-3.5">
+        我是你的 AI 面试教练 —— 我会陪你练面试，记住你讲过的每个项目，<br />
+        然后告诉你 <span className={EMPHASIS_CLASS}>下次该怎么讲会更好</span>。
+      </p>
+      <p className="mt-3.5">
+        开始之前，先告诉我：你正在准备 <span className={EMPHASIS_CLASS}>什么岗位</span>？
+      </p>
+    </div>
+  );
+}
+
+function trendLabel(trend: MemorySession["trend"]) {
+  if (trend === "up") return "↗";
+  if (trend === "down") return "↘";
+  return "→";
+}
+
+function MemorySessionCard({
+  session,
+  onClick,
+}: {
+  session: MemorySession;
+  onClick: () => void;
+}) {
+  const isPass = session.passFail === "pass";
+  const isPartial = session.passFail === "partial";
+  const trendColor =
+    session.trend === "up"
+      ? "text-[#059669]"
+      : session.trend === "down"
+      ? "text-[#e11d48]"
+      : "text-[#8a8a8a]";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex h-full min-h-[258px] flex-col rounded-2xl border border-[#e8e7e2] bg-white p-4 text-left shadow-[0_1px_0_rgba(23,23,23,0.03)] transition-all hover:-translate-y-0.5 hover:border-[#c9c6bc] hover:shadow-[0_14px_34px_rgba(23,23,23,0.08)] focus:outline-none focus:ring-2 focus:ring-[#7c3aed]/30"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[11px] font-semibold text-[#8a8a8a]">
+            第 {session.sessionIndex} 场 · {session.date}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {session.topic.split(" · ").map((tag, index) => (
+              <span
+                key={`${session.id}-${tag}`}
+                className={`rounded-full px-2 py-1 text-[11px] font-semibold ${
+                  index === 0
+                    ? "bg-[#eef2ff] text-[#4f46e5]"
+                    : "bg-[#edf7f2] text-[#047857]"
+                }`}
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        </div>
+        <span className={`text-base font-bold ${trendColor}`}>{trendLabel(session.trend)}</span>
+      </div>
+
+      <div className="mt-4 flex items-end justify-between gap-3">
+        <div className="font-[var(--mac-font-display)] text-[34px] font-bold leading-none text-[#171717]">
+          {session.score.toFixed(1)}
+        </div>
+        <div
+          className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+            isPass 
+              ? "bg-[#e9f8f1] text-[#047857]" 
+              : isPartial
+                ? "bg-[#fef9c3] text-[#a16207]"
+                : "bg-[#fff1f2] text-[#be123c]"
+          }`}
+        >
+          {isPass ? "✓ 通过" : isPartial ? "− 待定" : "✗ 未过"}
+        </div>
+      </div>
+
+      <div className="mt-4 space-y-3">
+        <div>
+          <div className="mb-1.5 text-[11px] font-extrabold tracking-[0.08em] text-[#4f46e5]">
+            💡 核心概念
+          </div>
+          <div className="space-y-1">
+            {session.keyConcepts.slice(0, 2).map((concept) => (
+              <div key={concept} className="line-clamp-1 text-xs leading-5 text-[#525252]">
+                {concept}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <div className="mb-1.5 text-[11px] font-extrabold tracking-[0.08em] text-[#059669]">
+            ⚠️ 待改进
+          </div>
+          <div className="space-y-1">
+            {session.improvements.slice(0, 2).map((item) => (
+              <div key={item} className="line-clamp-1 text-xs leading-5 text-[#525252]">
+                {item}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-auto pt-4">
+        <span className="rounded-full border border-[#dcdbd5] bg-[#faf9f5] px-2.5 py-1 text-[11px] font-semibold text-[#525252]">
+          {session.targetRole}
+        </span>
+      </div>
+    </button>
+  );
+}
+
+function MemorySessionModal({
+  session,
+  onClose,
+  onPracticeAgain,
+}: {
+  session: MemorySession | null;
+  onClose: () => void;
+  onPracticeAgain: (session: MemorySession) => void;
+}) {
+  // ESC 键关闭支持
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    if (session) {
+      window.addEventListener("keydown", handleEsc);
+    }
+    return () => window.removeEventListener("keydown", handleEsc);
+  }, [session, onClose]);
+
+  if (!session) return null;
+
+  const isPass = session.passFail === "pass";
+  const isPartial = session.passFail === "partial";
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 p-3 backdrop-blur-sm md:items-center"
+      onClick={onClose}
+    >
+      <div
+        className="max-h-[88vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white shadow-[0_24px_80px_rgba(0,0,0,0.24)]"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="border-b border-[#e8e7e2] p-5 md:p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="text-[11px] font-extrabold tracking-[0.12em] uppercase text-[#8a8a8a]">
+                {session.topic} · 第 {session.sessionIndex} 场 · {session.date}
+              </div>
+              <h3 className="mt-2 font-[var(--mac-font-display)] text-2xl font-bold text-[#171717]">
+                整场复盘
+              </h3>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-full border border-[#e8e7e2] px-3 py-1.5 text-sm text-[#525252] hover:border-[#b8b5aa] hover:text-[#171717]"
+            >
+              关闭
+            </button>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-2.5">
+            <span className="font-[var(--mac-font-display)] text-3xl font-bold text-[#171717]">
+              {session.score.toFixed(1)}
+            </span>
+            <span
+              className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+                isPass 
+                  ? "bg-[#e9f8f1] text-[#047857]" 
+                  : isPartial
+                    ? "bg-[#fef9c3] text-[#a16207]"
+                    : "bg-[#fff1f2] text-[#be123c]"
+              }`}
+            >
+              {isPass ? "✓ 通过" : isPartial ? "− 待定" : "✗ 未过"}
+            </span>
+            <span className="rounded-full border border-[#dcdbd5] bg-[#faf9f5] px-2.5 py-1 text-xs font-semibold text-[#525252]">
+              {session.targetRole}
+            </span>
+          </div>
+        </div>
+
+        <div className="space-y-6 p-5 md:p-6">
+          <section>
+            <h4 className="mb-3 text-sm font-bold text-[#171717]">📊 4 维度评分</h4>
+            <div className="grid gap-2 md:grid-cols-2">
+              {session.dimensions.map((dimension) => (
+                <div key={dimension.label} className="rounded-xl border border-[#e8e7e2] p-3">
+                  <div className="flex items-center justify-between text-xs font-semibold text-[#525252]">
+                    <span>{dimension.label}</span>
+                    <span>{dimension.score.toFixed(1)} / 5</span>
+                  </div>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#efeee8]">
+                    <div
+                      className="h-full rounded-full bg-[#4f46e5]"
+                      style={{ width: `${Math.round((dimension.score / 5) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <div className="grid gap-5 md:grid-cols-2">
+            <MemoryList title="✅ 亮点全文" tone="green" items={session.highlights} />
+            <MemoryList title="⚠️ 待改进全文" tone="rose" items={session.improvements} />
+            <MemoryList title="💡 核心概念全文" tone="blue" items={session.keyConcepts} />
+            <MemoryList title="🚨 常见陷阱" tone="amber" items={session.commonMistakes} />
+          </div>
+
+          <div className="flex flex-col gap-2 border-t border-[#e8e7e2] pt-5 sm:flex-row">
+            <button
+              type="button"
+              onClick={() => onPracticeAgain(session)}
+              className="rounded-2xl bg-[#171717] px-5 py-3 text-sm font-semibold text-white shadow-[0_6px_18px_rgba(23,23,23,0.18)] hover:bg-black"
+            >
+              按本场考点再练一场
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-2xl border border-[#dcdbd5] bg-white px-5 py-3 text-sm font-semibold text-[#525252] hover:border-[#b8b5aa] hover:text-[#171717]"
+            >
+              先关掉
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MemoryList({
+  title,
+  tone,
+  items,
+}: {
+  title: string;
+  tone: "green" | "rose" | "blue" | "amber";
+  items: string[];
+}) {
+  const toneClass = {
+    green: "border-[#cdebdc] bg-[#f0fbf6]",
+    rose: "border-[#ffd9df] bg-[#fff5f6]",
+    blue: "border-[#dbe4ff] bg-[#f4f6ff]",
+    amber: "border-[#ffe5b4] bg-[#fff9ec]",
+  }[tone];
+
+  return (
+    <section>
+      <h4 className="mb-2 text-sm font-bold text-[#171717]">{title}</h4>
+      <div className="space-y-2">
+        {items.map((item) => (
+          <div key={item} className={`rounded-xl border p-3 text-sm leading-6 text-[#525252] ${toneClass}`}>
+            {item}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 export function CoachDashboard() {
   const router = useRouter();
   const { isLoaded, isSignedIn, getToken } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [contextData, setContextData] = useState<UserContextResponse | null>(null);
+  const [coachMessage, setCoachMessage] = useState<CoachOpeningMessageResponse | null>(null);
+  const [memorySessions, setMemorySessions] = useState<MemorySession[]>([]);
 
-  // userState 兼容现有状态机，is_returning 对应 "returning"，否则 "new"
-  const userState: "returning" | "new" = contextData?.is_returning ? "returning" : "new";
-  
   const [isThinking, setIsThinking] = useState(false);
   const [inputText, setInputText] = useState("");
   
@@ -39,23 +456,76 @@ export function CoachDashboard() {
   
   const [selectedRole, setSelectedRole] = useState("");
   const [selectedTargetLabel, setSelectedTargetLabel] = useState("");
+  const [selectedMemory, setSelectedMemory] = useState<MemorySession | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // userState 兼容现有状态机，is_returning 对应 "returning"，否则 "new"
+  const userState: "returning" | "new" = contextData?.is_returning ? "returning" : "new";
+  const previewMemorySessions = memorySessions.slice(0, COACH_MEMORY_PREVIEW_LIMIT);
+
   // API 加载 effect
   useEffect(() => {
-    if (!isLoaded || !isSignedIn) return;
-    getToken().then(async (token) => {
-      if (!token) { setIsLoading(false); return; }
-      try {
-        const data = await fetchInterviewContext({ token });
-        setContextData(data);
-      } catch {
-        // 降级为新用户 UI
-      } finally {
+    let isCancelled = false;
+
+    if (!isLoaded || (!isSignedIn && !isDevAuthBypassEnabled)) {
+      if (isLoaded && !isSignedIn && !isDevAuthBypassEnabled) {
         setIsLoading(false);
       }
+      return () => {
+        isCancelled = true;
+      };
+    }
+    
+    const fetchToken = isDevAuthBypassEnabled ? Promise.resolve(DEV_AUTH_BYPASS_TOKEN) : getToken();
+
+    void fetchToken.then(async (token) => {
+      if (!token) {
+        if (!isCancelled) setIsLoading(false);
+        return;
+      }
+      try {
+        // 1. 发出核心请求：基础上下文和历史记录（阻塞骨架屏）
+        const [context, history] = await Promise.all([
+          fetchInterviewContext({ token }),
+          fetchInterviewHistory({ token, limit: 10 }),
+        ]);
+
+        if (isCancelled) return;
+
+        // 2. 状态批量更新
+        setContextData(context);
+        
+        // 映射并计算趋势
+        const mappedSessions = history.sessions.map((s, idx, arr) => {
+          const session = mapHistoryItemToSession(s, idx, arr.length);
+          // 比较相邻场次分数的简单趋势算法
+          if (idx < arr.length - 1) {
+            const prevSession = arr[idx + 1];
+            if (s.score > prevSession.score + 0.1) session.trend = "up";
+            else if (s.score < prevSession.score - 0.1) session.trend = "down";
+          }
+          return session;
+        });
+        
+        setMemorySessions(mappedSessions);
+        setIsLoading(false);
+
+        // 3. 异步获取 Coach 开场词（非阻塞）
+        void fetchCoachOpeningMessage({ token }).then((opening) => {
+          if (!isCancelled) setCoachMessage(opening);
+        }).catch((err) => {
+          console.warn("fetchCoachOpeningMessage failed, using fallback:", err);
+        });
+      } catch (error) {
+        console.error("CoachDashboard critical data fetch failed:", error);
+        if (!isCancelled) setIsLoading(false);
+      }
     });
+
+    return () => {
+      isCancelled = true;
+    };
   }, [isLoaded, isSignedIn, getToken]);
 
   // 重置交互阶段
@@ -103,32 +573,24 @@ export function CoachDashboard() {
   // 处理 CTA 的点击事件
   const handleAction = async (action: string, extra?: string) => {
     if (action === "follow") {
-      setIsThinking(true);
-      setTimeout(() => {
-        setIsThinking(false);
-        setSpeechStage("follow");
-      }, 1200);
+      setSpeechStage("follow");
     } else if (action === "switch") {
-      setIsThinking(true);
-      setTimeout(() => {
-        setIsThinking(false);
-        setSpeechStage("switch");
-      }, 1200);
+      setSpeechStage("switch");
     } else if (action === "switch-target" && extra) {
       setSelectedTargetLabel(extra);
-      setIsThinking(true);
-      setTimeout(() => {
-        setIsThinking(false);
-        setSpeechStage("switch-target");
-      }, 1000);
+      setSpeechStage("switch-target");
     } else if (action === "new-role" && extra) {
       setSelectedRole(extra);
       setUserMessage(`我在准备 ${extra} 的面试`);
-      setIsThinking(true);
-      setTimeout(() => {
-        setIsThinking(false);
-        setSpeechStage("new-role");
-      }, 1100);
+      setSpeechStage("new-role");
+      
+      // 持久化到用户 Profile
+      const fetchToken = isDevAuthBypassEnabled ? Promise.resolve(DEV_AUTH_BYPASS_TOKEN) : getToken();
+      void fetchToken.then(async (token) => {
+        if (token) {
+          await updateUserProfile({ token, profile: { target_role: extra } });
+        }
+      });
     } else if (action === "reset") {
       resetConversation();
     } else if (action === "go-room") {
@@ -139,7 +601,8 @@ export function CoachDashboard() {
           "interview_context",
           JSON.stringify({ target_role: role, user_background: bg }),
         );
-        const token = await getToken();
+        const fetchToken = isDevAuthBypassEnabled ? Promise.resolve(DEV_AUTH_BYPASS_TOKEN) : getToken();
+        const token = await fetchToken;
         if (token) {
           await resetInterviewSession({
             token,
@@ -152,6 +615,27 @@ export function CoachDashboard() {
     } else if (action === "go-setup") {
       router.push("/settings");
     }
+  };
+
+  const handlePracticeMemory = async (session: MemorySession) => {
+    const userBackground = `我想围绕「${session.topic}」再练一场，重点补齐：${session.improvements
+      .slice(0, 2)
+      .join("；")}`;
+    sessionStorage.setItem(
+      "interview_context",
+      JSON.stringify({ target_role: session.targetRole, user_background: userBackground }),
+    );
+    const fetchToken = isDevAuthBypassEnabled ? Promise.resolve(DEV_AUTH_BYPASS_TOKEN) : getToken();
+    const token = await fetchToken;
+    if (token) {
+      await resetInterviewSession({
+        token,
+        target_role: session.targetRole,
+        user_background: userBackground,
+      });
+    }
+    setSelectedMemory(null);
+    router.push("/interview");
   };
 
   return (
@@ -209,13 +693,12 @@ export function CoachDashboard() {
             </div>
           )}
 
-          {/* 3. Coach 呼吸思考状态 */}
+          {/* 3. Coach 呼吸状态 */}
           {isThinking && (
             <div className="flex gap-4 px-1 animate-in fade-in duration-200">
               <div className="w-[2px] shrink-0 rounded-[2px] bg-[#7c3aed] opacity-30" />
               <div className="flex items-center gap-2.5 text-[#8a8a8a] text-[13px] font-sans">
                 <div className="w-2 h-2 rounded-full bg-[#7c3aed] animate-coach-pulse" />
-                <span>Coach 正在回...</span>
               </div>
             </div>
           )}
@@ -228,34 +711,18 @@ export function CoachDashboard() {
                 
                 {/* 4.1 初始阶段（开场两态） */}
                 {speechStage === "initial" && (
-                  <>
-                    {userState === "returning" ? (
-                      <div>
-                        <p>欢迎回来。</p>
-                        <p className="mt-3.5">
-                          我看了你过去 {contextData?.session_count ?? 0} 场面试，发现一个挺要命的规律 ——<br />
-                          你讲项目时，<span className="text-[#e11d48] px-0.5 bg-[linear-gradient(180deg,transparent_62%,rgba(225,29,72,0.16)_62%)] font-sans">结果指标永远是模糊的</span>，7 场里有 <span className="text-[#e11d48] px-0.5 bg-[linear-gradient(180deg,transparent_62%,rgba(225,29,72,0.16)_62%)] font-sans">5 场</span> 都被扣。
-                        </p>
-                        <p className="mt-3.5">今天我想让你重练，<span className="text-[#4f46e5] px-0.5 bg-[linear-gradient(180deg,transparent_62%,rgba(79,70,229,0.16)_62%)] font-sans">这次你必须给我数字</span>。</p>
-                      </div>
-                    ) : (
-                      <div>
-                        <p>你好。我还不认识你。</p>
-                        <p className="mt-3.5">
-                          我是你的 AI 面试教练 —— 我会陪你练面试，记住你讲过的每个项目，<br />
-                          然后告诉你 <span className="text-[#4f46e5] px-0.5 bg-[linear-gradient(180deg,transparent_62%,rgba(79,70,229,0.16)_62%)] font-sans">下次该怎么讲会更好</span>。
-                        </p>
-                        <p className="mt-3.5">开始之前，先告诉我：你正在准备 <span className="text-[#4f46e5] px-0.5 bg-[linear-gradient(180deg,transparent_62%,rgba(79,70,229,0.16)_62%)] font-sans">什么岗位</span>？</p>
-                      </div>
-                    )}
-                  </>
+                  <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
+                    <CoachOpeningCopy
+                      coachMessage={coachMessage}
+                      fallbackUserState={userState}
+                      fallbackSessionCount={contextData?.session_count ?? 0}
+                    />
+                  </div>
                 )}
 
-                {/* 4.2 点击“好，今天就练这个”后的“进入考场”卡片渲染 */}
+                {/* 4.2 点击“好，今天就练这个”后的“开始面试”卡片渲染 */}
                 {speechStage === "follow" && (
-                  <div>
-                    <p>好。<span className="text-[#4f46e5] px-0.5 bg-[linear-gradient(180deg,transparent_62%,rgba(79,70,229,0.16)_62%)] font-sans">2 秒</span>给我，HR 准备好了。</p>
-                    
+                  <div className="animate-in fade-in slide-in-from-bottom-3 duration-500">
                     <Card className="my-3.5 p-3.5 px-4 border border-[#7c3aed]/20 rounded-2xl bg-gradient-to-br from-[#f5f3ff] to-[#7c3aed]/[0.04] shadow-[0_4px_14px_rgba(124,58,237,0.08)] ring-0 font-sans gap-0">
                       <div className="text-[10px] font-extrabold tracking-[0.12em] uppercase text-[#7c3aed] mb-1.5 select-none">即将进入</div>
                       <div className="font-[var(--mac-font-display)] text-lg text-[#171717] leading-tight mb-1">第 #{(contextData?.session_count ?? 0) + 1} 场 · 多 Agent 委员会</div>
@@ -269,21 +736,21 @@ export function CoachDashboard() {
 
                 {/* 4.3 点击“等等，我想换方向” */}
                 {speechStage === "switch" && (
-                  <div>
+                  <div className="animate-in fade-in slide-in-from-bottom-3 duration-500">
                     <p>好。那你今天想换的是 ——</p>
                   </div>
                 )}
 
                 {/* 4.4 选了要换什么（岗位/技术栈/项目） */}
                 {speechStage === "switch-target" && (
-                  <div>
-                    <p>明白。我把<span className="text-[#4f46e5] px-0.5 bg-[linear-gradient(180deg,transparent_62%,rgba(79,70,229,0.16)_62%)] font-sans">{selectedTargetLabel}</span>选择页打开给你。</p>
+                  <div className="animate-in fade-in slide-in-from-bottom-3 duration-500">
+                    <p>明白。正在为你打开设置页。</p>
                   </div>
                 )}
 
                 {/* 4.5 新用户点选了岗位 */}
                 {speechStage === "new-role" && (
-                  <div>
+                  <div className="animate-in fade-in slide-in-from-bottom-3 duration-500">
                     <p>好。<span className="text-[#4f46e5] px-0.5 bg-[linear-gradient(180deg,transparent_62%,rgba(79,70,229,0.16)_62%)] font-sans">{selectedRole}</span>。</p>
                     <p className="mt-3.5">
                       那再给我一分钟 —— 用一两句话告诉我，<br />
@@ -294,7 +761,7 @@ export function CoachDashboard() {
 
                 {/* 4.6 底部发送消息后 */}
                 {speechStage === "custom-reply" && (
-                  <div>
+                  <div className="animate-in fade-in slide-in-from-bottom-3 duration-500">
                     <p>听到了。</p>
                     <p className="mt-3.5">我先把这条记下来，<span className="text-[#4f46e5] px-0.5 bg-[linear-gradient(180deg,transparent_62%,rgba(79,70,229,0.16)_62%)] font-sans">下一场会带着这个上下文</span>开始。</p>
                     <p className="mt-3.5">你现在想要 ——</p>
@@ -349,7 +816,7 @@ export function CoachDashboard() {
                 </>
               )}
 
-              {/* 5.3 进入考场确认页 (follow) */}
+              {/* 5.3 开始面试确认页 (follow) */}
               {speechStage === "follow" && (
                 <>
                   <button
@@ -357,7 +824,7 @@ export function CoachDashboard() {
                     onClick={() => handleAction("go-room")}
                     className="px-5.5 py-3 rounded-2xl font-sans text-sm font-semibold cursor-pointer border border-transparent transition-all bg-[#171717] text-white shadow-[0_6px_18px_rgba(23,23,23,0.18)] hover:bg-black hover:translate-y-[-1px]"
                   >
-                    进入考场
+                    开始面试
                   </button>
                   <button
                     type="button"
@@ -421,7 +888,7 @@ export function CoachDashboard() {
                 <>
                   <button
                     type="button"
-                    onClick={() => handleAction("go-setup")}
+                    onClick={() => handleAction("go-room")}
                     className="px-5.5 py-3 rounded-2xl font-sans text-sm font-semibold cursor-pointer border border-transparent transition-all bg-[#171717] text-white shadow-[0_6px_18px_rgba(23,23,23,0.18)] hover:bg-black hover:translate-y-[-1px]"
                   >
                     我直接试一场吧
@@ -468,43 +935,48 @@ export function CoachDashboard() {
 
           {/* 6. 历史面试记忆（仅在老用户态下展示） */}
           {userState === "returning" && (
-            <div className="mt-2.5 pt-5.5 border-t border-[#e8e7e2] animate-in fade-in duration-300">
-              <div className="text-[10px] font-extrabold tracking-[0.12em] uppercase text-[#8a8a8a] mb-3 select-none">
-                你的 {contextData?.session_count ?? 0} 场记忆
-              </div>
-              
-              <div className="flex gap-2 overflow-x-auto pb-1 custom-textarea-scrollbar">
-                {MOCK_HISTORY.map((item) => (
-                  <Card
-                    key={item.id}
-                    onClick={() => handleAction("go-setup")}
-                    className="shrink-0 px-3.5 py-2.5 rounded-[10px] border border-[#e8e7e2] bg-white flex flex-col gap-0.5 min-w-[102px] cursor-pointer transition-all hover:border-[#dcdbd5] hover:translate-y-[-1px] ring-0 gap-0"
+            <div className="mt-2.5 border-t border-[#e8e7e2] pt-5.5 animate-in fade-in duration-300">
+              <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#8a8a8a] select-none">
+                    近期记忆
+                  </div>
+                  <div className="mt-1 text-xs text-[#8a8a8a]">
+                    Coach 只露出最值得接着练的几场，完整历史放在个人仪表盘
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="rounded-full bg-[#faf9f5] px-2.5 py-1 text-[11px] font-semibold text-[#8a8a8a]">
+                    显示 {previewMemorySessions.length} / {memorySessions.length}
+                  </span>
+                  <Link
+                    href="/dashboard"
+                    className="rounded-full border border-[#dcdbd5] bg-white px-3 py-1.5 text-xs font-semibold text-[#525252] transition-all hover:border-[#b8b5aa] hover:text-[#171717]"
                   >
-                    <div className="text-[11px] text-[#8a8a8a] font-semibold select-none">#{item.id}</div>
-                    <div className={`font-[var(--mac-font-display)] text-lg flex items-baseline gap-1 ${
-                      item.type === "improving"
-                        ? "text-[#059669]"
-                        : item.type === "declining"
-                        ? "text-[#e11d48]"
-                        : "text-[#171717]"
-                    }`}>
-                      {item.score.toFixed(1)}
-                      <span className={`text-[10px] font-sans font-semibold ${
-                        item.type === "improving"
-                          ? "text-[#059669]"
-                          : item.type === "declining"
-                          ? "text-[#e11d48]"
-                          : "text-[#8a8a8a]"
-                      }`}>
-                        {item.trend}
-                      </span>
-                    </div>
-                    <div className="text-[10px] text-[#8a8a8a] mt-0.5">{item.date}</div>
-                  </Card>
+                    查看全部记忆
+                  </Link>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                {previewMemorySessions.map((session) => (
+                  <MemorySessionCard
+                    key={session.id}
+                    session={session}
+                    onClick={() => setSelectedMemory(session)}
+                  />
                 ))}
               </div>
             </div>
           )}
+
+          <MemorySessionModal
+            session={selectedMemory}
+            onClose={() => setSelectedMemory(null)}
+            onPracticeAgain={(session) => {
+              void handlePracticeMemory(session);
+            }}
+          />
 
           {/* 7. 底部回应输入框区域 */}
           <div className="mt-1.5">

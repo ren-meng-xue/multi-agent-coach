@@ -1,5 +1,6 @@
 """interview 对话接口的请求体模型与校验。"""
-from typing import Literal, Self
+from typing import Any, Literal, Self
+from uuid import UUID
 
 from pydantic import BaseModel, field_validator, model_validator
 
@@ -63,6 +64,7 @@ class UserContextResponse(BaseModel):
 
     is_returning: bool
     target_role: str | None
+    work_years: str | None = None
     target_company: str | None
     user_background: str | None
     session_count: int
@@ -73,3 +75,32 @@ class ResetRequest(BaseModel):
 
     target_role: str | None = None
     user_background: str | None = None
+
+
+class CoachOpeningMessageResponse(BaseModel):
+    """GET /api/coach/opening-message 的展示文案响应。"""
+
+    greeting: str
+    weakness_summary: str | None
+    evidence: str | None
+    focus_today: str
+    cta_type: Literal["new", "returning"]
+
+
+class InterviewHistoryItem(BaseModel):
+    """单场面试历史记录项。"""
+
+    id: UUID
+    date: str
+    topic: str
+    target_role: str
+    score: float
+    pass_fail: Literal["pass", "fail", "partial"]
+    key_issues: list[str]
+    report: dict[str, Any] | None
+
+
+class InterviewHistoryResponse(BaseModel):
+    """GET /api/v1/interview/history 的响应。"""
+
+    sessions: list[InterviewHistoryItem]

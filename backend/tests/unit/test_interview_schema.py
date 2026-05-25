@@ -129,3 +129,20 @@ def test_reset_request_with_context():
 
     req = ResetRequest(target_role="前端工程师", user_background="Vue 项目")
     assert req.target_role == "前端工程师"
+
+
+def test_coach_opening_message_response_shape():
+    """Coach 开场词响应必须是前端可直接渲染的展示文案。"""
+    from app.schemas.interview import CoachOpeningMessageResponse
+
+    resp = CoachOpeningMessageResponse(
+        greeting="欢迎回来",
+        weakness_summary="你的项目表达缺少量化结果，面试官很难判断真实贡献。",
+        evidence="这个短板在你过去 7 场面试中出现了 5 场。",
+        focus_today="今天重点练量化表达。",
+        cta_type="returning",
+    )
+
+    assert resp.weakness_summary == "你的项目表达缺少量化结果，面试官很难判断真实贡献。"
+    assert resp.evidence == "这个短板在你过去 7 场面试中出现了 5 场。"
+    assert resp.cta_type == "returning"

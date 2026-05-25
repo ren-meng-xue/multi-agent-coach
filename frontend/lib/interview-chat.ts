@@ -24,9 +24,52 @@ export interface InterviewReport {
 export type UserContextResponse = {
   is_returning: boolean;
   target_role: string | null;
+  work_years: string | null;
   target_company: string | null;
   user_background: string | null;
   session_count: number;
+};
+
+export type InterviewHistoryItem = {
+  id: string;
+  date: string;
+  topic: string;
+  target_role: string;
+  score: number;
+  pass_fail: "pass" | "fail" | "partial";
+  key_issues: string[];
+  report: any | null;
+};
+
+export type InterviewHistoryResponse = {
+  sessions: InterviewHistoryItem[];
+};
+
+/** 返回用户的面试历史记录。 */
+export async function fetchInterviewHistory({
+  token,
+  limit = 10,
+}: {
+  token: string;
+  limit?: number;
+}): Promise<InterviewHistoryResponse> {
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL;
+  if (!baseUrl) throw new Error("缺少后端接口配置");
+
+  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/interview/history?limit=${limit}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!response.ok) throw new Error("获取面试历史失败");
+  return response.json() as Promise<InterviewHistoryResponse>;
+}
+
+export type CoachOpeningMessageResponse = {
+  greeting: string;
+  weakness_summary: string | null;
+  evidence: string | null;
+  focus_today: string;
+  cta_type: "new" | "returning";
 };
 
 type StreamInterviewChatOptions = {
@@ -121,6 +164,23 @@ export async function fetchInterviewContext({
 
   if (!response.ok) throw new Error("获取用户信息失败");
   return response.json() as Promise<UserContextResponse>;
+}
+
+/** 返回 Coach 页面个性化开场词。 */
+export async function fetchCoachOpeningMessage({
+  token,
+}: {
+  token: string;
+}): Promise<CoachOpeningMessageResponse> {
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL;
+  if (!baseUrl) throw new Error("缺少后端接口配置");
+
+  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/api/coach/opening-message`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!response.ok) throw new Error("获取 Coach 开场词失败");
+  return response.json() as Promise<CoachOpeningMessageResponse>;
 }
 
 /** 放弃当前面试 session，可携带 Coach 收集的上下文预建新 session。失败时静默忽略，不影响 UI。 */

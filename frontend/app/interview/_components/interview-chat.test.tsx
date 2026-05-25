@@ -159,17 +159,17 @@ describe("InterviewChat", () => {
 
     // 检查复制的内容是否符合预期
     expect(writeTextMock).toHaveBeenCalledWith(
-      "【面试官】：你好！在开始之前，请告诉我你想练习的面试岗位、公司，或者你想练习的具体项目背景与技术主题？（例如：AI Agent 工程师，或者分布式系统的架构设计）\n\n【求职者】：练分布式系统\n\n【面试官】：请先介绍一个项目。"
+      "【面试官】：你好！在开始之前，请告诉我你想练习的面试岗位、公司，或特定的技术主题。\n\n**你可以这样发起：**\n\n**前端开发**（例如：React 性能优化、大厂面试）\n\n**后端开发**（例如：Java/Go 微服务、高并发架构）\n\n**移动端开发**（例如：iOS/Android 实战、跨端架构）\n\n**Python AI Agent**（例如：RAG 优化、Agent 编排）\n\n请直接输入你的目标（例如：「我想面字节的前端岗位」），我们将立即开始。\n\n【求职者】：练分布式系统\n\n【面试官】：请先介绍一个项目。"
     );
 
     // 检查状态更新为“已复制”
     await waitFor(() => {
-      expect(screen.getByText("已复制")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "已复制" })).toBeInTheDocument();
     });
 
     // 等待 2 秒后，变回“复制会话”
     await waitFor(() => {
-      expect(screen.getByText("复制会话")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "复制会话" })).toBeInTheDocument();
     }, { timeout: 3000 });
   });
 
@@ -178,9 +178,18 @@ describe("InterviewChat", () => {
     expect(screen.getByText(/面试岗位/)).toBeInTheDocument();
   });
 
-  it("closing 阶段显示「开始新一轮面试」按钮，输入框仍可使用", async () => {
-    mockStreamInterviewChat.mockImplementation(async ({ onState }) => {
+  it("closing 阶段显示「开启下一场模拟面试」按钮，输入框仍可使用", async () => {
+    mockStreamInterviewChat.mockImplementation(async ({ onState, onReport }) => {
       onState?.({ stage: "closing", question_count: 5, total_questions: 5 });
+      onReport?.({
+        overall_score: 8.0,
+        technical_depth: 4.0,
+        quantified_results: 4.0,
+        failure_tradeoffs: 4.0,
+        structure: 4.0,
+        highlights: ["Good"],
+        improvements: ["Better"],
+      });
     });
 
     render(<InterviewChat />);
@@ -189,12 +198,12 @@ describe("InterviewChat", () => {
     await userEvent.click(screen.getByRole("button", { name: "发送" }));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "开始新一轮面试" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "开启下一场模拟面试" })).toBeInTheDocument();
     });
     expect(screen.getByLabelText("输入面试练习内容")).not.toBeDisabled();
   });
 
-  it("点击「开始新一轮面试」后，消息重置为开场消息，报告消失", async () => {
+  it("点击「开启下一场模拟面试」后，消息重置为开场消息，报告消失", async () => {
     mockStreamInterviewChat.mockImplementation(async ({ onState, onReport }) => {
       onState?.({ stage: "closing", question_count: 5, total_questions: 5 });
       onReport?.({
@@ -217,7 +226,7 @@ describe("InterviewChat", () => {
       expect(screen.getByText("本轮面试报告")).toBeInTheDocument();
     });
 
-    await userEvent.click(screen.getByRole("button", { name: "开始新一轮面试" }));
+    await userEvent.click(screen.getByRole("button", { name: "开启下一场模拟面试" }));
 
     await waitFor(() => {
       expect(screen.queryByText("本轮面试报告")).not.toBeInTheDocument();

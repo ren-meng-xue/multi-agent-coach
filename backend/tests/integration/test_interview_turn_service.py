@@ -135,7 +135,7 @@ async def test_stream_interview_turn_raises_on_empty_assistant_reply(db, monkeyp
 
 @pytest.mark.asyncio
 async def test_stream_interview_turn_emits_report_event_on_closing(db, monkeypatch):
-    """closing 阶段完成后，stream_interview_turn 在 done 前发出 report 事件，含 overall_score 字段。"""
+    """closing 阶段完成后，发出 report 事件并把关键指标写回 session。"""
 
     async def fake_graph_events(state):
         yield {"event": "token", "data": {"text": "感谢参与本次模拟面试。"}}
@@ -175,6 +175,14 @@ async def test_stream_interview_turn_emits_report_event_on_closing(db, monkeypat
     report_event = next(e for e in events if e["event"] == "report")
     assert report_event["data"]["overall_score"] == 7.5
     assert report_event["data"]["highlights"] == ["表达清晰"]
+
+    session_result = await db.execute(
+        select(InterviewSession).where(InterviewSession.user_id == user_id)
+    )
+    session = session_result.scalar_one()
+    assert session.score == 7.5
+    assert session.pass_fail == "pass"
+    assert session.key_issues == ["可补充量化数据"]
 
 
 @pytest.mark.asyncio
@@ -360,6 +368,36 @@ async def test_reset_interview_session_preseeds_context(db):
     assert new_session.id != old_session.id
     assert new_session.target_role == "前端工程师"
     assert new_session.user_background == "Vue 项目"
+
+
+@pytest.mark.asyncio
+async def test_reset_interview_session_preseeds_context_for_new_user(db):
+    """Regression: ISSUE-002 — 新用户从 Coach 直进面试时必须先创建用户占位记录。
+
+    Found by /qa on 2026-05-25.
+    Report: .gstack/qa-reports/qa-report-localhost-2026-05-25.md
+    """
+    from app.models.core import User
+    from app.services.interview_turn import reset_interview_session
+
+    user_id = f"user_reset_ctx_new_{uuid4().hex}"
+
+    await reset_interview_session(
+        db, user_id=user_id, target_role="AI Agent 工程师", user_background="Agent 项目"
+    )
+
+    user = await db.get(User, user_id)
+    result = await db.execute(
+        select(InterviewSession).where(
+            InterviewSession.user_id == user_id, InterviewSession.status == "in_progress"
+        )
+    )
+    new_session = result.scalar_one_or_none()
+
+    assert user is not None
+    assert new_session is not None
+    assert new_session.target_role == "AI Agent 工程师"
+    assert new_session.user_background == "Agent 项目"
 
 
 @pytest.mark.asyncio

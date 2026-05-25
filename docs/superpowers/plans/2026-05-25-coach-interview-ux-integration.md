@@ -974,12 +974,9 @@ function buildOpeningMessage(
   context: { target_role?: string; user_background?: string } | null,
 ): string {
   if (context?.target_role) {
-    const bg = context.user_background
-      ? `背景：${context.user_background.slice(0, 40)}。`
-      : "";
-    return `好，今天练「${context.target_role}」。${bg}准备好了发消息开始。`;
+    // ...
   }
-  return "你好！在开始之前，请告诉我你想练习的面试岗位、公司，或者你想练习的具体项目背景与技术主题？（例如：AI Agent 工程师，或者分布式系统的架构设计）";
+  return "你好！在开始之前，请告诉我你想练习的面试岗位、公司，或特定的技术主题。\n\n**你可以这样发起：**\n\n**前端开发**\n\n**后端开发**\n\n**移动端开发**\n\n**Python AI Agent**";
 }
 ```
 
