@@ -331,3 +331,54 @@ async def test_get_user_interview_context_ignores_sessions_without_role(db):
     assert result["is_returning"] is False
     assert result["target_role"] is None
     assert result["session_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_reset_interview_session_preseeds_context(db):
+    """携带 target_role 时，reset 创建预置岗位的新 session。"""
+    from app.services.interview_turn import (
+        get_or_create_active_session,
+        reset_interview_session,
+    )
+
+    user_id = f"user_reset_ctx_{uuid4().hex}"
+    old_session, _ = await get_or_create_active_session(db, user_id=user_id)
+    await db.commit()
+
+    await reset_interview_session(
+        db, user_id=user_id, target_role="前端工程师", user_background="Vue 项目"
+    )
+
+    result = await db.execute(
+        select(InterviewSession).where(
+            InterviewSession.user_id == user_id, InterviewSession.status == "in_progress"
+        )
+    )
+    new_session = result.scalar_one_or_none()
+
+    assert new_session is not None
+    assert new_session.id != old_session.id
+    assert new_session.target_role == "前端工程师"
+    assert new_session.user_background == "Vue 项目"
+
+
+@pytest.mark.asyncio
+async def test_reset_without_context_does_not_create_new_session(db):
+    """不携带 target_role 时，reset 只 abandon 旧 session，不预建新 session。"""
+    from app.services.interview_turn import (
+        get_or_create_active_session,
+        reset_interview_session,
+    )
+
+    user_id = f"user_reset_noctx_{uuid4().hex}"
+    await get_or_create_active_session(db, user_id=user_id)
+    await db.commit()
+
+    await reset_interview_session(db, user_id=user_id)
+
+    result = await db.execute(
+        select(InterviewSession).where(
+            InterviewSession.user_id == user_id, InterviewSession.status == "in_progress"
+        )
+    )
+    assert result.scalar_one_or_none() is None

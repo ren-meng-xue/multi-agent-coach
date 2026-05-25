@@ -179,8 +179,18 @@ async def get_user_interview_context(db: AsyncSession, *, user_id: str) -> dict:
     }
 
 
-async def reset_interview_session(db: AsyncSession, *, user_id: str) -> None:
-    """放弃当前用户所有进行中的面试 session，允许重新开始。"""
+async def reset_interview_session(
+    db: AsyncSession,
+    *,
+    user_id: str,
+    target_role: str | None = None,
+    user_background: str | None = None,
+) -> None:
+    """放弃当前用户所有进行中的面试 session。
+
+    若携带 target_role，则在 abandon 旧 session 后立即创建预置岗位信息的新 session，
+    供 LangGraph opening 节点直接跳过重新收集。
+    """
     result = await db.execute(
         select(InterviewSession).where(
             InterviewSession.user_id == user_id,
@@ -191,7 +201,21 @@ async def reset_interview_session(db: AsyncSession, *, user_id: str) -> None:
     for session in sessions:
         session.status = "abandoned"
         log.info("interview_session_reset", user_id=user_id, session_id=str(session.id))
-    if sessions:
+
+    if target_role:
+        new_session = InterviewSession(
+            user_id=user_id,
+            target_role=target_role,
+            user_background=user_background,
+        )
+        db.add(new_session)
+        log.info(
+            "interview_session_preseeded",
+            user_id=user_id,
+            target_role=target_role,
+        )
+
+    if sessions or target_role:
         await db.commit()
 
 
