@@ -20,6 +20,9 @@ def _to_psycopg_url(database_url: str) -> str:
 
 def route_after_load(state: InterviewState) -> str:
     """Choose the next phase based on persisted run state."""
+    if state.get("prepared_questions"):
+        return "ask_question"
+
     if state.get("stage") == "closing":
         return "closing"
     if state.get("stage") == "briefing":

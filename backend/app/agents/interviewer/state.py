@@ -29,3 +29,9 @@ class InterviewState(TypedDict, total=False):
     report: dict[str, Any]
     briefing_intent: Literal["continue", "change_info", "not_ready"]
 
+    # 阶段 3 新增（可选字段，保持向后兼容）
+    jd_context: dict[str, Any] | None
+    prepared_questions: list[dict[str, Any]]
+    current_question_index: int  # 当前取到 prepared_questions 的第几题
+
+

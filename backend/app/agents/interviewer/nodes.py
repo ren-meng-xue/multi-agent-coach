@@ -272,9 +272,34 @@ async def briefing_node(state: InterviewState) -> InterviewState:
 
 
 
+async def generate_prepared_question_reply(question_text: str, state: InterviewState) -> str:
+    """用面试官语气包装给定的预备题目。"""
+    system_prompt = f"""你是候选人的模拟面试官。请用温和、专业、自然的面试官口吻，向候选人提出以下指定的问题。
+可以有一句简短的过渡或开场词，然后直接、清晰地提出问题，不要有多余的废话或总结。
+指定提出的问题：{question_text}"""
+    return await _generate_text(system_prompt, state)
+
+
 async def ask_question_node(state: InterviewState) -> InterviewState:
     """Ask the next formal interview question and reset per-question followups."""
     next_question_count = state.get("question_count", 0) + 1
+
+    prepared = state.get("prepared_questions") or []
+    idx = state.get("current_question_index", 0)
+
+    if prepared and idx < len(prepared):
+        question_text = prepared[idx]["question"]
+        assistant_message = await generate_prepared_question_reply(
+            question_text, {**state, "question_count": next_question_count}
+        )
+        return {
+            "stage": "interview",
+            "question_count": next_question_count,
+            "followup_count": 0,
+            "current_question_index": idx + 1,
+            "assistant_message": assistant_message,
+        }
+
     return {
         "stage": "interview",
         "question_count": next_question_count,
