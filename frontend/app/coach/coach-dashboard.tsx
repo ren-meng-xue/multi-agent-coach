@@ -448,6 +448,11 @@ export function CoachDashboard() {
   const [isThinking, setIsThinking] = useState(false);
   const [inputText, setInputText] = useState("");
   
+  // 阶段 3 新增 JD 输入状态
+  const [showJdInput, setShowJdInput] = useState(false);
+  const [jdText, setJdText] = useState("");
+  const [jdUrl, setJdUrl] = useState("");
+  
   // 聊天上下文状态机
   const [userMessage, setUserMessage] = useState<string | null>(null);
   const [speechStage, setSpeechStage] = useState<
@@ -599,7 +604,12 @@ export function CoachDashboard() {
       if (role) {
         sessionStorage.setItem(
           "interview_context",
-          JSON.stringify({ target_role: role, user_background: bg }),
+          JSON.stringify({
+            target_role: role,
+            user_background: bg,
+            jd_text: jdText,
+            jd_url: jdUrl,
+          }),
         );
         const fetchToken = isDevAuthBypassEnabled ? Promise.resolve(DEV_AUTH_BYPASS_TOKEN) : getToken();
         const token = await fetchToken;
@@ -729,6 +739,35 @@ export function CoachDashboard() {
                       <div className="text-xs text-[#8a8a8a] flex gap-2.5 flex-wrap mt-1">
                         <span>本场重点 <b className="text-[#525252] font-semibold">量化结果 · 失败降级</b></span>
                         <span>预计 <b className="text-[#525252] font-semibold">30 min</b></span>
+                      </div>
+                      
+                      <div className="mt-3.5 border-t border-[#7c3aed]/10 pt-3">
+                        <button
+                          type="button"
+                          onClick={() => setShowJdInput(!showJdInput)}
+                          className="flex items-center gap-1.5 text-xs text-[#7c3aed] font-semibold hover:text-[#4f46e5] active:scale-95 transition-all select-none"
+                        >
+                          <span>{showJdInput ? "▲ 收起" : "▼ 我有 JD · 深度定制考点 (可选)"}</span>
+                        </button>
+                        {showJdInput && (
+                          <div className="mt-2.5 space-y-2 animate-in slide-in-from-top-1 duration-200">
+                            <Textarea
+                              value={jdText}
+                              onChange={(e) => setJdText(e.target.value)}
+                              placeholder="粘贴目标职位的 JD 文本，或输入招聘要求..."
+                              className="text-xs bg-white/70 border-[#7c3aed]/20 focus-visible:ring-[#7c3aed]/30 min-h-[72px]"
+                            />
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={jdUrl}
+                                onChange={(e) => setJdUrl(e.target.value)}
+                                placeholder="或粘贴 JD 的网址链接 (可选)..."
+                                className="flex-1 text-[11px] px-3 py-1.5 rounded-lg border border-[#7c3aed]/20 bg-white/70 outline-none focus:border-[#7c3aed] text-[#171717]"
+                              />
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </Card>
                   </div>

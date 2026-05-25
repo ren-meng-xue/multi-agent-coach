@@ -5,6 +5,8 @@ import { useAuth } from "@clerk/nextjs";
 import {
   streamInterviewChat,
   resetInterviewSession,
+  startPrepareStreamFetch,
+  resumePrepareStreamFetch,
   type InterviewChatMessage,
   type InterviewProgressState,
   type InterviewReport,
@@ -14,6 +16,9 @@ import { ChatInput } from "./chat-input";
 import { ReportCard } from "./report-card";
 import { Button } from "@/components/ui/button";
 import { Copy, Check } from "lucide-react";
+import { PreparationCard } from "./preparation-card";
+import { type TraceNodeData } from "./agent-trace";
+import type { PreparedQuestion, PrepareSSEEvent } from "@/lib/prepare-types";
 
 function buildOpeningMessage(
   context: { target_role?: string; user_background?: string } | null,
@@ -50,16 +55,19 @@ export function InterviewChat() {
   const { isLoaded, isSignedIn, getToken } = useAuth();
 
   // 1. 在组件顶层读取一次上下文，供初始消息和首次 reset 使用
-  const initialContextRef = useRef<{ target_role?: string; user_background?: string } | null>(null);
+  const initialContextRef = useRef<{ target_role?: string; user_background?: string; jd_text?: string; jd_url?: string } | null>(null);
   const [messages, setMessages] = useState<InterviewChatMessage[]>(() => {
     if (typeof window === "undefined") return [{ role: "assistant", content: buildOpeningMessage(null) }];
     
     const raw = sessionStorage.getItem("interview_context");
     if (raw) {
-      sessionStorage.removeItem("interview_context");
       try {
         const ctx = JSON.parse(raw);
         initialContextRef.current = ctx;
+        if (ctx.target_role || ctx.jd_text || ctx.jd_url) {
+          // 如果需要走预备准备流水线，首屏消息先置空
+          return [];
+        }
         return [{ role: "assistant", content: buildOpeningMessage(ctx) }];
       } catch {
         return [{ role: "assistant", content: buildOpeningMessage(null) }];
@@ -73,6 +81,13 @@ export function InterviewChat() {
   const [report, setReport] = useState<InterviewReport | null>(null);
   const [showReportDelayed, setShowReportDelayed] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // 阶段 3 准备流状态
+  const [prepStatus, setPrepStatus] = useState<"running" | "done" | "waiting_direction" | null>(null);
+  const [traceNodes, setTraceNodes] = useState<TraceNodeData[]>([]);
+  const [preparedQuestions, setPreparedQuestions] = useState<PreparedQuestion[]>([]);
+  const [prepSummary, setPrepSummary] = useState("");
+  const [prepDirection, setPrepDirection] = useState("");
 
   // 当报告数据到达且流式结束时，延迟显示报告卡片，增加节奏感
   useEffect(() => {
@@ -94,7 +109,7 @@ export function InterviewChat() {
   // 防止 reset 完成前用户提前发消息重用旧 session
   const isResettingRef = useRef(false);
 
-  // 页面加载时 abandon 旧 session，确保每次进入都是全新一轮
+  // 页面加载时 abandon 旧 session，确保每次进入都是全新一轮，并按需启动准备流
   useEffect(() => {
     if (!isLoaded || (!isSignedIn && !isDevAuthBypassEnabled) || hasResetRef.current) return;
 
@@ -108,14 +123,144 @@ export function InterviewChat() {
             target_role: initialContextRef.current?.target_role,
             user_background: initialContextRef.current?.user_background,
           });
+
+          // 如果缓存的上下文有 target_role 或者 JD 文本，就触发多 Agent 准备流水线
+          if (initialContextRef.current?.target_role || initialContextRef.current?.jd_text || initialContextRef.current?.jd_url) {
+            setPrepStatus("running");
+            runPrepare(initialContextRef.current);
+          }
         }
       })
       .finally(() => {
         isResettingRef.current = false;
-        // 首次 reset 后清空 ref，后续 handleNewRound 不再携带旧上下文
-        initialContextRef.current = null;
+        sessionStorage.removeItem("interview_context");
       });
   }, [isLoaded, isSignedIn, getToken]);
+
+  async function runPrepare(ctx: { target_role?: string; user_background?: string; jd_text?: string; jd_url?: string }) {
+    try {
+      const token = isDevAuthBypassEnabled ? DEV_AUTH_BYPASS_TOKEN : (await getToken() ?? "");
+      for await (const ev of startPrepareStreamFetch({
+        token,
+        userDirection: ctx.target_role,
+        userBackground: ctx.user_background,
+        jdText: ctx.jd_text,
+        jdUrl: ctx.jd_url,
+      })) {
+        handlePrepareEvent(ev);
+      }
+    } catch (err) {
+      console.error("Preparation stream failed:", err);
+      setPrepStatus(null);
+    }
+  }
+
+  function handlePrepareEvent(ev: PrepareSSEEvent) {
+    const { event, data } = ev;
+
+    if (event === "node_start") {
+      setTraceNodes((prev) => {
+        if (prev.some((n) => n.id === data.node)) {
+          return prev.map((n) => n.id === data.node ? { ...n, status: "running" as const } : n);
+        }
+        return [
+          ...prev,
+          { id: data.node!, label: data.label!, title: "", status: "running" as const, tokens: "" },
+        ];
+      });
+    }
+
+    if (event === "node_token") {
+      setTraceNodes((prev) =>
+        prev.map((n) =>
+          n.id === data.node ? { ...n, tokens: n.tokens + (data.text ?? "") } : n
+        )
+      );
+
+      if (data.need_direction) {
+        setPrepStatus("waiting_direction");
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: "你好！我为你检测了历史表现，发现你目前还没有设置本次练习的明确岗位。请告诉我你想练习什么岗位或面试方向？（如「AI Agent 工程师」）",
+          },
+        ]);
+      }
+    }
+
+    if (event === "node_done") {
+      setTraceNodes((prev) =>
+        prev.map((n) =>
+          n.id === data.node
+            ? { ...n, status: "done" as const, elapsedMs: data.elapsed_ms }
+            : n
+        )
+      );
+    }
+
+    if (event === "done") {
+      setPreparedQuestions(data.prepared_questions ?? []);
+      setPrepSummary(data.summary ?? "");
+      setPrepDirection(data.direction ?? "");
+      setPrepStatus("done");
+    }
+  }
+
+  async function handleStartFirstQuestion() {
+    if (isStreaming || isResettingRef.current) return;
+
+    abortRef.current?.abort();
+    const abortController = new AbortController();
+    abortRef.current = abortController;
+
+    const assistantIndex = messages.length + 1;
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", content: "开始本轮面试" },
+      { role: "assistant", content: "" },
+    ]);
+
+    assistantIndexRef.current = assistantIndex;
+    discardBufferedDelta();
+    setIsStreaming(true);
+
+    try {
+      const token = await getInterviewToken({ getToken });
+      if (!token) {
+        throw new Error("登录状态已失效，请重新登录后再试");
+      }
+
+      await streamInterviewChat({
+        token,
+        message: "__START__",
+        preparedQuestions,
+        signal: abortController.signal,
+        onState: setProgress,
+        onReport: setReport,
+        onDelta: (text) => {
+          deltaBufferRef.current += text;
+          scheduleDeltaFlush();
+        },
+      });
+      flushBufferedDelta();
+    } catch (error) {
+      if (abortController.signal.aborted) return;
+
+      discardBufferedDelta();
+      const message = error instanceof Error ? error.message : "AI 暂时无法响应，请稍后重试";
+      setMessages((current) =>
+        current.map((item, index) =>
+          index === assistantIndex ? { ...item, content: message } : item
+        )
+      );
+    } finally {
+      if (!abortController.signal.aborted) {
+        setIsStreaming(false);
+      }
+      assistantIndexRef.current = null;
+    }
+  }
 
   useEffect(() => {
     return () => {
@@ -199,6 +344,27 @@ export function InterviewChat() {
 
   async function handleSend(content: string) {
     if (!content || isStreaming || isResettingRef.current) return;
+
+    // 若当前处于等待面试练习方向的交互追问阶段
+    if (prepStatus === "waiting_direction") {
+      setMessages((prev) => [...prev, { role: "user", content }]);
+      setPrepStatus("running");
+      
+      try {
+        const token = isDevAuthBypassEnabled ? DEV_AUTH_BYPASS_TOKEN : (await getToken() ?? "");
+        for await (const ev of resumePrepareStreamFetch({
+          token,
+          direction: content,
+          userBackground: initialContextRef.current?.user_background || undefined,
+        })) {
+          handlePrepareEvent(ev);
+        }
+      } catch (err) {
+        console.error("Resume prepare failed:", err);
+        setPrepStatus(null);
+      }
+      return;
+    }
 
     abortRef.current?.abort();
     const abortController = new AbortController();
@@ -297,6 +463,16 @@ export function InterviewChat() {
         </header>
 
         <div className="interview-chat-scroll flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-5 py-5">
+          {prepStatus && (
+            <PreparationCard
+              status={prepStatus}
+              nodes={traceNodes}
+              questions={preparedQuestions}
+              summary={prepSummary}
+              direction={prepDirection}
+              onStart={handleStartFirstQuestion}
+            />
+          )}
           {messages.map((message, index) => (
             <MessageBubble
               key={`${message.role}-${index}`}
@@ -330,7 +506,10 @@ export function InterviewChat() {
             </p>
           </div>
         )}
-        <ChatInput onSend={handleSend} isStreaming={isStreaming} />
+        <ChatInput
+          onSend={handleSend}
+          isStreaming={isStreaming || (prepStatus !== null && prepStatus !== "waiting_direction")}
+        />
       </div>
     </section>
   );

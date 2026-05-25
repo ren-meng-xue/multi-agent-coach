@@ -68,7 +68,13 @@ async def turn(
 
     async def event_gen() -> AsyncIterator[dict[str, str]]:
         try:
-            async for event in stream_interview_turn(req.message, user_id=user_id, db=db):
+            async for event in stream_interview_turn(
+                req.message,
+                user_id=user_id,
+                db=db,
+                prepared_questions=req.prepared_questions,
+                jd_context=req.jd_context,
+            ):
                 yield {
                     "event": event["event"],
                     "data": json.dumps(event["data"], ensure_ascii=False),

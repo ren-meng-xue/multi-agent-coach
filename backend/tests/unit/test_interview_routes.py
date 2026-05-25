@@ -31,13 +31,13 @@ async def _partial_then_failing_reply(messages, *, user_id=""):
     raise RuntimeError("stream broke midway")
 
 
-async def _fake_turn(message, *, user_id, db):
+async def _fake_turn(message, *, user_id, db, **kwargs):
     yield {"event": "state", "data": {"stage": "opening", "question_count": 0, "total_questions": 5}}
     yield {"event": "delta", "data": {"text": "你好，先确认方向"}}
     yield {"event": "done", "data": {}}
 
 
-async def _failing_turn(message, *, user_id, db):
+async def _failing_turn(message, *, user_id, db, **kwargs):
     raise RuntimeError("turn down")
     yield {"event": "done", "data": {}}
 

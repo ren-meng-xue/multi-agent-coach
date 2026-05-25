@@ -235,7 +235,12 @@ async def reset_interview_session(
 
 
 async def stream_interview_turn(
-    message: str, *, user_id: str, db: AsyncSession
+    message: str,
+    *,
+    user_id: str,
+    db: AsyncSession,
+    prepared_questions: list[dict[str, Any]] | None = None,
+    jd_context: dict[str, Any] | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
     """处理统一入口的一轮对话，流式返回 SSE 事件数据。
 
@@ -249,6 +254,11 @@ async def stream_interview_turn(
         is_first_time=is_first_time,
         messages=history,
     )
+    if is_first_time:
+        if prepared_questions:
+            state["prepared_questions"] = prepared_questions
+        if jd_context:
+            state["jd_context"] = jd_context
 
     assistant_chunks: list[str] = []
     output: InterviewState | None = None

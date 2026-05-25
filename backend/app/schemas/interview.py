@@ -47,6 +47,8 @@ class TurnRequest(BaseModel):
     """统一面试入口请求：前端只提交本轮用户输入，历史由后端按 user_id 管理。"""
 
     message: str
+    prepared_questions: list[dict[str, Any]] | None = None
+    jd_context: dict[str, Any] | None = None
 
     @field_validator("message")
     @classmethod

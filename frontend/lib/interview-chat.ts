@@ -75,6 +75,8 @@ export type CoachOpeningMessageResponse = {
 type StreamInterviewChatOptions = {
   token: string;
   message: string;
+  preparedQuestions?: import("./prepare-types").PreparedQuestion[];
+  jdContext?: any;
   signal?: AbortSignal;
   onDelta: (text: string) => void;
   onState?: (state: InterviewProgressState) => void;
@@ -87,6 +89,8 @@ const DEFAULT_ERROR_MESSAGE = "请求失败，请稍后重试";
 export async function streamInterviewChat({
   token,
   message,
+  preparedQuestions,
+  jdContext,
   signal,
   onDelta,
   onState,
@@ -103,7 +107,11 @@ export async function streamInterviewChat({
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({
+      message,
+      prepared_questions: preparedQuestions,
+      jd_context: jdContext,
+    }),
     signal,
   });
 
@@ -221,3 +229,94 @@ function parseJsonPayload<T>(data: string): T {
     throw new Error(DEFAULT_ERROR_MESSAGE);
   }
 }
+
+/** 启动准备流水线（支持多源 JD，流式 SSE 返回）。 */
+export async function* startPrepareStreamFetch(params: {
+  token: string;
+  userDirection?: string;
+  userBackground?: string;
+  jdText?: string;
+  jdUrl?: string;
+  jdFile?: File;
+}): AsyncGenerator<import("./prepare-types").PrepareSSEEvent, void, unknown> {
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
+  const form = new FormData();
+  if (params.userDirection) form.append("user_direction", params.userDirection);
+  if (params.userBackground) form.append("user_background", params.userBackground);
+  if (params.jdText) form.append("jd_text", params.jdText);
+  if (params.jdUrl) form.append("jd_url", params.jdUrl);
+  if (params.jdFile) form.append("jd_file", params.jdFile);
+
+  const resp = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/prepare/start`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${params.token}` },
+    body: form,
+  });
+
+  if (!resp.ok || !resp.body) throw new Error("Prepare stream failed");
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      if (trimmedLine.startsWith("data: ")) {
+        try {
+          yield JSON.parse(trimmedLine.slice(6)) as import("./prepare-types").PrepareSSEEvent;
+        } catch {
+          // ignore parsing error
+        }
+      }
+    }
+  }
+}
+
+/** 恢复准备流水线（需要向用户追问方向场景）。 */
+export async function* resumePrepareStreamFetch(params: {
+  token: string;
+  direction: string;
+  userBackground?: string;
+}): AsyncGenerator<import("./prepare-types").PrepareSSEEvent, void, unknown> {
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
+  const form = new FormData();
+  form.append("direction", params.direction);
+  if (params.userBackground) form.append("user_background", params.userBackground);
+
+  const resp = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/prepare/resume`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${params.token}` },
+    body: form,
+  });
+
+  if (!resp.ok || !resp.body) throw new Error("Resume prepare stream failed");
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      if (trimmedLine.startsWith("data: ")) {
+        try {
+          yield JSON.parse(trimmedLine.slice(6)) as import("./prepare-types").PrepareSSEEvent;
+        } catch {
+          // ignore parsing error
+        }
+      }
+    }
+  }
+}
+
