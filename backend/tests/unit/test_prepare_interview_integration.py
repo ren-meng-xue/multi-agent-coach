@@ -117,3 +117,69 @@ async def test_end_to_end_one_turn_emits_full_event_sequence(monkeypatch, db):
     master_done = next(d for d in node_dones if d["data"]["node"] == "master")
     assert master_done["data"]["chain"] == ["evaluator", "followup"]
 
+
+@pytest.mark.asyncio
+async def test_chain_only_followup_skips_evaluator_sse(monkeypatch, db):
+    """跑题场景：master 决定 chain=['followup']，evaluator 在 SSE 里不出现。"""
+    from uuid import uuid4
+
+    from app.services.interview_turn import stream_interview_turn
+
+    test_user_id = f"user_{uuid4().hex}"
+
+    async def fake_events(state):
+        yield {"event": "node_start", "data": {"node": "master", "label": "MASTER"}}
+        yield {"event": "node_done", "data": {"node": "master", "elapsed_ms": 100, "chain": ["followup"]}}
+        yield {"event": "node_start", "data": {"node": "followup", "label": "面试官 · 追问"}}
+        yield {"event": "token", "data": {"text": "拉回主题"}}
+        yield {"event": "node_done", "data": {"node": "followup", "elapsed_ms": 400}}
+        yield {"event": "final", "data": {
+            "stage": "interview", "question_count": 1, "total_questions": 5,
+            "followup_count": 1, "max_followups": 2,
+            "assistant_message": "拉回主题",
+        }}
+
+    monkeypatch.setattr(
+        "app.services.interview_turn.stream_interviewer_turn_events",
+        fake_events,
+    )
+    nodes = []
+    async for ev in stream_interview_turn(message="...", user_id=test_user_id, db=db):
+        if ev["event"] == "node_start":
+            nodes.append(ev["data"]["node"])
+    assert "evaluator" not in nodes
+    assert "master" in nodes
+    assert "followup" in nodes
+
+
+@pytest.mark.asyncio
+async def test_chain_closing_triggers_report_event(monkeypatch, db):
+    """chain=['closing'] 应有 report 事件。"""
+    from uuid import uuid4
+
+    from app.services.interview_turn import stream_interview_turn
+
+    test_user_id = f"user_{uuid4().hex}"
+
+    async def fake_events(state):
+        yield {"event": "node_start", "data": {"node": "master", "label": "MASTER"}}
+        yield {"event": "node_done", "data": {"node": "master", "elapsed_ms": 80, "chain": ["closing"]}}
+        yield {"event": "node_start", "data": {"node": "closing", "label": "收尾"}}
+        yield {"event": "token", "data": {"text": "面试结束"}}
+        yield {"event": "node_done", "data": {"node": "closing", "elapsed_ms": 500}}
+        yield {"event": "final", "data": {
+            "stage": "closing", "question_count": 5, "total_questions": 5,
+            "followup_count": 2, "max_followups": 2,
+            "assistant_message": "面试结束",
+            "report": {"overall_score": 7.2, "highlights": [], "improvements": []},
+        }}
+
+    monkeypatch.setattr(
+        "app.services.interview_turn.stream_interviewer_turn_events",
+        fake_events,
+    )
+    events = []
+    async for ev in stream_interview_turn(message="结束吧", user_id=test_user_id, db=db):
+        events.append(ev["event"])
+    assert "report" in events
+
