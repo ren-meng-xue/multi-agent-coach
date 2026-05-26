@@ -214,6 +214,12 @@ async def question_gen_node(state: PrepareState) -> PrepareState:
         content = chunk.content if isinstance(chunk.content, str) else ""
         full_text += content
 
+    def _safe_int(val: Any, default: int) -> int:
+        try:
+            return int(val)
+        except (ValueError, TypeError):
+            return default
+
     # 解析 JSON 数组
     questions: list[PreparedQuestion] = []
     try:
@@ -223,27 +229,37 @@ async def question_gen_node(state: PrepareState) -> PrepareState:
             questions = sorted(
                 [
                     {
-                        "id": int(q.get("id", i + 1)),
+                        "id": _safe_int(q.get("id"), i + 1),
                         "question": str(q["question"]),
                         "category": q.get("category", "technical"),
                         "focus_area": str(q.get("focus_area", "")),
-                        "priority": int(q.get("priority", 5)),
+                        "priority": _safe_int(q.get("priority"), 5),
                     }
                     for i, q in enumerate(raw_list)
                 ],
                 key=lambda x: x["priority"],
             )
-    except (json.JSONDecodeError, KeyError) as exc:
-        log.error("question_gen_parse_failed", error=str(exc), raw=full_text[:200])
+    except (json.JSONDecodeError, KeyError, ValueError, TypeError) as exc:
+        log.error("question_gen_parse_failed", error=str(exc), raw=full_text[:500])
+
+    # 生成一句话摘要
+    summary = ""
+    if questions:
+        summary = f"已根据你的背景和目标岗位为你定制了 {len(questions)} 道面试题，点击下方按钮开始练习。"
+    else:
+        summary = "题目生成遇到了一点小问题，你可以点击下方按钮直接开始面试，我将为你实时出题。"
 
     log.info("question_gen_done", count=len(questions))
-    return {**state, "prepared_questions": questions}
+    return {**state, "prepared_questions": questions, "summary": summary}
 
 
 class _MasterDecision(BaseModel):
     direction: str = ""
     chain: list[str] = []
     need_direction: bool = False
+
+
+VALID_PREPARE_NODES = {"memory_search", "jd_analysis", "question_gen"}
 
 
 async def master_node(state: PrepareState) -> PrepareState:
@@ -286,8 +302,9 @@ async def master_node(state: PrepareState) -> PrepareState:
 
     decision: _MasterDecision = await _invoke_decision()
 
-    # 保证 question_gen 始终在 chain 末尾
-    chain = list(dict.fromkeys(decision.chain + ["question_gen"]))
+    # [C3] 保证 question_gen 始终在 chain 末尾，并过滤非法节点
+    chain = [n for n in decision.chain if n in VALID_PREPARE_NODES]
+    chain = list(dict.fromkeys(chain + ["question_gen"]))
 
     log.info(
         "master_done",

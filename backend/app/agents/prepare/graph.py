@@ -103,6 +103,15 @@ def _extract_token(event: dict[str, Any]) -> str | None:
 
 async def stream_prepare_events(state: PrepareState) -> AsyncIterator[dict[str, Any]]:
     """运行 prepare graph，流式 yield SSE 事件。"""
+    # 率先吐出 session_id 给前端，用于断点继续时的凭证
+    if state.get("session_id"):
+        yield {
+            "event": "init",
+            "data": {
+                "session_id": state.get("session_id")
+            }
+        }
+
     current_node: str | None = None
     elapsed_tracker: dict[str, float] = {}
     finished_nodes: set[str] = set()
@@ -159,6 +168,29 @@ async def stream_prepare_events(state: PrepareState) -> AsyncIterator[dict[str, 
         if ev_name == "on_chain_end" and event.get("name") == "LangGraph":
             from typing import cast
             final = cast(PrepareState, event.get("data", {}).get("output") or {})
+            
+            # 将最新的 weak_areas 和 star_stories 写入 Redis 缓存，防止二次重定向时状态丢失
+            session_id = final.get("session_id")
+            user_id = final.get("user_id")
+            if session_id and user_id:
+                try:
+                    import json
+
+                    from app.services.coach_opening import get_coach_redis
+                    r = await get_coach_redis()
+                    cache_data = {
+                        "weak_areas": final.get("weak_areas", []),
+                        "star_stories": final.get("star_stories", []),
+                    }
+                    await r.setex(
+                        f"prepare:state:{user_id}:{session_id}",
+                        3600,  # 缓存1小时
+                        json.dumps(cache_data, ensure_ascii=False),
+                    )
+                    log.info("prepare_state_cached", session_id=session_id)
+                except Exception as exc:
+                    log.warning("prepare_state_cache_failed", session_id=session_id, error=str(exc))
+
             if not final.get("need_direction"):
                 yield {
                     "event": "done",

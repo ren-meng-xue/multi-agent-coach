@@ -1,4 +1,5 @@
 """LangGraph definition for the multi-agent interviewer."""
+import asyncio
 import time as _time
 from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack
@@ -8,17 +9,18 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import END, StateGraph
 
 from app.agents.interviewer import nodes
+from app.agents.interviewer.nodes import CHAIN_NODES
 from app.agents.interviewer.state import InterviewState
 
-_interviewer_graph: Any | None = None
 _checkpoint_stack: AsyncExitStack | None = None
+_interviewer_graph: Any = None
 
 
-def _to_psycopg_url(database_url: str) -> str:
-    return database_url.replace("postgresql+asyncpg://", "postgresql://", 1)
-
-
-CHAIN_NODES = {"evaluator", "followup", "ask_question", "closing"}
+def _to_psycopg_url(url: str) -> str:
+    """将 postgresql+asyncpg:// 转换为 postgresql:// 兼容 psycopg"""
+    if "postgresql+asyncpg://" in url:
+        return url.replace("postgresql+asyncpg://", "postgresql://", 1)
+    return url
 
 
 def route_after_master(state: InterviewState) -> str:
@@ -180,6 +182,12 @@ async def stream_interviewer_turn_events(state: InterviewState) -> AsyncIterator
                 "event": "node_start",
                 "data": {"node": ev_node, "label": NODE_LABELS.get(ev_node, ev_node)},
             }
+            # F9: 首轮启动静态文案流式体验模拟
+            if ev_node == "master" and state.get("question_count", 0) == 0:
+                static_text = "• 面试正式开始，正在为您生成第一道题目。"
+                for char in static_text:
+                    yield {"event": "node_token", "data": {"node": "master", "text": char}}
+                    await asyncio.sleep(0.02)
 
         # Token 流：根据 tag 路由
         if ev_name == "on_chat_model_stream":

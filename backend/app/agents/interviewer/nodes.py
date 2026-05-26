@@ -116,7 +116,7 @@ class _InterviewMasterDecision(BaseModel):
     reason: str = ""
 
 
-VALID_CHAIN_NODES = {"evaluator", "followup", "ask_question", "closing"}
+CHAIN_NODES = {"evaluator", "followup", "ask_question", "closing"}
 TERMINAL_NODES = {"followup", "ask_question", "closing"}
 DEFAULT_FALLBACK_CHAIN = ["evaluator", "followup"]
 
@@ -177,7 +177,7 @@ def _enforce_chain(chain: list[str], state: InterviewState) -> list[str]:
         return ["closing"]
 
     # 3. 过滤非法节点 + 去空
-    cleaned = [n for n in chain if n in VALID_CHAIN_NODES]
+    cleaned = [n for n in chain if n in CHAIN_NODES]
     if not cleaned:
         log.warning("master_chain_empty_fallback", original=chain)
         cleaned = list(DEFAULT_FALLBACK_CHAIN)
@@ -197,6 +197,16 @@ def _enforce_chain(chain: list[str], state: InterviewState) -> list[str]:
 
 async def master_node(state: InterviewState) -> InterviewState:
     """Phase 3+ 真·动态调度：LLM 决定 chain。"""
+    # 若为首轮启动，跳过 LLM 复杂推理，直接输出固定意图
+    if state.get("question_count", 0) == 0:
+        # 首轮自动启动直接跳过真实 LLM 推理，由外层流生成器（stream_interviewer_turn_events）
+        # 静态推送首轮思维链，从而省下 1 次 LLM 调用
+        return {
+            **state,
+            "chain": ["ask_question"],
+            "master_reason": "首轮自动启动",
+        }
+
     context = _build_master_context(state)
 
     try:
