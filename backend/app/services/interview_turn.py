@@ -263,14 +263,19 @@ async def stream_interview_turn(
     assistant_chunks: list[str] = []
     output: InterviewState | None = None
     async for graph_event in stream_interviewer_turn_events(state):
-        if graph_event["event"] == "token":
-            text = graph_event["data"].get("text", "")
+        evt = graph_event["event"]
+        data = graph_event["data"]
+        if evt == "token":
+            text = data.get("text", "")
             if text:
                 assistant_chunks.append(text)
                 yield {"event": "delta", "data": {"text": text}}
             continue
-        if graph_event["event"] == "final":
-            output = graph_event["data"]
+        if evt in ("node_start", "node_token", "node_done"):
+            yield {"event": evt, "data": data}
+            continue
+        if evt == "final":
+            output = data
 
     if output is None:
         log.warning("interview_turn_missing_graph_output", user_id=user_id, session_id=str(session.id))
