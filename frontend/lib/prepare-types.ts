@@ -41,3 +41,13 @@ export interface TraceNodeData {
   tokens: string;
   elapsedMs?: number;
 }
+
+export interface InterviewTraceNodeEvent {
+  phase: "start" | "token" | "done";
+  node: string;
+  label?: string;
+  text?: string;
+  elapsedMs?: number;
+  chain?: string[];
+  summaryScore?: number;
+}

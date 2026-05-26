@@ -1,4 +1,5 @@
 import { readSseStream, type SseEvent } from "./sse";
+import type { InterviewTraceNodeEvent } from "./prepare-types";
 
 export type InterviewChatMessage = {
   role: "user" | "assistant";
@@ -81,6 +82,7 @@ type StreamInterviewChatOptions = {
   onDelta: (text: string) => void;
   onState?: (state: InterviewProgressState) => void;
   onReport?: (report: InterviewReport) => void;
+  onTraceNode?: (ev: InterviewTraceNodeEvent) => void;
 };
 
 const DEFAULT_ERROR_MESSAGE = "请求失败，请稍后重试";
@@ -95,6 +97,7 @@ export async function streamInterviewChat({
   onDelta,
   onState,
   onReport,
+  onTraceNode,
 }: StreamInterviewChatOptions): Promise<void> {
   const baseUrl = process.env.NEXT_PUBLIC_API_URL;
   if (!baseUrl) {
@@ -121,7 +124,7 @@ export async function streamInterviewChat({
 
   await readSseStream({
     stream: response.body,
-    onEvent: (event) => handleSseEvent(event, onDelta, onState, onReport),
+    onEvent: (event) => handleSseEvent(event, onDelta, onState, onReport, onTraceNode),
   });
 }
 
@@ -130,6 +133,7 @@ function handleSseEvent(
   onDelta: (text: string) => void,
   onState?: (state: InterviewProgressState) => void,
   onReport?: (report: InterviewReport) => void,
+  onTraceNode?: (ev: InterviewTraceNodeEvent) => void,
 ) {
   if (event === "done") return;
 
@@ -148,6 +152,28 @@ function handleSseEvent(
   if (event === "report") {
     const payload = parseJsonPayload<InterviewReport>(data);
     onReport?.(payload);
+    return;
+  }
+
+  if (event === "node_start" || event === "node_token" || event === "node_done") {
+    const payload = parseJsonPayload<{
+      node: string;
+      label?: string;
+      text?: string;
+      elapsed_ms?: number;
+      chain?: string[];
+      summary_score?: number;
+    }>(data);
+    const phase = event === "node_start" ? "start" : event === "node_token" ? "token" : "done";
+    onTraceNode?.({
+      phase,
+      node: payload.node,
+      label: payload.label,
+      text: payload.text,
+      elapsedMs: payload.elapsed_ms,
+      chain: payload.chain,
+      summaryScore: payload.summary_score,
+    });
     return;
   }
 
@@ -321,4 +347,3 @@ export async function* resumePrepareStreamFetch(params: {
     }
   }
 }
-

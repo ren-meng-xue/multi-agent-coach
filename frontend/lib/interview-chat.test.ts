@@ -151,6 +151,37 @@ describe("streamInterviewChat", () => {
     expect(reports).toHaveLength(1);
     expect(reports[0]).toMatchObject({ overall_score: 7.5, highlights: ["表达清晰"] });
   });
+
+  it("dispatches start/token/done with normalized trace node payload", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        makeSseStream(
+          'event: node_start\ndata: {"node":"master","label":"MASTER"}\n\n' +
+            'event: node_token\ndata: {"node":"master","text":"评估并追问"}\n\n' +
+            'event: node_done\ndata: {"node":"master","elapsed_ms":120,"chain":["evaluator","followup"]}\n\n' +
+            "event: done\ndata: {}\n\n",
+        ),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const events: unknown[] = [];
+    await streamInterviewChat({
+      token: "test-token",
+      message: "hi",
+      onDelta: vi.fn(),
+      onTraceNode: (ev) => events.push(ev),
+    });
+
+    expect(events.map((ev) => (ev as { phase: string }).phase)).toEqual(["start", "token", "done"]);
+    expect(events[2]).toMatchObject({
+      phase: "done",
+      node: "master",
+      elapsedMs: 120,
+      chain: ["evaluator", "followup"],
+    });
+  });
 });
 
 describe("resetInterviewSession", () => {
