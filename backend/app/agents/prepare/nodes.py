@@ -260,6 +260,8 @@ async def master_node(state: PrepareState) -> PrepareState:
     weak_areas = state.get("weak_areas") or []
     star_stories = state.get("star_stories") or []
 
+    log.info("master_node_start", user_direction=user_direction, jd_raw_len=len(jd_raw))
+
     context = f"""
 用户档案：
   - 目标岗位/方向：{user_direction or "未设置"}
