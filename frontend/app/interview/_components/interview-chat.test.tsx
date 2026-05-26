@@ -6,7 +6,7 @@ if (typeof globalThis.crypto === "undefined") {
   (globalThis as any).crypto = {};
 }
 if (typeof globalThis.crypto.randomUUID === "undefined") {
-  globalThis.crypto.randomUUID = () => "test-uuid-12345678";
+  globalThis.crypto.randomUUID = () => "test-uuid-12345678" as any;
 }
 import userEvent from "@testing-library/user-event";
 import { InterviewChat } from "./interview-chat";
@@ -514,12 +514,11 @@ describe("InterviewChat", () => {
     await userEvent.type(input, "我是这么做 RAG 的");
     await userEvent.click(screen.getByRole("button", { name: "发送" }));
 
-    // 断言 TurnTraceCard 在聊天流中正确展现
+    // 断言 TurnTraceCard 在聊天流中正确展现，包含评估分数与面试追问
     await waitFor(() => {
-      expect(screen.getByText(/本轮分析/)).toBeInTheDocument();
+      expect(screen.getAllByText(/本轮分析/)[0]).toBeInTheDocument();
+      expect(screen.getByText(/8\.5/)).toBeInTheDocument();
+      expect(screen.getByText(/你提到的 RAG 是如何调优的/)).toBeInTheDocument();
     });
-
-    expect(screen.getByText(/8\.5/)).toBeInTheDocument();
-    expect(screen.getByText(/你提到的 RAG 是如何调优的/)).toBeInTheDocument();
   });
 });
