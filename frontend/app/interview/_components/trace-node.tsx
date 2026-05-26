@@ -24,27 +24,32 @@ export function TraceNode({
   const badgeClass = getBadgeClass(id);
 
   return (
-    <div data-testid={`trace-node-${id}`} className="group flex gap-3 py-2.5">
-      <div className="flex flex-col items-center gap-1 pt-1">
+    <div data-testid={`trace-node-${id}`} className="group flex gap-4 py-3">
+      <div className="flex flex-col items-center gap-1.5 pt-1">
         {status === "pending" && (
           <div
             data-testid="trace-status-pending"
-            className="size-5 flex-shrink-0 rounded-full border border-black/15 bg-white transition-colors duration-300 dark:border-white/15 dark:bg-[#252523]"
-          />
+            className="size-5 flex-shrink-0 flex items-center justify-center rounded-full"
+          >
+            <div className="size-2 rounded-full border border-black/20 dark:border-white/20 bg-black/[0.02] dark:bg-white/[0.02] transition-colors duration-500" />
+          </div>
         )}
         {status === "running" && (
           <div
             data-testid="trace-status-running"
-            className="size-5 flex-shrink-0 animate-spin rounded-full border-2 border-[#534AB7] border-t-transparent"
-          />
+            className="relative flex size-5 flex-shrink-0 items-center justify-center rounded-full bg-[#534AB7]/10 dark:bg-[#CECBF6]/10"
+          >
+            <div className="absolute inset-0 animate-ping rounded-full bg-[#534AB7]/20 dark:bg-[#CECBF6]/20" />
+            <div className="size-2 rounded-full bg-[#534AB7] dark:bg-[#CECBF6] shadow-[0_0_8px_rgba(83,74,183,0.5)] dark:shadow-[0_0_8px_rgba(206,203,246,0.5)]" />
+          </div>
         )}
         {status === "done" && (
           <div
             data-testid="trace-status-done"
-            className="flex size-5 flex-shrink-0 items-center justify-center rounded-full bg-[#1D9E75] text-white shadow-sm shadow-emerald-200 animate-in fade-in zoom-in-50 duration-300"
+            className="flex size-5 flex-shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white shadow-[0_2px_8px_-1px_rgba(16,185,129,0.3)] dark:bg-emerald-600 dark:shadow-none animate-in fade-in zoom-in-50 duration-500"
           >
             <svg
-              className="size-3"
+              className="size-2.5"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -52,44 +57,55 @@ export function TraceNode({
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                strokeWidth={3}
+                strokeWidth={3.5}
                 d="M5 13l4 4L19 7"
               />
             </svg>
           </div>
         )}
-        <div className="mt-1 min-h-[16px] w-px flex-1 bg-black/10 group-last:bg-transparent dark:bg-white/10" />
+        <div className={`mt-1.5 w-[1.5px] flex-1 transition-all duration-700 ${
+          status === "running"
+            ? "bg-gradient-to-b from-[#534AB7] via-[#7B71F3]/50 to-transparent animate-pulse"
+            : status === "done"
+            ? "bg-emerald-500/30 dark:bg-emerald-500/20"
+            : "bg-black/[0.06] dark:bg-white/[0.06]"
+        } group-last:bg-transparent`} />
       </div>
 
-      <div className="min-w-0 flex-1 pb-4">
-        <div className="mb-1.5 flex flex-wrap items-center gap-2">
-          <span className={`rounded px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider shadow-sm ${badgeClass}`}>
+      <div className="min-w-0 flex-1 pb-2">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <span className={`rounded-md px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-widest shadow-[0_1px_2px_rgba(0,0,0,0.02)] ${badgeClass}`}>
             {label}
           </span>
-          <span className="text-xs font-semibold text-[#1a1a18] dark:text-[#e8e6de]">{title}</span>
+          <span className="text-xs font-bold text-black/85 dark:text-white/85">{title}</span>
           {status === "running" && (
-            <span className="flex gap-0.5 text-[10px] font-bold text-[#534AB7] animate-pulse">
+            <span className="flex gap-0.5 text-[8px] text-[#534AB7] dark:text-[#CECBF6] animate-pulse">
               <span>●</span>
               <span>●</span>
               <span>●</span>
             </span>
           )}
           {elapsedMs !== undefined && (
-            <span className="ml-auto rounded border border-black/5 bg-black/[0.03] px-1.5 py-0.5 font-mono text-[10px] text-black/35 dark:border-white/10 dark:bg-white/[0.04] dark:text-white/35">
+            <span className="ml-auto rounded-md border border-black/[0.04] bg-black/[0.02] px-1.5 py-0.5 font-mono text-[9px] text-black/30 dark:border-white/10 dark:bg-white/[0.03] dark:text-white/30">
               {elapsedMs}ms
             </span>
           )}
         </div>
 
-        {tokens && (
-          <div className="space-y-1 whitespace-pre-wrap pl-1 text-xs font-normal leading-relaxed text-black/55 animate-in fade-in slide-in-from-top-1 duration-300 dark:text-white/55">
+        {id === "master" && status === "running" && (
+          <p className="pl-2 text-[11px] text-black/30 animate-pulse dark:text-white/30">
+            分析中...
+          </p>
+        )}
+        {id !== "master" && tokens && (
+          <div className="space-y-1.5 whitespace-pre-wrap pl-2.5 border-l-[1.5px] border-black/[0.04] dark:border-white/[0.04] text-[11px] font-normal leading-relaxed text-black/55 dark:text-white/60 animate-in fade-in slide-in-from-top-1 duration-500">
             {tokens.split("\n").map((line, i) => {
               const trimmed = line.trim();
               if (!trimmed) return null;
               return (
-                <div key={i} className="flex gap-2 mt-1">
-                  <span className="flex-shrink-0 select-none text-black/20 dark:text-white/20">•</span>
-                  <span>
+                <div key={i} className="flex gap-2 items-start mt-1.5 animate-in fade-in slide-in-from-left-2 duration-300">
+                  <span className="flex-shrink-0 select-none text-black/25 dark:text-white/25 mt-[3px] font-mono text-[8px]">→</span>
+                  <span className="break-words">
                     {trimmed.replace(/^[•\-]\s*/, "")}
                   </span>
                 </div>

@@ -5,6 +5,7 @@ import { useAuth } from "@clerk/nextjs";
 import {
   streamInterviewChat,
   resetInterviewSession,
+  fetchActiveInterviewSession,
   startPrepareStreamFetch,
   resumePrepareStreamFetch,
   isPrepareTraceMessage,
@@ -14,6 +15,7 @@ import {
   type InterviewPrepareTracePayload,
   type InterviewProgressState,
   type InterviewReport,
+  type InterviewTurnTraceMessage,
 } from "@/lib/interview-chat";
 import { MessageBubble } from "./message-bubble";
 import { ChatInput } from "./chat-input";
@@ -66,12 +68,22 @@ function createPrepareTracePayload(
   };
 }
 
+// 解决 React 组件在 Clerk 重定向/多次挂载期间销毁导致的 initialContextRef 丢失问题。
+// 使用全局变量作为挂载期间的闭包缓存，浏览器刷新时全局变量虽重置，但能从 sessionStorage 重新恢复。
+let globalInitialContextCache: { target_role?: string; user_background?: string; jd_text?: string; jd_url?: string } | null = null;
+
 /** 面试房间的单面试官流式聊天主体。 */
 export function InterviewChat() {
   const { isLoaded, isSignedIn, getToken } = useAuth();
 
-  // 1. 在组件顶层读取一次上下文，供初始消息和首次 reset 使用
-  const initialContextRef = useRef<{ target_role?: string; user_background?: string; jd_text?: string; jd_url?: string } | null>(null);
+  const isTest = typeof process !== "undefined" && process.env.NODE_ENV === "test";
+
+  // 1. 在组件顶层读取一次上下文，供初始消息和首次 reset 使用。
+  // 在单测中，各测试用例共享进程，为防全局变量污染需强制不使用闭包缓存；
+  // 在真实浏览器中，则安全使用闭包缓存 globalInitialContextCache，以抵御 Clerk 重定向重新挂载造成的丢失。
+  const initialContextRef = useRef<{ target_role?: string; user_background?: string; jd_text?: string; jd_url?: string } | null>(
+    isTest ? null : globalInitialContextCache
+  );
   
   // 在客户端首次渲染（Hydration）的 render 阶段，同步且安全地从 sessionStorage 中读取上下文。
   // 由于 Ref 仅是内存引用，不影响首屏生成的 HTML DOM 树，因此绝对不会产生 Hydration Mismatch。
@@ -79,7 +91,9 @@ export function InterviewChat() {
     const raw = sessionStorage.getItem("interview_context");
     if (raw) {
       try {
-        initialContextRef.current = JSON.parse(raw);
+        const parsed = JSON.parse(raw);
+        initialContextRef.current = parsed;
+        globalInitialContextCache = parsed; // 写入全局缓存
       } catch (err) {
         console.error("Failed to parse initial interview_context on render:", err);
       }
@@ -108,8 +122,9 @@ export function InterviewChat() {
     if (initialContextRef.current) {
       const ctx = initialContextRef.current;
       if (ctx.target_role || ctx.jd_text || ctx.jd_url) {
-        // 如果需要走预备准备流水线，首屏消息先置空
-        setMessages([]);
+        // 客户端首屏成功挂载后，如果带有开始意图，立刻渲染出准备流面板占位，
+        // 避免重新挂载或防抖跳过导致首屏渲染出空白或欢迎开场。
+        setMessages([{ role: "trace", kind: "prepare", payload: createPrepareTracePayload() }]);
       } else {
         setMessages([{ role: "assistant", content: buildOpeningMessage(ctx) }]);
       }
@@ -152,9 +167,9 @@ export function InterviewChat() {
   // 防止 reset 完成前用户提前发消息重用旧 session
   const isResettingRef = useRef(false);
 
-  // 页面加载时 abandon 旧 session，确保每次进入都是全新一轮，并按需启动准备流
+  // 页面加载时按需恢复进行中的活动会话，否则按需启动新一轮的准备流或展示欢迎开场消息。
   // sessionStorage 防抖：Clerk 握手期间的多次 307 重定向会导致组件反复挂载，
-  // 每次挂载都触发 /reset，30s 内只允许一次实际 reset。
+  // 每次挂载都触发同步流程，30s 内只允许一次实际请求防抖。
   useEffect(() => {
     if (!isLoaded || (!isSignedIn && !isDevAuthBypassEnabled) || hasResetRef.current) return;
 
@@ -164,34 +179,69 @@ export function InterviewChat() {
       return;
     }
 
-    const RESET_COOLDOWN_MS = 30_000;
-    const RESET_TS_KEY = "interview_reset_ts";
-    const lastReset = sessionStorage.getItem(RESET_TS_KEY);
-    if (!isTest && lastReset && Date.now() - Number(lastReset) < RESET_COOLDOWN_MS) {
-      hasResetRef.current = true;
-      return;
-    }
-
     hasResetRef.current = true;
     isResettingRef.current = true;
-    sessionStorage.setItem(RESET_TS_KEY, String(Date.now()));
     getInterviewToken({ getToken, skipCache: true })
       .then(async (token) => {
-        if (token) {
-          await resetInterviewSession({
-            token,
-            target_role: initialContextRef.current?.target_role,
-            user_background: initialContextRef.current?.user_background,
-          });
+        if (!token) return;
 
-          // 如果缓存的上下文有 target_role 或者 JD 文本，就触发多 Agent 准备流水线
-          if (initialContextRef.current?.target_role || initialContextRef.current?.jd_text || initialContextRef.current?.jd_url) {
-            setPrepStatus("running");
-            setMessages((prev) => {
-              if (prev.some(isPrepareTraceMessage)) return prev;
-              return [{ role: "trace", kind: "prepare", payload: createPrepareTracePayload() }, ...prev];
+        const RESET_COOLDOWN_MS = 30_000;
+        const RESET_TS_KEY = "interview_reset_ts";
+        const lastReset = sessionStorage.getItem(RESET_TS_KEY);
+        // 是否处于 30 秒重置冷却防抖内
+        const isCooldown = !isTest && lastReset && (Date.now() - Number(lastReset) < RESET_COOLDOWN_MS);
+
+        // 1. 如果缓存的上下文有 target_role / JD 信息，说明是用户在 Coach 主动发起的“开始面试”或“再练一场”
+        if (initialContextRef.current?.target_role || initialContextRef.current?.jd_text || initialContextRef.current?.jd_url) {
+          // 仅在冷却时间外才真正向后端发送 /reset 请求，防止 Clerk 多次重定向导致频繁 reset 生成大量废弃垃圾会话
+          if (!isCooldown) {
+            sessionStorage.setItem(RESET_TS_KEY, String(Date.now()));
+            await resetInterviewSession({
+              token,
+              target_role: initialContextRef.current?.target_role,
+              user_background: initialContextRef.current?.user_background,
             });
-            runPrepare(initialContextRef.current);
+          }
+
+          setPrepStatus("running");
+          setMessages((prev) => {
+            if (prev.some(isPrepareTraceMessage)) return prev;
+            return [{ role: "trace", kind: "prepare", payload: createPrepareTracePayload() }, ...prev];
+          });
+          // 无论是全新 reset 还是二次挂载恢复，都必须正常跑 runPrepare 建立 SSE 监听，保证新挂载组件实例的正常状态推进！
+          runPrepare(initialContextRef.current);
+        } else {
+          // 2. 否则（页面刷新，或切离后点导航栏切回），先尝试拉取后端目前正在进行中 (in_progress) 的会话
+          try {
+            const activeSession = await fetchActiveInterviewSession({ token });
+            if (activeSession.session_id) {
+              // 成功拉取到活动会话，恢复历史消息、进度和评估报告
+              if (activeSession.messages && activeSession.messages.length > 0) {
+                const restoredMessages: InterviewChatMessage[] = activeSession.messages.map((m) => ({
+                  role: m.role as "user" | "assistant",
+                  content: m.content,
+                }));
+                setMessages(restoredMessages);
+              } else {
+                setMessages([{ role: "assistant", content: buildOpeningMessage(null) }]);
+              }
+
+              setProgress({
+                stage: (activeSession.stage as "opening" | "interview" | "closing") || "opening",
+                question_count: activeSession.question_count ?? 0,
+                total_questions: activeSession.total_questions ?? 5,
+              });
+
+              if (activeSession.report) {
+                setReport(activeSession.report);
+              }
+            } else {
+              // 没有任何活动会话，正常展示默认欢迎卡片
+              setMessages([{ role: "assistant", content: buildOpeningMessage(null) }]);
+            }
+          } catch (err) {
+            console.error("Failed to load active interview session, falling back to clean state:", err);
+            setMessages([{ role: "assistant", content: buildOpeningMessage(null) }]);
           }
         }
       })
@@ -402,6 +452,7 @@ export function InterviewChat() {
           status: "running",
           nodes: [],
           turnIndex,
+          isOpening: true,
         },
       },
     ]);
@@ -720,18 +771,21 @@ export function InterviewChat() {
               );
             }
             if (isTurnTraceMessage(message)) {
-              return (
-                <TurnTraceCard
-                  key={`turn-${message.id}`}
-                  status={message.payload.status}
-                  nodes={message.payload.nodes}
-                  turnIndex={message.payload.turnIndex}
-                  summaryScore={message.payload.summaryScore}
-                />
-              );
+              // 思考面板已完美融入 AI 消息气泡底部渲染，此处直接跳过，避免重复渲染
+              return null;
             }
-            // 状态面板还在跑时，空 assistant bubble 不渲染，避免"..."和 trace 同时出现
-            if (message.role === "assistant" && message.content === "" && isStreaming) {
+
+            // 提取紧跟在 AI (assistant) 消息后面的 trace 面板消息，以便在气泡内合并展现
+            let associatedTrace: InterviewTurnTraceMessage | undefined = undefined;
+            if (message.role === "assistant") {
+              const nextMessage = messages[index + 1];
+              if (nextMessage && isTurnTraceMessage(nextMessage)) {
+                associatedTrace = nextMessage;
+              }
+            }
+
+            // 状态面板还在跑且无 trace 时，空 assistant bubble 不渲染，避免"..."和 trace 同时出现
+            if (message.role === "assistant" && message.content === "" && isStreaming && !associatedTrace) {
               return null;
             }
             return (
@@ -739,6 +793,7 @@ export function InterviewChat() {
                 key={`${message.role}-${index}`}
                 message={message}
                 isPending={isStreaming && index === messages.length - 1}
+                trace={associatedTrace}
               />
             );
           })}

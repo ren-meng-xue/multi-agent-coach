@@ -287,3 +287,43 @@ def test_reset_without_body_still_works():
 
     assert resp.status_code == 200
     assert resp.json() == {"status": "ok"}
+
+
+def test_active_session_returns_data_from_service():
+    """GET /active 时以正确参数调用 service 并返回有效 JSON 结构。"""
+    from unittest.mock import ANY
+    app.dependency_overrides[get_current_user_id] = _fake_user
+    app.dependency_overrides[get_db] = _fake_db
+    mock_get_active = AsyncMock(return_value={
+        "session_id": "8cf6de08-04f7-410a-b333-f725cf26d9c6",
+        "target_role": "Rust 开发",
+        "target_company": "字节",
+        "user_background": "3年经验",
+        "stage": "interview",
+        "question_count": 2,
+        "total_questions": 5,
+        "followup_count": 0,
+        "messages": [{"role": "user", "content": "你好"}, {"role": "assistant", "content": "你好，请开始"}]
+    })
+    try:
+        with patch("app.api.v1.interview.get_active_interview_session", mock_get_active):
+            resp = TestClient(app).get("/api/v1/interview/active")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert resp.status_code == 200
+    mock_get_active.assert_awaited_once_with(ANY, user_id="user_test_123")
+    data = resp.json()
+    assert data["session_id"] == "8cf6de08-04f7-410a-b333-f725cf26d9c6"
+    assert data["target_role"] == "Rust 开发"
+    assert len(data["messages"]) == 2
+    assert data["messages"][0]["role"] == "user"
+
+
+def test_active_session_requires_auth():
+    """GET /active 无效 token 必须 401。"""
+    resp = TestClient(app).get(
+        "/api/v1/interview/active",
+        headers={"Authorization": "Bearer invalid"},
+    )
+    assert resp.status_code == 401

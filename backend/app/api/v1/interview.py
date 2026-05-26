@@ -10,6 +10,7 @@ from app.core.auth import get_current_user_id
 from app.core.logging import get_logger
 from app.db.session import get_db
 from app.schemas.interview import (
+    ActiveSessionResponse,
     ChatRequest,
     InterviewHistoryResponse,
     ResetRequest,
@@ -19,6 +20,7 @@ from app.schemas.interview import (
 from app.services.interview_chat import stream_interview_reply
 from app.services.interview_history import get_interview_history
 from app.services.interview_turn import (
+    get_active_interview_session,
     get_user_interview_context,
     reset_interview_session,
     stream_interview_turn,
@@ -127,3 +129,13 @@ async def get_history(
 ) -> InterviewHistoryResponse:
     """获取用户的面试历史记录。"""
     return await get_interview_history(db, user_id=user_id, limit=limit)
+
+
+@router.get("/active", response_model=ActiveSessionResponse)
+async def get_active_session(
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> ActiveSessionResponse:
+    """获取当前处于进行中（in_progress）的活动会话及历史消息，用于前端刷新恢复。"""
+    data = await get_active_interview_session(db, user_id=user_id)
+    return ActiveSessionResponse(**data)

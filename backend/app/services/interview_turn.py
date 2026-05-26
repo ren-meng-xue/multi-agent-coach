@@ -156,13 +156,6 @@ async def get_user_interview_context(db: AsyncSession, *, user_id: str) -> dict:
     )
     completed_count = completed_count_result.scalar_one()
 
-    total_count_result = await db.execute(
-        select(func.count())
-        .select_from(InterviewSession)
-        .where(InterviewSession.user_id == user_id)
-    )
-    session_count = total_count_result.scalar_one()
-
     # 基础返回结构
     ctx = {
         "is_returning": completed_count > 0,
@@ -170,7 +163,7 @@ async def get_user_interview_context(db: AsyncSession, *, user_id: str) -> dict:
         "work_years": user.work_years,
         "target_company": None,
         "user_background": None,
-        "session_count": session_count,
+        "session_count": completed_count,
     }
 
     # 如果 User 表没设岗位，尝试从最近 session 捞
@@ -234,6 +227,64 @@ async def reset_interview_session(
         await db.commit()
 
 
+async def get_active_interview_session(
+    db: AsyncSession,
+    *,
+    user_id: str,
+) -> dict:
+    """获取当前处于进行中（in_progress）的活动会话及历史消息记录。"""
+    await ensure_user_exists(db, user_id=user_id)
+
+    active_result = await db.execute(
+        select(InterviewSession)
+        .where(
+            InterviewSession.user_id == user_id,
+            InterviewSession.status == "in_progress",
+        )
+        .order_by(InterviewSession.started_at.desc())
+        .limit(1)
+    )
+    active = active_result.scalar_one_or_none()
+
+    if active is not None:
+        if await _is_stale_active_session(db, active):
+            active.status = "abandoned"
+            await db.commit()
+            return {}
+
+        # 加载历史消息记录
+        msg_result = await db.execute(
+            select(InterviewMessage)
+            .where(InterviewMessage.session_id == active.id)
+            .order_by(InterviewMessage.created_at)
+        )
+        stored_messages = msg_result.scalars().all()
+
+        messages = []
+        for m in stored_messages:
+            # 过滤只加载 user 和 assistant 的对话，避免把 system 或 trace 垃圾消息带入前端
+            if m.role in ("user", "assistant"):
+                messages.append({
+                    "role": m.role,
+                    "content": m.content,
+                })
+
+        return {
+            "session_id": str(active.id),
+            "target_role": active.target_role or "",
+            "target_company": active.target_company or "",
+            "user_background": active.user_background or "",
+            "stage": active.stage,
+            "question_count": active.question_count,
+            "total_questions": active.total_questions,
+            "followup_count": active.followup_count,
+            "messages": messages,
+            "report": active.report_json,
+        }
+
+    return {}
+
+
 async def stream_interview_turn(
     message: str,
     *,
@@ -286,10 +337,7 @@ async def stream_interview_turn(
         log.warning("interview_turn_empty_assistant_reply", user_id=user_id, session_id=str(session.id))
         raise RuntimeError("empty assistant reply")
 
-    # "briefing" is a transient LangGraph stage; DB CheckConstraint only allows
-    # opening/interview/closing, so persist briefing as "opening"
-    graph_stage = output.get("stage", session.stage)
-    session.stage = graph_stage if graph_stage != "briefing" else "opening"
+    session.stage = output.get("stage", session.stage)
     session.target_role = output.get("target_role", session.target_role)
     session.target_company = output.get("target_company", session.target_company)
     session.user_background = output.get("user_background", session.user_background)

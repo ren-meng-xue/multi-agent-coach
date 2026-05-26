@@ -17,6 +17,7 @@ export type InterviewPrepareTracePayload = {
   questions: PreparedQuestion[];
   summary: string;
   direction?: string;
+  jdContext?: JDContext;
 };
 
 export type InterviewTurnTracePayload = {
@@ -25,6 +26,7 @@ export type InterviewTurnTracePayload = {
   chain?: string[];
   summaryScore?: number;
   turnIndex: number;
+  isOpening?: boolean;
 };
 
 export type InterviewPrepareTraceMessage = {
@@ -114,6 +116,41 @@ export async function fetchInterviewHistory({
 
   if (!response.ok) throw new Error("获取面试历史失败");
   return response.json() as Promise<InterviewHistoryResponse>;
+}
+
+export type ActiveMessageItem = {
+  role: string;
+  content: string;
+};
+
+export type ActiveSessionResponse = {
+  session_id?: string;
+  target_role?: string;
+  target_company?: string;
+  user_background?: string;
+  stage?: "opening" | "interview" | "closing";
+  question_count?: number;
+  total_questions?: number;
+  followup_count?: number;
+  messages: ActiveMessageItem[];
+  report?: InterviewReport | null;
+};
+
+/** 获取当前进行中（in_progress）的活动会话及消息历史。 */
+export async function fetchActiveInterviewSession({
+  token,
+}: {
+  token: string;
+}): Promise<ActiveSessionResponse> {
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL;
+  if (!baseUrl) throw new Error("缺少后端接口配置");
+
+  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/interview/active`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!response.ok) throw new Error("获取活动面试会话失败");
+  return response.json() as Promise<ActiveSessionResponse>;
 }
 
 export type CoachOpeningMessageResponse = {
@@ -332,29 +369,7 @@ export async function* startPrepareStreamFetch(params: {
     signal: params.signal,
   });
 
-  if (!resp.ok || !resp.body) throw new Error("Prepare stream failed");
-
-  const reader = resp.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-    for (const line of lines) {
-      const trimmedLine = line.trim();
-      if (trimmedLine.startsWith("data: ")) {
-        try {
-          yield JSON.parse(trimmedLine.slice(6)) as import("./prepare-types").PrepareSSEEvent;
-        } catch {
-          // ignore parsing error
-        }
-      }
-    }
-  }
+  yield* _readPrepareStream(resp);
 }
 
 /** 恢复准备流水线（需要向用户追问方向场景）。 */
@@ -362,39 +377,58 @@ export async function* resumePrepareStreamFetch(params: {
   token: string;
   direction: string;
   userBackground?: string;
+  jdText?: string;
+  weakAreas?: string;
+  starStories?: string;
+  signal?: AbortSignal;
 }): AsyncGenerator<import("./prepare-types").PrepareSSEEvent, void, unknown> {
   const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
   const form = new FormData();
   form.append("direction", params.direction);
   if (params.userBackground) form.append("user_background", params.userBackground);
+  if (params.jdText) form.append("jd_text", params.jdText);
+  if (params.weakAreas) form.append("weak_areas", params.weakAreas);
+  if (params.starStories) form.append("star_stories", params.starStories);
 
   const resp = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/prepare/resume`, {
     method: "POST",
     headers: { Authorization: `Bearer ${params.token}` },
     body: form,
+    signal: params.signal,
   });
 
-  if (!resp.ok || !resp.body) throw new Error("Resume prepare stream failed");
+  yield* _readPrepareStream(resp);
+}
+
+/** 内部通用的 SSE 读取生成器 */
+async function* _readPrepareStream(
+  resp: Response
+): AsyncGenerator<import("./prepare-types").PrepareSSEEvent, void, unknown> {
+  if (!resp.ok || !resp.body) throw new Error("Prepare stream failed");
 
   const reader = resp.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-    for (const line of lines) {
-      const trimmedLine = line.trim();
-      if (trimmedLine.startsWith("data: ")) {
-        try {
-          yield JSON.parse(trimmedLine.slice(6)) as import("./prepare-types").PrepareSSEEvent;
-        } catch {
-          // ignore parsing error
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (trimmedLine.startsWith("data: ")) {
+          try {
+            yield JSON.parse(trimmedLine.slice(6)) as import("./prepare-types").PrepareSSEEvent;
+          } catch {
+            // ignore parsing error
+          }
         }
       }
     }
+  } finally {
+    reader.releaseLock();
   }
 }

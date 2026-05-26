@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { UserButton, useAuth } from "@clerk/nextjs";
+import { usePathname } from "next/navigation";
 import { MainNav } from "./nav";
 
 /** 渲染全站页眉和主内容外壳。 */
@@ -11,7 +12,13 @@ export function AppShell({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const { userId } = useAuth();
+  const { isLoaded, userId } = useAuth();
+  const pathname = usePathname();
+
+  // 解决登录 tab 闪烁问题：
+  // 在 Clerk 加载完成前 (!isLoaded)，如果当前路径是 /login，则视为未登录状态以渲染登录 Tab；
+  // 如果当前是其他被保护页面，则由于中间件已过滤未登录用户，先假设为已登录状态，避免已登录用户的布局闪烁。
+  const isLoggedIn = isLoaded ? !!userId : pathname !== "/login";
 
   return (
     <div className="mac-app">
@@ -24,7 +31,7 @@ export function AppShell({
             Multi Agent <span>Coach</span>
           </div>
         </Link>
-        <MainNav isLoggedIn={!!userId} />
+        <MainNav isLoggedIn={isLoggedIn} />
         <div className="mac-header-actions">
           <UserButton />
         </div>
