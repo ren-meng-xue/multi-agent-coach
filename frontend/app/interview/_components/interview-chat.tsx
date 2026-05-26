@@ -224,7 +224,7 @@ export function InterviewChat() {
       setTraceNodes(updateNodes);
       updatePrepareTraceMessage((payload) => ({ ...payload, nodes: updateNodes(payload.nodes) }));
       // need_direction 由 master node_done 携带，在这里处理
-      if (data.node === "master" && data.need_direction) {
+      if (data.node === "master" && data.need_direction && prepStatus !== "waiting_direction") {
         setPrepStatus("waiting_direction");
         updatePrepareTraceMessage((payload) => ({ ...payload, status: "waiting_direction" }));
         setMessages((prev) => [
