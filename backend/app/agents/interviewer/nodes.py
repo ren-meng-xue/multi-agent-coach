@@ -349,10 +349,15 @@ async def _report_fallback_full_eval(state: InterviewState) -> ReportOutput:
     )
 
 
-def _average_dimensions(evals: list[dict]) -> dict[str, float]:
+def _average_dimensions(evals: list[TurnEvaluation]) -> dict[str, float]:
     n = max(len(evals), 1)
     dims = ("technical_depth", "quantified_results", "failure_tradeoffs", "structure")
-    return {d: sum(float(e.get(d, 0)) for e in evals) / n for d in dims}
+    totals = dict.fromkeys(dims, 0.0)
+    for ev in evals:
+        for dim in dims:
+            value = ev.get(dim, 0.0)
+            totals[dim] += float(value) if isinstance(value, int | float | str) else 0.0
+    return {dim: totals[dim] / n for dim in dims}
 
 
 def _report_output_to_dict(out: Any) -> dict[str, Any]:
