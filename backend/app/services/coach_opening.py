@@ -21,17 +21,46 @@ COACH_OPENING_CACHE_KEY_TEMPLATE = "coach:opening:{user_id}"
 COACH_OPENING_CACHE_TTL = 86400  # 24 小时
 
 COACH_OPENING_SYSTEM_PROMPT = """
-你是 AI 面试教练。根据用户的面试历史数据，生成个性化的开场白。
+你是 AI 面试教练。根据用户真实的面试历史数据，生成个性化开场白。
 
-要求：
-1. 如果是新用户（首次），推荐岗位选择。
-2. 如果是老用户，weakness_summary 必须是一段可直接展示给用户的诊断文案，明确指出面试者最突出的不足或短板，语气像面试教练给诊断，不要像产品总结。
-3. weakness_summary 必须使用「你在……方面不足 / 你缺少…… / 你的……不够具体」这类句式，明确说出缺什么。
-4. evidence 必须是一段可直接展示给用户的证据文案，基于输入数据说明这个不足出现了多少次、影响了哪些场次或趋势；不要编造输入中没有的数据。
-5. 禁止在 weakness_summary 和 evidence 中使用这些泛化表达：规律、改进机会、加强能力、提升空间、建议关注、频繁出现。
-6. focus_today 必须是一段可直接展示给用户的训练安排，格式接近「今天重点练……」，并服务于补齐 weakness_summary 指出的不足。
-7. 前端只会逐段渲染返回字段，不会再拼接业务句子；所以每个字段都必须是完整自然的中文句子。
-8. 必须返回结构化 JSON，不要输出 Markdown，不要输出 JSON 之外的解释。
+【输入数据说明】
+- practiced_roles：用户练过的岗位及场次，例如 {"AI Agent工程师": 2}
+- recent_sessions：最近每场面试的详情，包含维度分（1-5分）、优点、待改进点
+  - technical_depth：技术深度
+  - quantified_results：量化成果
+  - failure_tradeoffs：失败与取舍
+  - structure：结构表达
+  - improvements：该场面试的具体改进建议（LLM 原话）
+  - highlights：该场面试做得好的地方
+- common_issues：跨场次反复出现的问题标签及次数
+- pass_rate：通过率（0.0-1.0）
+- trend：分数趋势（improving/flat/declining）
+
+【生成规则】
+greeting（1句）：
+- 提到用户练了什么岗位、几场，语气简短直接，不说废话
+- 例："你练了 2 场 AI Agent 工程师，通过率 50%，继续。"
+- 禁止："欢迎回来！今天我们继续关注你的面试表现，帮助你进一步提升技能。"
+
+weakness_summary（1-2句）：
+- 必须点出最突出的短板维度（找 recent_sessions 里分数最低的维度）
+- 用具体分数说话，例："你的量化成果维度平均 2.1 分，是四个维度里最低的。"
+- 禁止使用：提升空间、规律、改进机会、加强能力、建议关注
+
+evidence（1-2句）：
+- 直接引用 recent_sessions 里的 improvements 原话或 common_issues 中的高频问题
+- 说清楚是哪场出了什么问题，或哪个问题在几场里反复出现
+- 禁止编造输入中没有的数据，禁止重复 weakness_summary 的内容
+
+focus_today（1句）：
+- 格式：「今天重点练……，目标是……」
+- 针对 weakness_summary 给出具体的练习方向，不能只说"练量化"，要说练什么类型的题/怎么练
+- 例："今天重点练技术方案类题目，每个方案后面必须给出至少一个具体数字（延迟、吞吐、准确率等），目标是把量化分从 2 分拉到 3 分以上。"
+
+【其他约束】
+- 前端逐段渲染，每个字段必须是完整自然的中文句子，不要有多余标点或 Markdown
+- 必须返回结构化 JSON，不要输出 JSON 以外的任何内容
+- 新用户（is_new=true）：weakness_summary 和 evidence 返回 null，greeting 推荐岗位，focus_today 说明从哪里开始
 
 返回格式：
 {
@@ -44,6 +73,20 @@ COACH_OPENING_SYSTEM_PROMPT = """
 """.strip()
 
 
+class RecentSessionSummary(BaseModel):
+    """单场面试的关键评价摘要，供 Coach 生成开场词时引用。"""
+
+    role: str | None
+    score: float | None
+    pass_fail: str | None
+    technical_depth: float | None
+    quantified_results: float | None
+    failure_tradeoffs: float | None
+    structure: float | None
+    improvements: list[str]
+    highlights: list[str]
+
+
 class CoachHistoryContext(BaseModel):
     """用于生成 Coach 开场词的历史指标上下文。"""
 
@@ -53,6 +96,8 @@ class CoachHistoryContext(BaseModel):
     common_issues: dict[str, int]
     trend: Literal["improving", "declining", "flat"]
     is_new: bool
+    practiced_roles: dict[str, int]
+    recent_sessions: list[RecentSessionSummary]
 
 
 async def get_coach_redis() -> redis.Redis:
@@ -82,6 +127,22 @@ def _coach_model() -> ChatOpenAI:
     )
 
 
+def _extract_report_dim(report: dict | None, key: str) -> float | None:
+    """从 report_json 中安全提取维度分数。"""
+    if not report:
+        return None
+    val = report.get(key)
+    return float(val) if val is not None else None
+
+
+def _extract_report_list(report: dict | None, key: str) -> list[str]:
+    """从 report_json 中安全提取字符串列表字段。"""
+    if not report:
+        return []
+    items = report.get(key, [])
+    return [str(i) for i in items] if isinstance(items, list) else []
+
+
 async def build_coach_history_context(
     db: AsyncSession, *, user_id: str
 ) -> CoachHistoryContext:
@@ -108,6 +169,28 @@ async def build_coach_history_context(
         if session.key_issues:
             issue_counter.update(str(issue) for issue in session.key_issues)
 
+    role_counter: Counter[str] = Counter()
+    for session in sessions:
+        if session.target_role:
+            role_counter[session.target_role] += 1
+
+    recent_sessions: list[RecentSessionSummary] = []
+    for session in sessions[:3]:
+        report = session.report_json or {}
+        recent_sessions.append(
+            RecentSessionSummary(
+                role=session.target_role,
+                score=float(session.score) if session.score is not None else None,
+                pass_fail=session.pass_fail,
+                technical_depth=_extract_report_dim(report, "technical_depth"),
+                quantified_results=_extract_report_dim(report, "quantified_results"),
+                failure_tradeoffs=_extract_report_dim(report, "failure_tradeoffs"),
+                structure=_extract_report_dim(report, "structure"),
+                improvements=_extract_report_list(report, "improvements"),
+                highlights=_extract_report_list(report, "highlights"),
+            )
+        )
+
     return CoachHistoryContext(
         session_count=len(sessions),
         recent_scores=recent_scores,
@@ -115,6 +198,8 @@ async def build_coach_history_context(
         common_issues=dict(issue_counter.most_common(5)),
         trend=_calculate_trend(recent_scores),
         is_new=len(sessions) == 0,
+        practiced_roles=dict(role_counter),
+        recent_sessions=recent_sessions,
     )
 
 
@@ -192,7 +277,6 @@ async def generate_coach_opening_message(
 
 def _fallback_opening_message(context: CoachHistoryContext) -> CoachOpeningMessageResponse:
     """LLM 不可用时仍返回可渲染结构，避免 Coach 页面空白。"""
-    top_issue, issue_count = next(iter(context.common_issues.items()), ("技术细节不足", 0))
     if context.is_new:
         return CoachOpeningMessageResponse(
             greeting="欢迎来到 AI 面试教练。先选择一个你想练习的岗位，我们会从一场模拟面试开始。",
@@ -201,10 +285,45 @@ def _fallback_opening_message(context: CoachHistoryContext) -> CoachOpeningMessa
             focus_today="今天可以先从 AI Agent 工程师、后端工程师或前端工程师里选一个方向。",
             cta_type="new",
         )
+
+    top_issue, issue_count = next(iter(context.common_issues.items()), ("技术细节不足", 0))
+
+    role_summary = "、".join(
+        f"{role} {count} 场" for role, count in list(context.practiced_roles.items())[:2]
+    )
+    greeting = f"你练了 {role_summary}，共 {context.session_count} 场，通过率 {round(context.pass_rate * 100)}%。"
+
+    # 找最低维度分
+    weakest_dim: str | None = None
+    weakest_score: float = float("inf")
+    dim_names = {
+        "quantified_results": "量化成果",
+        "technical_depth": "技术深度",
+        "failure_tradeoffs": "失败与取舍",
+        "structure": "结构表达",
+    }
+    for session in context.recent_sessions:
+        for dim_key, dim_label in dim_names.items():
+            val = getattr(session, dim_key)
+            if val is not None and val < weakest_score:
+                weakest_score = val
+                weakest_dim = dim_label
+
+    weakness_label = weakest_dim or f"「{top_issue}」"
+    weakness_summary = (
+        f"你的{weakness_label}是当前最薄弱的环节，"
+        f"需要在回答中补充更具体的数据和结果。"
+    )
+    evidence = (
+        f"「{top_issue}」在你过去 {context.session_count} 场中出现了 {issue_count} 次，"
+        f"是反复出现的高频问题。"
+    )
+    focus_today = f"今天重点练{weakness_label}，每个技术方案后面至少给出一个具体数字（延迟、吞吐、准确率等）。"
+
     return CoachOpeningMessageResponse(
-        greeting="欢迎回来，今天继续把面试表达练扎实。",
-        weakness_summary=f"你在「{top_issue}」方面还不够具体，需要把经历、动作和结果讲得更清楚。",
-        evidence=f"这个短板在你过去 {context.session_count} 场面试中出现了 {issue_count} 场，是当前最需要优先处理的问题。",
-        focus_today=f"今天重点练围绕「{top_issue}」补充更具体的项目证据、结果数据和复盘结论。",
+        greeting=greeting,
+        weakness_summary=weakness_summary,
+        evidence=evidence,
+        focus_today=focus_today,
         cta_type="returning",
     )

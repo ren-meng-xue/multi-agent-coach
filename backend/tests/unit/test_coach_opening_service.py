@@ -43,3 +43,40 @@ def test_coach_opening_response_has_memory_hint_slots():
     assert response.long_memory_hints == []
     assert response.hobby_hints == []
 
+
+def test_fallback_opening_includes_memory_hint_slots_for_new_user():
+    from app.services.coach_opening import CoachHistoryContext, _fallback_opening_message
+
+    ctx = CoachHistoryContext(
+        session_count=0,
+        recent_scores=[],
+        pass_rate=0.0,
+        common_issues={},
+        trend="flat",
+        is_new=True,
+        practiced_roles={},
+        recent_sessions=[],
+    )
+    response = _fallback_opening_message(ctx)
+    assert response.long_memory_hints == []
+    assert response.hobby_hints == []
+
+
+def test_fallback_opening_includes_memory_hint_slots_for_returning_user():
+    from app.services.coach_opening import CoachHistoryContext, _fallback_opening_message
+
+    ctx = CoachHistoryContext(
+        session_count=3,
+        recent_scores=[3.2, 3.0, 2.8],
+        pass_rate=0.33,
+        common_issues={"量化欠缺": 2},
+        trend="declining",
+        is_new=False,
+        practiced_roles={"AI Agent 工程师": 3},
+        recent_sessions=[],
+    )
+    response = _fallback_opening_message(ctx)
+    assert response.long_memory_hints == []
+    assert response.hobby_hints == []
+
+
