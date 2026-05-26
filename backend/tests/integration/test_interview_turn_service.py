@@ -338,7 +338,7 @@ async def test_get_user_interview_context_ignores_sessions_without_role(db):
 
     assert result["is_returning"] is False
     assert result["target_role"] is None
-    assert result["session_count"] == 1
+    assert result["session_count"] == 0  # abandoned session 不计入 completed 场次
 
 
 @pytest.mark.asyncio

@@ -1,5 +1,6 @@
 """面试历史记录服务。"""
 from typing import Literal, cast
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 

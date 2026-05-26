@@ -210,7 +210,9 @@ async def reset_interview_session(
         log.info("interview_session_reset", user_id=user_id, session_id=str(session.id))
 
     if target_role:
-        await ensure_user_exists(db, user_id=user_id)
+        user = await ensure_user_exists(db, user_id=user_id)
+        # 同步更新 User 表的持久化配置，供设置页面和未来 session 使用
+        user.target_role = target_role
         new_session = InterviewSession(
             user_id=user_id,
             target_role=target_role,
@@ -218,7 +220,7 @@ async def reset_interview_session(
         )
         db.add(new_session)
         log.info(
-            "interview_session_preseeded",
+            "interview_session_preseeded_and_user_synced",
             user_id=user_id,
             target_role=target_role,
         )

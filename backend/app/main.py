@@ -1,5 +1,5 @@
 """FastAPI 应用主入口：挂载路由、中间件、全局异常处理、生命周期事件。"""
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
@@ -42,6 +42,56 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
 
+
+class ContentSizeLimitMiddleware:
+    """ASGI 中间件：在 multipart parser 解析前拦截超大 payload，防止磁盘/内存 spool 被写满。"""
+    def __init__(self, app, max_size: int = 10 * 1024 * 1024):
+        self.app = app
+        self.max_size = max_size
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            content_length = 0
+            for header, value in scope.get("headers", []):
+                if header == b"content-length":
+                    with suppress(ValueError):
+                        content_length = int(value)
+                    break
+            if content_length > self.max_size:
+                from starlette.responses import JSONResponse
+                response = JSONResponse(
+                    status_code=413,
+                    content={"code": 413, "message": "请求体大小不能超过 10MB", "data": None}
+                )
+                await response(scope, receive, send)
+                return
+
+            # 对 chunked 传输等没有 Content-Length 声明或逃避声明的请求，通过代理 receive 对实际接收的 body 进行累计拦截
+            total_received = 0
+
+            async def custom_receive():
+                nonlocal total_received
+                message = await receive()
+                if message["type"] == "http.request":
+                    body = message.get("body", b"")
+                    total_received += len(body)
+                    if total_received > self.max_size:
+                        from fastapi import HTTPException
+                        raise HTTPException(
+                            status_code=413,
+                            detail="请求体大小不能超过 10MB"
+                        )
+                return message
+
+            await self.app(scope, custom_receive, send)
+            return
+
+        await self.app(scope, receive, send)
+
+
+# 挂载自定义限速中间件
+app.add_middleware(ContentSizeLimitMiddleware, max_size=10 * 1024 * 1024)
+
 # 跨域中间件
 app.add_middleware(
     CORSMiddleware,
@@ -50,6 +100,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 
 # ── 全局异常处理器 ──────────────────────────────────────────────
