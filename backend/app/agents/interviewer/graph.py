@@ -199,13 +199,25 @@ async def stream_interviewer_turn_events(state: InterviewState) -> AsyncIterator
 
         # 节点结束
         if ev_name == "on_chain_end" and ev_node and ev_node not in _HIDDEN_NODES:
+            # 只有当 event['name'] 跟 ev_node 一致或者是顶级节点时才算真正结束
+            if event.get("name") != ev_node:
+                continue
+
             elapsed_ms = int((_time.time() - elapsed_tracker.get(ev_node, _time.time())) * 1000)
             node_state = event.get("data", {}).get("output") or {}
             payload: dict[str, Any] = {"node": ev_node, "elapsed_ms": elapsed_ms}
-            if ev_node == "master":
-                payload["chain"] = node_state.get("chain", [])
-            if ev_node == "evaluator":
-                evals = node_state.get("turn_evaluations") or []
+
+            # 兼容 Pydantic 对象和 dict
+            node_dict = node_state
+            if hasattr(node_state, "model_dump"):
+                node_dict = node_state.model_dump()
+            elif hasattr(node_state, "dict"):
+                node_dict = node_state.dict()
+
+            if ev_node == "master" and isinstance(node_dict, dict):
+                payload["chain"] = node_dict.get("chain", [])
+            if ev_node == "evaluator" and isinstance(node_dict, dict):
+                evals = node_dict.get("turn_evaluations") or []
                 if evals:
                     payload["summary_score"] = evals[-1].get("summary_score")
             yield {"event": "node_done", "data": payload}

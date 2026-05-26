@@ -105,6 +105,7 @@ async def stream_prepare_events(state: PrepareState) -> AsyncIterator[dict[str, 
     """运行 prepare graph，流式 yield SSE 事件。"""
     current_node: str | None = None
     elapsed_tracker: dict[str, float] = {}
+    finished_nodes: set[str] = set()
 
     async for event in get_prepare_graph().astream_events(state, version="v2"):
         ev_name = event.get("event", "")
@@ -129,14 +130,28 @@ async def stream_prepare_events(state: PrepareState) -> AsyncIterator[dict[str, 
             yield {"event": "node_token", "data": {"node": ev_node, "text": token}}
 
         # 节点结束
-        if ev_name == "on_chain_end" and ev_node:
+        if ev_name == "on_chain_end" and ev_node and ev_node not in finished_nodes:
+            # 只有当 event['name'] 跟 ev_node 一致或者是顶级节点时才算真正结束
+            # astream_events 会 yield 子 chain 的结束
+            if event.get("name") != ev_node:
+                continue
+
+            finished_nodes.add(ev_node)
             elapsed_ms = int((time.time() - elapsed_tracker.get(ev_node, time.time())) * 1000)
             node_state = event.get("data", {}).get("output") or {}
 
             extra: dict[str, Any] = {"elapsed_ms": elapsed_ms}
             if ev_node == "master":
-                extra["chain"] = node_state.get("chain", [])
-                extra["need_direction"] = node_state.get("need_direction", False)
+                # 兼容 Pydantic 对象和 dict
+                node_dict = node_state
+                if hasattr(node_state, "model_dump"):
+                    node_dict = node_state.model_dump()
+                elif hasattr(node_state, "dict"):
+                    node_dict = node_state.dict()
+                
+                if isinstance(node_dict, dict):
+                    extra["chain"] = node_dict.get("chain", [])
+                    extra["need_direction"] = node_dict.get("need_direction", False)
 
             yield {"event": "node_done", "data": {"node": ev_node, **extra}}
 
