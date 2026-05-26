@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,7 +11,7 @@ import {
   fetchCoachOpeningMessage,
   fetchInterviewContext,
   fetchInterviewHistory,
-  resetInterviewSession,
+  enterInterviewRoom,
   type CoachOpeningMessageResponse,
   type UserContextResponse,
   type InterviewHistoryItem,
@@ -112,13 +112,25 @@ function CoachHighlightedText({ text }: { text: string }) {
 
 function CoachOpeningCopy({
   coachMessage,
+  isOpeningLoading,
   fallbackUserState,
   fallbackSessionCount,
 }: {
   coachMessage: CoachOpeningMessageResponse | null;
+  isOpeningLoading: boolean;
   fallbackUserState: "returning" | "new";
   fallbackSessionCount: number;
 }) {
+  if (isOpeningLoading) {
+    return (
+      <div data-testid="coach-opening-skeleton" className="space-y-3.5 animate-pulse">
+        <div className="h-5 w-3/4 rounded-md bg-[#e8e7e2]" />
+        <div className="h-5 w-full rounded-md bg-[#e8e7e2]" />
+        <div className="h-5 w-5/6 rounded-md bg-[#e8e7e2]" />
+        <div className="h-5 w-2/3 rounded-md bg-[#e8e7e2]" />
+      </div>
+    );
+  }
   // 统一数据：如果 LLM 返回的文案中包含错误的场次数字，强制替换为真实场次以保持一致性。
   const unifyMessage = (text: string | null) => {
     if (!text) return null;
@@ -145,6 +157,24 @@ function CoachOpeningCopy({
         <p className="mt-3.5">
           <CoachHighlightedText text={unifyMessage(coachMessage.focus_today) || ""} />
         </p>
+        {coachMessage.long_memory_hints && coachMessage.long_memory_hints.length > 0 && (
+          <div data-testid="coach-long-memory-hints" className="mt-3.5 space-y-1">
+            {coachMessage.long_memory_hints.map((hint) => (
+              <p key={hint} className="text-sm text-[#525252]">
+                <CoachHighlightedText text={hint} />
+              </p>
+            ))}
+          </div>
+        )}
+        {coachMessage.hobby_hints && coachMessage.hobby_hints.length > 0 && (
+          <div data-testid="coach-hobby-hints" className="mt-2 space-y-1">
+            {coachMessage.hobby_hints.map((hint) => (
+              <p key={hint} className="text-sm text-[#8a8a8a]">
+                <CoachHighlightedText text={hint} />
+              </p>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
@@ -439,8 +469,21 @@ function MemoryList({
 
 export function CoachDashboard() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const fromInterview = searchParams.get("from") === "interview";
+  const [showFromInterviewHint, setShowFromInterviewHint] = useState(fromInterview);
+
+  useEffect(() => {
+    if (!fromInterview) return;
+    // 同步清除 query，防止刷新/分享链接时重复出现
+    router.replace("/coach");
+    const t = setTimeout(() => setShowFromInterviewHint(false), 4000);
+    return () => clearTimeout(t);
+  }, [fromInterview, router]);
+
   const { isLoaded, isSignedIn, getToken } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
+  const [isOpeningLoading, setIsOpeningLoading] = useState(false);
   const [contextData, setContextData] = useState<UserContextResponse | null>(null);
   const [coachMessage, setCoachMessage] = useState<CoachOpeningMessageResponse | null>(null);
   const [memorySessions, setMemorySessions] = useState<MemorySession[]>([]);
@@ -515,12 +558,17 @@ export function CoachDashboard() {
         
         setMemorySessions(mappedSessions);
         setIsLoading(false);
+        setIsOpeningLoading(true);
 
-        // 3. 异步获取 Coach 开场词（非阻塞）
+        // 3. 异步获取 Coach 开场词（非阻塞），加载完前用 skeleton 代替 fallback
         void fetchCoachOpeningMessage({ token }).then((opening) => {
-          if (!isCancelled) setCoachMessage(opening);
+          if (!isCancelled) {
+            setCoachMessage(opening);
+            setIsOpeningLoading(false);
+          }
         }).catch((err) => {
           console.warn("fetchCoachOpeningMessage failed, using fallback:", err);
+          if (!isCancelled) setIsOpeningLoading(false);
         });
       } catch (error) {
         console.error("CoachDashboard critical data fetch failed:", error);
@@ -602,26 +650,20 @@ export function CoachDashboard() {
       const role = selectedRole || contextData?.target_role || "";
       const bg = userMessage || contextData?.user_background || "";
       if (role) {
-        sessionStorage.setItem(
-          "interview_context",
-          JSON.stringify({
-            target_role: role,
-            user_background: bg,
-            jd_text: jdText,
-            jd_url: jdUrl,
-          }),
-        );
-        const fetchToken = isDevAuthBypassEnabled ? Promise.resolve(DEV_AUTH_BYPASS_TOKEN) : getToken();
-        const token = await fetchToken;
-        if (token) {
-          await resetInterviewSession({
-            token,
+        await enterInterviewRoom({
+          getToken: () =>
+            isDevAuthBypassEnabled ? Promise.resolve(DEV_AUTH_BYPASS_TOKEN) : getToken(),
+          router,
+          context: {
             target_role: role,
             user_background: bg || undefined,
-          });
-        }
+            jd_text: jdText || undefined,
+            jd_url: jdUrl || undefined,
+          },
+        });
+      } else {
+        router.push("/interview"); // 不该到这里，但兜底
       }
-      router.push("/interview");
     } else if (action === "go-setup") {
       router.push("/settings");
     }
@@ -631,21 +673,16 @@ export function CoachDashboard() {
     const userBackground = `我想围绕「${session.topic}」再练一场，重点补齐：${session.improvements
       .slice(0, 2)
       .join("；")}`;
-    sessionStorage.setItem(
-      "interview_context",
-      JSON.stringify({ target_role: session.targetRole, user_background: userBackground }),
-    );
-    const fetchToken = isDevAuthBypassEnabled ? Promise.resolve(DEV_AUTH_BYPASS_TOKEN) : getToken();
-    const token = await fetchToken;
-    if (token) {
-      await resetInterviewSession({
-        token,
+    setSelectedMemory(null);
+    await enterInterviewRoom({
+      getToken: () =>
+        isDevAuthBypassEnabled ? Promise.resolve(DEV_AUTH_BYPASS_TOKEN) : getToken(),
+      router,
+      context: {
         target_role: session.targetRole,
         user_background: userBackground,
-      });
-    }
-    setSelectedMemory(null);
-    router.push("/interview");
+      },
+    });
   };
 
   return (
@@ -689,6 +726,12 @@ export function CoachDashboard() {
             </div>
           </div>
 
+          {showFromInterviewHint && (
+            <div className="rounded-xl border border-[#e8e7e2] bg-[#faf9f5] px-4 py-2.5 text-xs text-[#525252] animate-in fade-in slide-in-from-top-2 duration-300">
+              面试还没开始，先在这里告诉我练什么。
+            </div>
+          )}
+
           {/* 2. 用户消息气泡（每轮覆盖显示最新一条） */}
           {userMessage && (
             <div className="flex justify-end px-1 animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -724,6 +767,7 @@ export function CoachDashboard() {
                   <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
                     <CoachOpeningCopy
                       coachMessage={coachMessage}
+                      isOpeningLoading={isOpeningLoading}
                       fallbackUserState={userState}
                       fallbackSessionCount={contextData?.session_count ?? 0}
                     />

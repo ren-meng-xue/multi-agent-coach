@@ -11,20 +11,32 @@ if (typeof globalThis.crypto.randomUUID === "undefined") {
 import userEvent from "@testing-library/user-event";
 import { InterviewChat } from "./interview-chat";
 import { startPrepareStreamFetch, streamInterviewChat } from "@/lib/interview-chat";
+import { useAuth } from "@clerk/nextjs";
+
+const mockUseAuth = vi.fn().mockReturnValue({
+  isLoaded: true,
+  isSignedIn: true,
+  getToken: vi.fn().mockResolvedValue("test-token"),
+});
 
 vi.mock("@clerk/nextjs", () => ({
-  useAuth: () => ({
-    isLoaded: true,
-    isSignedIn: true,
-    getToken: vi.fn().mockResolvedValue("test-token"),
-  }),
+  useAuth: () => mockUseAuth(),
 }));
+
+vi.mock("next/navigation", () => ({
+  useRouter: vi.fn(() => ({ push: vi.fn(), replace: vi.fn() })),
+  useSearchParams: vi.fn(() => new URLSearchParams()),
+  usePathname: vi.fn(() => "/interview"),
+}));
+
+import { useRouter } from "next/navigation";
 
 vi.mock("@/lib/interview-chat", () => ({
   streamInterviewChat: vi.fn(),
   resetInterviewSession: vi.fn().mockResolvedValue(undefined),
   startPrepareStreamFetch: vi.fn(),
   resumePrepareStreamFetch: vi.fn(),
+  fetchActiveInterviewSession: vi.fn().mockResolvedValue({}),
   isTextMessage: (message: { role: string }) => message.role === "user" || message.role === "assistant",
   isPrepareTraceMessage: (message: { role: string; kind?: string }) =>
     message.role === "trace" && message.kind === "prepare",
@@ -32,8 +44,10 @@ vi.mock("@/lib/interview-chat", () => ({
     message.role === "trace" && message.kind === "turn",
 }));
 
+import { fetchActiveInterviewSession } from "@/lib/interview-chat";
 const mockStreamInterviewChat = vi.mocked(streamInterviewChat);
 const mockStartPrepareStreamFetch = vi.mocked(startPrepareStreamFetch);
+const mockFetchActiveSession = vi.mocked(fetchActiveInterviewSession);
 
 describe("InterviewChat", () => {
   let writeTextMock: ReturnType<typeof vi.fn>;
@@ -42,6 +56,7 @@ describe("InterviewChat", () => {
     vi.useRealTimers();
     mockStreamInterviewChat.mockReset();
     mockStartPrepareStreamFetch.mockReset();
+    mockFetchActiveSession.mockReset();
     writeTextMock = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", {
       value: {
@@ -77,9 +92,9 @@ describe("InterviewChat", () => {
     await userEvent.type(screen.getByLabelText("输入面试练习内容"), "练分布式系统");
     await userEvent.click(screen.getByRole("button", { name: "发送" }));
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /开始第\s*1\s*题/ })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /开始本轮面试/ })).toBeInTheDocument();
     });
-    await userEvent.click(screen.getByRole("button", { name: /开始第\s*1\s*题/ }));
+    await userEvent.click(screen.getByRole("button", { name: /开始本轮面试/ }));
   }
 
   it("输入栏固定在聊天面板底部，长内容只滚动消息区", () => {
@@ -131,7 +146,7 @@ describe("InterviewChat", () => {
 
     expect(screen.getByText("练分布式系统")).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /开始第\s*1\s*题/ })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /开始本轮面试/ })).toBeInTheDocument();
     });
     expect(mockStartPrepareStreamFetch).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -220,9 +235,9 @@ describe("InterviewChat", () => {
     await userEvent.click(screen.getByRole("button", { name: "发送" }));
 
     await waitFor(() => {
-      expect(screen.getAllByText("准备完成").length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/准备就绪/).length).toBeGreaterThan(0);
     });
-    await userEvent.click(screen.getByRole("button", { name: /开始第\s*1\s*题/ }));
+    await userEvent.click(screen.getByRole("button", { name: /开始本轮面试/ }));
 
     // 等待消息流结束
     await waitFor(() => {
@@ -516,9 +531,73 @@ describe("InterviewChat", () => {
 
     // 断言 TurnTraceCard 在聊天流中正确展现，包含评估分数与面试追问
     await waitFor(() => {
-      expect(screen.getAllByText(/本轮分析/)[0]).toBeInTheDocument();
+      expect(screen.getAllByText(/多 Agent/)[0]).toBeInTheDocument();
       expect(screen.getByText(/8\.5/)).toBeInTheDocument();
       expect(screen.getByText(/你提到的 RAG 是如何调优的/)).toBeInTheDocument();
+    });
+  });
+
+  describe("路由守卫与加载异常", () => {
+    beforeEach(() => {
+      sessionStorage.clear();
+      sessionStorage.setItem("test_routing_guard", "true");
+    });
+
+    it("无 sessionStorage context 且 /interview/active 返回空时，重定向到 /coach?from=interview", async () => {
+      mockFetchActiveSession.mockResolvedValue({} as any);
+      const replace = vi.fn();
+      vi.mocked(useRouter).mockReturnValue({ push: vi.fn(), replace } as any);
+
+      render(<InterviewChat />);
+      await waitFor(() => {
+        expect(replace).toHaveBeenCalledWith("/coach?from=interview");
+      });
+    });
+
+    it("有 sessionStorage context 时不重定向，触发 prepare", async () => {
+      sessionStorage.setItem(
+        "interview_context",
+        JSON.stringify({ target_role: "AI Agent 工程师" }),
+      );
+      mockFetchActiveSession.mockResolvedValue({} as any);
+      const replace = vi.fn();
+      vi.mocked(useRouter).mockReturnValue({ push: vi.fn(), replace } as any);
+
+      render(<InterviewChat />);
+      await new Promise((r) => setTimeout(r, 50));
+      expect(replace).not.toHaveBeenCalled();
+    });
+
+    it("/interview/active 返回 in_progress 会话时不重定向，恢复消息", async () => {
+      mockFetchActiveSession.mockResolvedValue({
+        session_id: "abc",
+        stage: "interview",
+        question_count: 2,
+        messages: [
+          { role: "assistant", content: "已开始的面试" },
+          { role: "user", content: "我的回答" },
+        ],
+      } as any);
+      const replace = vi.fn();
+      vi.mocked(useRouter).mockReturnValue({ push: vi.fn(), replace } as any);
+
+      render(<InterviewChat />);
+      await waitFor(() => {
+        expect(screen.getByText("已开始的面试")).toBeInTheDocument();
+      });
+      expect(replace).not.toHaveBeenCalled();
+    });
+
+    it("/interview/active 抛错时不重定向，渲染兜底错误 UI", async () => {
+      mockFetchActiveSession.mockRejectedValue(new Error("network"));
+      const replace = vi.fn();
+      vi.mocked(useRouter).mockReturnValue({ push: vi.fn(), replace } as any);
+
+      render(<InterviewChat />);
+      await waitFor(() => {
+        expect(screen.getByText(/连接异常/)).toBeInTheDocument();
+      });
+      expect(replace).not.toHaveBeenCalled();
     });
   });
 });

@@ -10,9 +10,32 @@ interface TurnTraceCardProps {
   nodes: TraceNodeData[];
   turnIndex: number;
   summaryScore?: number;
+  isOpening?: boolean;
+  isEmbedded?: boolean;
 }
 
-export function TurnTraceCard({ status, nodes, turnIndex, summaryScore }: TurnTraceCardProps) {
+const INTERVIEW_NODE_TITLES: Record<string, string> = {
+  master: "分析表现，规划下一步",
+  evaluator: "多维深度评估",
+  followup: "生成追问逻辑",
+  ask_question: "抽取下一道题",
+};
+
+const INTERVIEW_NODE_LABELS: Record<string, string> = {
+  master: "调度",
+  evaluator: "评估官",
+  followup: "面试官",
+  ask_question: "出题官",
+};
+
+export function TurnTraceCard({
+  status,
+  nodes,
+  turnIndex,
+  summaryScore,
+  isOpening,
+  isEmbedded = false,
+}: TurnTraceCardProps) {
   const [expanded, setExpanded] = useState(status === "running");
 
   useEffect(() => {
@@ -24,35 +47,65 @@ export function TurnTraceCard({ status, nodes, turnIndex, summaryScore }: TurnTr
   }, [status]);
 
   const isDone = status === "done";
-  const headerText = isDone ? "本轮分析完成" : "本轮分析中";
+  
+  // 核心文案逻辑优化：如果是开场出题卡片，或者 turnIndex === 1（首题生成）
+  let headerText = "";
+  if (isOpening || turnIndex === 1) {
+    headerText = isDone ? "AI 面试官 · 准备就绪" : "AI 面试官 · 正在准备题目";
+  } else {
+    headerText = isDone 
+      ? `多 Agent · 分析完成 · 第 ${turnIndex - 1} 轮` 
+      : `多 Agent · 正在分析 · 第 ${turnIndex - 1} 轮`;
+  }
 
+  // 当正在运行 (status === "running") 时，我们追求极致流式！
+  if (status === "running") {
+    return (
+      <div className="w-full mx-0 my-1 bg-transparent transition-all duration-300 animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <div className="flex items-center gap-2 mb-3 px-1 text-[10px] font-bold text-black/40 dark:text-white/35">
+          <span className="size-1 rounded-full bg-[#534AB7] dark:bg-[#cecbf6] animate-pulse" />
+          <span className="tracking-wider">{headerText.toUpperCase()}</span>
+        </div>
+        <AgentTrace 
+          nodes={nodes} 
+          nodeTitles={INTERVIEW_NODE_TITLES}
+          nodeLabels={INTERVIEW_NODE_LABELS}
+        />
+      </div>
+    );
+  }
+
+  // 当运行完成 (status === "done") 时，我们只渲染极其精细雅致的微缩文本折叠链接
   return (
-    <div className="mx-0 mt-1 overflow-hidden rounded-xl border border-black/10 bg-white shadow-sm animate-in fade-in duration-300 dark:border-white/10 dark:bg-[#1c1c1a]">
+    <div className="w-full mx-0 my-0 bg-transparent transition-all duration-300">
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-center justify-between border-b border-black/10 bg-[#f7f6f2] px-4 py-3 dark:border-white/10 dark:bg-[#252523]"
+        className="inline-flex items-center gap-2 px-1 py-1 text-[10px] font-bold text-black/30 hover:text-[#534AB7] hover:underline dark:text-white/30 dark:hover:text-[#CECBF6] transition-all"
       >
-        <div className="flex items-center gap-2">
-          <span
-            className={`size-2 rounded-full flex-shrink-0 transition-all duration-300 ${
-              isDone ? "bg-[#1D9E75]" : "bg-[#534AB7] animate-pulse shadow-[0_0_0_4px_rgba(83,74,183,0.12)]"
-            }`}
-          />
-          <span className="text-xs font-bold text-[#1a1a18] dark:text-[#e8e6de]">
-            {headerText} · 第 {turnIndex} 轮
+        <span
+          className="size-1 rounded-full bg-emerald-500/60"
+        />
+        <span className="tracking-tight">{headerText}</span>
+        {typeof summaryScore === "number" && !isOpening && turnIndex > 1 && (
+          <span className="rounded bg-[#534AB7]/5 px-1 py-0.2 font-black text-[8px] tracking-tighter text-[#534AB7]/40 dark:bg-[#cecbf6]/10 dark:text-[#cecbf6]/40">
+            {summaryScore.toFixed(1)} / 10
           </span>
-        </div>
-        <div className="flex items-center gap-2 text-xs text-[#8a8a8a]">
-          {typeof summaryScore === "number" && (
-            <span className="rounded-full bg-[#eef2ff] px-2 py-0.5 font-semibold text-[#4f46e5]">
-              {summaryScore.toFixed(1)} / 10
-            </span>
-          )}
-          <span>{expanded ? "收起" : "展开"}</span>
-        </div>
+        )}
+        <span className="text-[9px] opacity-40">
+          ({expanded ? "收起思考过程" : "展开思考过程"})
+        </span>
       </button>
-      {expanded && <AgentTrace nodes={nodes} />}
+      
+      {expanded && (
+        <div className="bg-transparent transition-all duration-300 pt-1 pb-2">
+          <AgentTrace 
+            nodes={nodes} 
+            nodeTitles={INTERVIEW_NODE_TITLES}
+            nodeLabels={INTERVIEW_NODE_LABELS}
+          />
+        </div>
+      )}
     </div>
   );
 }

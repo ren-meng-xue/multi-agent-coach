@@ -1007,3 +1007,8 @@ border-color: rgba(79, 70, 229, 0.15);
 .mac-chart-duo { grid-template-columns: 1fr; }
 }
 
+
+@keyframes traceNodeRunning {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(83, 74, 183, 0.2); }
+  50% { box-shadow: 0 0 0 4px rgba(83, 74, 183, 0.07); }
+}

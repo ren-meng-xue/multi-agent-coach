@@ -31,6 +31,20 @@ test("running 状态显示动画圆圈", () => {
   expect(screen.getByText("检查用户档案")).toBeInTheDocument();
 });
 
+test("非 master 节点 running 时显示 token 内容", () => {
+  render(
+    <TraceNode
+      id="memory_search"
+      label="记忆检索"
+      title="读取历史"
+      status="running"
+      tokens="正在查询数据库"
+    />
+  );
+  expect(screen.getByTestId("trace-status-running")).toBeInTheDocument();
+  expect(screen.getByText("正在查询数据库")).toBeInTheDocument();
+});
+
 test("done 状态显示绿色勾 + 耗时", () => {
   render(
     <TraceNode

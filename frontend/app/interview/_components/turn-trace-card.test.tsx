@@ -11,10 +11,10 @@ describe("TurnTraceCard", () => {
         nodes={[
           { id: "master", label: "MASTER", status: "running", tokens: "" },
         ]}
-        turnIndex={1}
+        turnIndex={2}
       />,
     );
-    expect(screen.getByText(/本轮分析中/)).toBeInTheDocument();
+    expect(screen.getByText(/多 AGENT · 正在分析 · 第 1 轮/i)).toBeInTheDocument();
     expect(screen.getByText(/第 1 轮/)).toBeInTheDocument();
   });
 
@@ -31,7 +31,7 @@ describe("TurnTraceCard", () => {
         summaryScore={7.4}
       />,
     );
-    expect(screen.getByText(/本轮分析完成/)).toBeInTheDocument();
+    expect(screen.getByText(/多 Agent · 分析完成 · 第 1 轮/)).toBeInTheDocument();
     expect(screen.getByText(/7\.4/)).toBeInTheDocument();
   });
 });

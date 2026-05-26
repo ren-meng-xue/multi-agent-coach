@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useMemo } from "react";
 import { useAuth } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
 import {
   streamInterviewChat,
   resetInterviewSession,
@@ -75,6 +76,8 @@ let globalInitialContextCache: { target_role?: string; user_background?: string;
 /** 面试房间的单面试官流式聊天主体。 */
 export function InterviewChat() {
   const { isLoaded, isSignedIn, getToken } = useAuth();
+  const router = useRouter();
+  const [loadError, setLoadError] = useState(false);
 
   const isTest = typeof process !== "undefined" && process.env.NODE_ENV === "test";
 
@@ -115,6 +118,8 @@ export function InterviewChat() {
     return [{ role: "assistant", content: buildOpeningMessage(null) }];
   });
 
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+
   useEffect(() => {
     const isTest = typeof process !== "undefined" && process.env.NODE_ENV === "test";
     if (isTest) return; // 单测环境在 useState 中已同步初始化，无需重复更新
@@ -122,9 +127,9 @@ export function InterviewChat() {
     if (initialContextRef.current) {
       const ctx = initialContextRef.current;
       if (ctx.target_role || ctx.jd_text || ctx.jd_url) {
-        // 客户端首屏成功挂载后，如果带有开始意图，立刻渲染出准备流面板占位，
-        // 避免重新挂载或防抖跳过导致首屏渲染出空白或欢迎开场。
-        setMessages([{ role: "trace", kind: "prepare", payload: createPrepareTracePayload() }]);
+        // 客户端首屏成功挂载后，如果带有开始意图，在网络请求加载前保持 messages 为 []，由 isInitialLoading 渲染精美微光加载，
+        // 彻底根治一挂载就一闪而逝“专家组正在工作”占位卡片的假闪烁。
+        setMessages([]);
       } else {
         setMessages([{ role: "assistant", content: buildOpeningMessage(ctx) }]);
       }
@@ -174,7 +179,8 @@ export function InterviewChat() {
     if (!isLoaded || (!isSignedIn && !isDevAuthBypassEnabled) || hasResetRef.current) return;
 
     const isTest = typeof process !== "undefined" && process.env.NODE_ENV === "test";
-    if (isTest && !initialContextRef.current) {
+    const isRoutingGuardTest = isTest && typeof window !== "undefined" && sessionStorage.getItem("test_routing_guard") === "true";
+    if (isTest && !initialContextRef.current && !isRoutingGuardTest) {
       hasResetRef.current = true;
       return;
     }
@@ -236,17 +242,19 @@ export function InterviewChat() {
                 setReport(activeSession.report);
               }
             } else {
-              // 没有任何活动会话，正常展示默认欢迎卡片
-              setMessages([{ role: "assistant", content: buildOpeningMessage(null) }]);
+              // 路径 3/4：无 sessionStorage 上下文 + 无活动会话 → 守卫重定向回 Coach
+              router.replace("/coach?from=interview");
+              return; // 即将卸载，不再触发后续 setIsInitialLoading
             }
           } catch (err) {
-            console.error("Failed to load active interview session, falling back to clean state:", err);
-            setMessages([{ role: "assistant", content: buildOpeningMessage(null) }]);
+            console.error("Failed to load active interview session:", err);
+            setLoadError(true);
           }
         }
       })
       .finally(() => {
         isResettingRef.current = false;
+        setIsInitialLoading(false);
         sessionStorage.removeItem("interview_context");
       });
   }, [isLoaded, isSignedIn, getToken]);
@@ -430,6 +438,7 @@ export function InterviewChat() {
   async function handleStartFirstQuestion() {
     const isTest = typeof process !== "undefined" && process.env.NODE_ENV === "test";
     if (isStreaming || (isResettingRef.current && !isTest)) return;
+    if (progress.stage !== "opening" && !isTest) return;
 
     abortRef.current?.abort();
     const abortController = new AbortController();
@@ -718,14 +727,14 @@ export function InterviewChat() {
   }
 
   return (
-    <section className="relative mx-auto flex h-[calc(100dvh-132px)] min-h-0 w-full max-w-[960px] overflow-hidden rounded-2xl border border-black/10 bg-white shadow-lg shadow-black/5 dark:border-white/10 dark:bg-[#1c1c1a]">
+    <section className="relative mx-auto flex h-[calc(100dvh-132px)] min-h-0 w-full max-w-[1200px] overflow-hidden rounded-2xl border border-black/10 bg-white shadow-lg shadow-black/5 dark:border-white/10 dark:bg-[#1c1c1a]">
       <div
-        className="pointer-events-none absolute right-[5%] top-[18%] z-0 h-[350px] w-[350px] rounded-full bg-[radial-gradient(circle,rgba(83,74,183,0.08)_0%,rgba(244,63,94,0.04)_50%,transparent_100%)] blur-3xl"
+        className="pointer-events-none absolute right-[5%] top-[18%] z-0 h-[450px] w-[450px] rounded-full bg-[radial-gradient(circle,rgba(83,74,183,0.08)_0%,rgba(244,63,94,0.04)_50%,transparent_100%)] blur-3xl"
         aria-hidden="true"
       />
 
       <div className="relative z-10 flex min-h-0 w-full flex-col">
-        <header className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-black/10 px-5 py-3 dark:border-white/10">
+        <header className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-black/10 px-6 py-3 dark:border-white/10">
           <div>
             <h1 className="bg-gradient-to-br from-[#534AB7] to-rose-600 bg-clip-text text-sm font-bold tracking-[-0.02em] text-transparent">
               AI 模拟面试舱 · Agent Cabin
@@ -754,7 +763,29 @@ export function InterviewChat() {
           </div>
         </header>
 
-        <div className="interview-chat-scroll flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-5 py-5">
+        <div className="interview-chat-scroll flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-6">
+          {isInitialLoading && messages.length <= 1 && (
+            <div className="flex flex-1 flex-col items-center justify-center gap-2.5 animate-in fade-in duration-500">
+              <span className="relative flex size-6 items-center justify-center rounded-full bg-[#534AB7]/5 dark:bg-[#CECBF6]/5">
+                <span className="absolute inset-0 animate-ping rounded-full bg-[#534AB7]/10 dark:bg-[#CECBF6]/10" />
+                <span className="size-2 rounded-full bg-[#534AB7] dark:bg-[#CECBF6] shadow-[0_0_8px_rgba(83,74,183,0.4)]" />
+              </span>
+              <span className="text-[10px] font-bold text-black/35 tracking-wider dark:text-white/30 animate-pulse">
+                正在连接模拟舱...
+              </span>
+            </div>
+          )}
+          {loadError && messages.length <= 1 && (
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sm">
+              <div className="text-black/60 dark:text-white/60">连接异常，请重试或返回 Coach。</div>
+              <Button
+                variant="outline"
+                onClick={() => router.replace("/coach")}
+              >
+                返回 Coach
+              </Button>
+            </div>
+          )}
           {messages.map((message, index) => {
             if (isPrepareTraceMessage(message)) {
               return (
@@ -767,6 +798,7 @@ export function InterviewChat() {
                   direction={message.payload.direction}
                   jdContext={message.payload.jdContext}
                   onStart={handleStartFirstQuestion}
+                  started={progress.stage !== "opening"}
                 />
               );
             }
@@ -782,6 +814,31 @@ export function InterviewChat() {
               if (nextMessage && isTurnTraceMessage(nextMessage)) {
                 associatedTrace = nextMessage;
               }
+            }
+
+            // 正在首题生成或思考分析、且 AI 正文还为空（即 content === ""）时，不要塞进窄扁的 MessageBubble 气泡！
+            // 直接以独立 100% 宽度将 TurnTraceCard 平铺展示，实现无比舒展大气的极客流式工作日志！
+            if (
+              message.role === "assistant" &&
+              message.content === "" &&
+              associatedTrace &&
+              associatedTrace.payload.status === "running"
+            ) {
+              return (
+                <div
+                  key={`embedded-trace-${index}`}
+                  className="w-full py-1 animate-in fade-in slide-in-from-bottom-2 duration-300"
+                >
+                  <TurnTraceCard
+                    status={associatedTrace.payload.status}
+                    nodes={associatedTrace.payload.nodes}
+                    turnIndex={associatedTrace.payload.turnIndex}
+                    summaryScore={associatedTrace.payload.summaryScore}
+                    isOpening={associatedTrace.payload.isOpening}
+                    isEmbedded={false}
+                  />
+                </div>
+              );
             }
 
             // 状态面板还在跑且无 trace 时，空 assistant bubble 不渲染，避免"..."和 trace 同时出现
