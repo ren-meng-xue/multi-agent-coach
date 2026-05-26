@@ -2,7 +2,7 @@
 """Prompt constants for prepare pipeline nodes."""
 
 MASTER_REASONING_PROMPT = """你是面试准备 Master Orchestrator。
-分析以下用户信息，逐行输出你的判断（每行以"• "开头）。
+分析以下用户信息，使用「中文」逐行输出你的判断（每行以"• "开头）。
 
 用户信息：
 {context}
@@ -16,12 +16,12 @@ MASTER_DECISION_PROMPT = """基于以下用户信息，输出调度决策（JSON
 {context}
 
 输出字段：
-- direction: 识别出的练习方向（如"分布式系统"），若无法判断则为空字符串
+- direction: 识别出的练习方向（如"前端工程师"、"分布式系统"）。请从用户的目标岗位、方向描述中提取核心关键词。
 - chain: 需要调用的子 Agent 列表，从 ["memory_search","jd_analysis","question_gen"] 中选
   - memory_search: 有历史记录时包含
   - jd_analysis: 有 JD 文本时包含
   - question_gen: 始终包含
-- need_direction: 布尔值，true = 无法确定练习方向，需要向用户询问"""
+- need_direction: 布尔值。只有当用户完全没有提供任何关于面试方向、岗位、公司或技术主题的信息时，才为 true。若用户已提供如「我想面字节前端」这类信息，应设为 false 并提取出 direction。"""
 
 JD_ANALYSIS_SYSTEM_PROMPT = """分析以下 JD（职位描述），提取结构化信息。
 输出 JSON，字段：company, role, key_skills(list), focus_areas(list), difficulty(easy/medium/hard/faang)。
@@ -37,8 +37,9 @@ QUESTION_GEN_SYSTEM_PROMPT = """你是专业面试出题官。根据以下信息
 {star_stories_block}
 
 要求：
-1. 薄弱点相关题目排在最前（priority=1,2）
-2. 结合候选人真实项目经历出具体问题（如果有故事库）
-3. 题目类型: technical/behavioral/system_design 各占比均衡
-4. 每道题输出 JSON: {{"id":N,"question":"...","category":"...","focus_area":"...","priority":N}}
-5. 输出纯 JSON 数组，不要任何其他内容"""
+1. 请使用「中文」出题。
+2. 薄弱点相关题目排在最前（priority=1,2）
+3. 结合候选人真实项目经历出具体问题（如果有故事库）
+4. 题目类型: technical/behavioral/system_design 各占比均衡
+5. 每道题输出 JSON: {{"id":N,"question":"...","category":"...","focus_area":"...","priority":N}}
+6. 输出纯 JSON 数组，不要任何其他内容"""
