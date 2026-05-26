@@ -1,10 +1,61 @@
 import { readSseStream, type SseEvent } from "./sse";
-import type { InterviewTraceNodeEvent } from "./prepare-types";
+import type {
+  InterviewTraceNodeEvent,
+  JDContext,
+  PreparedQuestion,
+  TraceNodeData,
+} from "./prepare-types";
 
-export type InterviewChatMessage = {
+export type InterviewChatTextMessage = {
   role: "user" | "assistant";
   content: string;
 };
+
+export type InterviewPrepareTracePayload = {
+  status: "running" | "done" | "waiting_direction";
+  nodes: TraceNodeData[];
+  questions: PreparedQuestion[];
+  summary: string;
+  direction?: string;
+};
+
+export type InterviewTurnTracePayload = {
+  status: "running" | "done";
+  nodes: TraceNodeData[];
+  chain?: string[];
+  summaryScore?: number;
+  turnIndex: number;
+};
+
+export type InterviewPrepareTraceMessage = {
+  role: "trace";
+  kind: "prepare";
+  payload: InterviewPrepareTracePayload;
+};
+
+export type InterviewTurnTraceMessage = {
+  role: "trace";
+  kind: "turn";
+  id: string;
+  payload: InterviewTurnTracePayload;
+};
+
+export type InterviewChatMessage =
+  | InterviewChatTextMessage
+  | InterviewPrepareTraceMessage
+  | InterviewTurnTraceMessage;
+
+export function isTextMessage(m: InterviewChatMessage): m is InterviewChatTextMessage {
+  return m.role === "user" || m.role === "assistant";
+}
+
+export function isPrepareTraceMessage(m: InterviewChatMessage): m is InterviewPrepareTraceMessage {
+  return m.role === "trace" && m.kind === "prepare";
+}
+
+export function isTurnTraceMessage(m: InterviewChatMessage): m is InterviewTurnTraceMessage {
+  return m.role === "trace" && m.kind === "turn";
+}
 
 export type InterviewProgressState = {
   stage: "opening" | "interview" | "closing";
@@ -76,8 +127,8 @@ export type CoachOpeningMessageResponse = {
 type StreamInterviewChatOptions = {
   token: string;
   message: string;
-  preparedQuestions?: import("./prepare-types").PreparedQuestion[];
-  jdContext?: import("./prepare-types").JDContext | null;
+  preparedQuestions?: PreparedQuestion[];
+  jdContext?: JDContext | null;
   signal?: AbortSignal;
   onDelta: (text: string) => void;
   onState?: (state: InterviewProgressState) => void;

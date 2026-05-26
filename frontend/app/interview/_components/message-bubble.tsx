@@ -1,10 +1,10 @@
 import { cn } from "@/lib/utils";
-import type { InterviewChatMessage } from "@/lib/interview-chat";
+import type { InterviewChatTextMessage } from "@/lib/interview-chat";
 import { MarkdownMessage } from "./markdown-message";
 import { TypingIndicator } from "./typing-indicator";
 
 type MessageBubbleProps = {
-  message: InterviewChatMessage;
+  message: InterviewChatTextMessage;
   isPending?: boolean;
 };
 

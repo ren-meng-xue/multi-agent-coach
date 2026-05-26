@@ -7,7 +7,11 @@ import {
   resetInterviewSession,
   startPrepareStreamFetch,
   resumePrepareStreamFetch,
+  isPrepareTraceMessage,
+  isTextMessage,
+  isTurnTraceMessage,
   type InterviewChatMessage,
+  type InterviewPrepareTracePayload,
   type InterviewProgressState,
   type InterviewReport,
 } from "@/lib/interview-chat";
@@ -17,8 +21,8 @@ import { ReportCard } from "./report-card";
 import { Button } from "@/components/ui/button";
 import { Copy, Check } from "lucide-react";
 import { PreparationCard } from "./preparation-card";
-import { type TraceNodeData } from "./agent-trace";
-import type { PreparedQuestion, PrepareSSEEvent } from "@/lib/prepare-types";
+import { TurnTraceCard } from "./turn-trace-card";
+import type { PreparedQuestion, PrepareSSEEvent, TraceNodeData } from "@/lib/prepare-types";
 
 function buildOpeningMessage(
   context: { target_role?: string; user_background?: string } | null,
@@ -49,6 +53,18 @@ const INITIAL_PROGRESS: InterviewProgressState = {
 
 const DEV_AUTH_BYPASS_TOKEN = "dev-auth-bypass-token";
 const isDevAuthBypassEnabled = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "1";
+
+function createPrepareTracePayload(
+  status: InterviewPrepareTracePayload["status"] = "running",
+): InterviewPrepareTracePayload {
+  return {
+    status,
+    nodes: [],
+    questions: [],
+    summary: "",
+    direction: undefined,
+  };
+}
 
 /** 面试房间的单面试官流式聊天主体。 */
 export function InterviewChat() {
@@ -128,6 +144,10 @@ export function InterviewChat() {
           // 如果缓存的上下文有 target_role 或者 JD 文本，就触发多 Agent 准备流水线
           if (initialContextRef.current?.target_role || initialContextRef.current?.jd_text || initialContextRef.current?.jd_url) {
             setPrepStatus("running");
+            setMessages((prev) => {
+              if (prev.some(isPrepareTraceMessage)) return prev;
+              return [{ role: "trace", kind: "prepare", payload: createPrepareTracePayload() }, ...prev];
+            });
             runPrepare(initialContextRef.current);
           }
         }
@@ -159,15 +179,20 @@ export function InterviewChat() {
     } catch (err) {
       if (abortController.signal.aborted) return;
       console.error("Preparation stream failed:", err);
-      setPrepStatus(null);
+      fallbackFromPrepareFailure(ctx);
     }
   }
 
   function handlePrepareEvent(ev: PrepareSSEEvent) {
     const { event, data } = ev;
 
+    if (event === "error") {
+      fallbackFromPrepareFailure(initialContextRef.current);
+      return;
+    }
+
     if (event === "node_start") {
-      setTraceNodes((prev) => {
+      const updateNodes = (prev: TraceNodeData[]) => {
         if (prev.some((n) => n.id === data.node)) {
           return prev.map((n) => n.id === data.node ? { ...n, status: "running" as const } : n);
         }
@@ -175,28 +200,33 @@ export function InterviewChat() {
           ...prev,
           { id: data.node!, label: data.label!, title: "", status: "running" as const, tokens: "" },
         ];
-      });
+      };
+      setTraceNodes(updateNodes);
+      updatePrepareTraceMessage((payload) => ({ ...payload, nodes: updateNodes(payload.nodes) }));
     }
 
     if (event === "node_token") {
-      setTraceNodes((prev) =>
+      const updateNodes = (prev: TraceNodeData[]) =>
         prev.map((n) =>
           n.id === data.node ? { ...n, tokens: n.tokens + (data.text ?? "") } : n
-        )
-      );
+        );
+      setTraceNodes(updateNodes);
+      updatePrepareTraceMessage((payload) => ({ ...payload, nodes: updateNodes(payload.nodes) }));
     }
 
     if (event === "node_done") {
-      setTraceNodes((prev) =>
+      const updateNodes = (prev: TraceNodeData[]) =>
         prev.map((n) =>
           n.id === data.node
             ? { ...n, status: "done" as const, elapsedMs: data.elapsed_ms }
             : n
-        )
-      );
+        );
+      setTraceNodes(updateNodes);
+      updatePrepareTraceMessage((payload) => ({ ...payload, nodes: updateNodes(payload.nodes) }));
       // need_direction 由 master node_done 携带，在这里处理
       if (data.node === "master" && data.need_direction) {
         setPrepStatus("waiting_direction");
+        updatePrepareTraceMessage((payload) => ({ ...payload, status: "waiting_direction" }));
         setMessages((prev) => [
           ...prev,
           {
@@ -212,7 +242,40 @@ export function InterviewChat() {
       setPrepSummary(data.summary ?? "");
       setPrepDirection(data.direction ?? "");
       setPrepStatus("done");
+      updatePrepareTraceMessage((payload) => ({
+        ...payload,
+        status: "done",
+        questions: data.prepared_questions ?? [],
+        summary: data.summary ?? "",
+        direction: data.direction,
+      }));
     }
+  }
+
+  function updatePrepareTraceMessage(
+    updater: (payload: InterviewPrepareTracePayload) => InterviewPrepareTracePayload,
+  ) {
+    setMessages((prev) =>
+      prev.map((message) =>
+        isPrepareTraceMessage(message)
+          ? { ...message, payload: updater(message.payload) }
+          : message,
+      ),
+    );
+  }
+
+  function fallbackFromPrepareFailure(
+    ctx: { target_role?: string; user_background?: string } | null,
+  ) {
+    setPrepStatus(null);
+    setTraceNodes([]);
+    setPreparedQuestions([]);
+    setPrepSummary("");
+    setPrepDirection("");
+    setMessages((prev) => {
+      const withoutPrepare = prev.filter((message) => !isPrepareTraceMessage(message));
+      return withoutPrepare.length > 0 ? withoutPrepare : [{ role: "assistant", content: buildOpeningMessage(ctx) }];
+    });
   }
 
   async function handleStartFirstQuestion() {
@@ -228,6 +291,7 @@ export function InterviewChat() {
       { role: "user", content: "开始本轮面试" },
       { role: "assistant", content: "" },
     ]);
+    setPrepStatus(null);
 
     assistantIndexRef.current = assistantIndex;
     discardBufferedDelta();
@@ -259,7 +323,7 @@ export function InterviewChat() {
       const message = error instanceof Error ? error.message : "AI 暂时无法响应，请稍后重试";
       setMessages((current) =>
         current.map((item, index) =>
-          index === assistantIndex ? { ...item, content: message } : item
+          index === assistantIndex && isTextMessage(item) ? { ...item, content: message } : item
         )
       );
     } finally {
@@ -292,7 +356,7 @@ export function InterviewChat() {
     deltaBufferRef.current = "";
     setMessages((current) =>
       current.map((message, index) =>
-        index === assistantIndex
+        index === assistantIndex && isTextMessage(message)
           ? { ...message, content: `${message.content}${text}` }
           : message,
       ),
@@ -322,6 +386,11 @@ export function InterviewChat() {
     setMessages([{ role: "assistant", content: buildOpeningMessage(null) }]);
     setProgress(INITIAL_PROGRESS);
     setReport(null);
+    setPrepStatus(null);
+    setTraceNodes([]);
+    setPreparedQuestions([]);
+    setPrepSummary("");
+    setPrepDirection("");
     isResettingRef.current = true;
     getInterviewToken({ getToken })
       .then(async (token) => {
@@ -336,6 +405,7 @@ export function InterviewChat() {
     if (messages.length === 0) return;
 
     const chatText = messages
+      .filter(isTextMessage)
       .map((msg) => {
         const roleName = msg.role === "user" ? "求职者" : "面试官";
         return `【${roleName}】：${msg.content}`;
@@ -358,6 +428,7 @@ export function InterviewChat() {
     if (prepStatus === "waiting_direction") {
       setMessages((prev) => [...prev, { role: "user", content }]);
       setPrepStatus("running");
+      updatePrepareTraceMessage((payload) => ({ ...payload, status: "running" }));
       
       try {
         const token = isDevAuthBypassEnabled ? DEV_AUTH_BYPASS_TOKEN : (await getToken() ?? "");
@@ -372,6 +443,24 @@ export function InterviewChat() {
         console.error("Resume prepare failed:", err);
         setPrepStatus(null);
       }
+      return;
+    }
+
+    if (progress.stage === "opening" && prepStatus === null && !report) {
+      setMessages((prev) => [
+        ...prev,
+        { role: "user", content },
+        { role: "trace", kind: "prepare", payload: createPrepareTracePayload() },
+      ]);
+      setPrepStatus("running");
+      setTraceNodes([]);
+      setPreparedQuestions([]);
+      setPrepSummary("");
+      setPrepDirection("");
+      await runPrepare({
+        target_role: content,
+        user_background: initialContextRef.current?.user_background,
+      });
       return;
     }
 
@@ -423,7 +512,7 @@ export function InterviewChat() {
       const message = error instanceof Error ? error.message : "AI 暂时无法响应，请稍后重试";
       setMessages((current) =>
         current.map((item, index) =>
-          index === assistantIndex ? { ...item, content: message } : item,
+          index === assistantIndex && isTextMessage(item) ? { ...item, content: message } : item,
         ),
       );
     } finally {
@@ -435,7 +524,7 @@ export function InterviewChat() {
   }
 
   return (
-    <section className="relative mx-auto flex h-[calc(100dvh-132px)] min-h-0 w-full max-w-5xl overflow-hidden rounded-2xl border border-black/10 bg-white shadow-lg shadow-black/5 dark:border-white/10 dark:bg-[#1c1c1a]">
+    <section className="relative mx-auto flex h-[calc(100dvh-132px)] min-h-0 w-full max-w-[960px] overflow-hidden rounded-2xl border border-black/10 bg-white shadow-lg shadow-black/5 dark:border-white/10 dark:bg-[#1c1c1a]">
       <div
         className="pointer-events-none absolute right-[5%] top-[18%] z-0 h-[350px] w-[350px] rounded-full bg-[radial-gradient(circle,rgba(83,74,183,0.08)_0%,rgba(244,63,94,0.04)_50%,transparent_100%)] blur-3xl"
         aria-hidden="true"
@@ -444,8 +533,8 @@ export function InterviewChat() {
       <div className="relative z-10 flex min-h-0 w-full flex-col">
         <header className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-black/10 px-5 py-3 dark:border-white/10">
           <div>
-            <h1 className="bg-gradient-to-br from-[#534AB7] to-rose-600 bg-clip-text text-sm font-bold text-transparent">
-              AI 智能面试室 · IntelRoom
+            <h1 className="bg-gradient-to-br from-[#534AB7] to-rose-600 bg-clip-text text-sm font-bold tracking-[-0.02em] text-transparent">
+              AI 模拟面试舱 · Agent Cabin
             </h1>
             <p className="mt-1 text-xs text-black/45 dark:text-white/45">
               {formatStageLabel(progress.stage)}
@@ -472,23 +561,39 @@ export function InterviewChat() {
         </header>
 
         <div className="interview-chat-scroll flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-5 py-5">
-          {prepStatus && (
-            <PreparationCard
-              status={prepStatus}
-              nodes={traceNodes}
-              questions={preparedQuestions}
-              summary={prepSummary}
-              direction={prepDirection}
-              onStart={handleStartFirstQuestion}
-            />
-          )}
-          {messages.map((message, index) => (
-            <MessageBubble
-              key={`${message.role}-${index}`}
-              message={message}
-              isPending={isStreaming && index === messages.length - 1}
-            />
-          ))}
+          {messages.map((message, index) => {
+            if (isPrepareTraceMessage(message)) {
+              return (
+                <PreparationCard
+                  key={`prepare-${index}`}
+                  status={message.payload.status}
+                  nodes={message.payload.nodes}
+                  questions={message.payload.questions}
+                  summary={message.payload.summary}
+                  direction={message.payload.direction}
+                  onStart={handleStartFirstQuestion}
+                />
+              );
+            }
+            if (isTurnTraceMessage(message)) {
+              return (
+                <TurnTraceCard
+                  key={`turn-${message.id}`}
+                  status={message.payload.status}
+                  nodes={message.payload.nodes}
+                  turnIndex={message.payload.turnIndex}
+                  summaryScore={message.payload.summaryScore}
+                />
+              );
+            }
+            return (
+              <MessageBubble
+                key={`${message.role}-${index}`}
+                message={message}
+                isPending={isStreaming && index === messages.length - 1}
+              />
+            );
+          })}
           {showReportDelayed && report && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-1000">
               <div className="flex items-center gap-3 py-4" role="separator" aria-label="面试结束">
