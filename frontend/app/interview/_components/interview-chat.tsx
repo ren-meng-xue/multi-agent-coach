@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Copy, Check } from "lucide-react";
 import { PreparationCard } from "./preparation-card";
 import { TurnTraceCard } from "./turn-trace-card";
-import type { PreparedQuestion, PrepareSSEEvent, TraceNodeData } from "@/lib/prepare-types";
+import type { PreparedQuestion, PrepareSSEEvent, TraceNodeData, InterviewTraceNodeEvent } from "@/lib/prepare-types";
 
 function buildOpeningMessage(
   context: { target_role?: string; user_background?: string } | null,
@@ -278,6 +278,62 @@ export function InterviewChat() {
     });
   }
 
+  function updateTurnTrace(turnId: string, ev: InterviewTraceNodeEvent) {
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (!isTurnTraceMessage(m) || m.id !== turnId) return m;
+        const nodes = [...m.payload.nodes];
+        const idx = nodes.findIndex((n) => n.id === ev.node);
+
+        if (ev.phase === "start") {
+          if (idx === -1) {
+            nodes.push({
+              id: ev.node,
+              label: ev.label ?? ev.node,
+              status: "running" as const,
+              tokens: "",
+            });
+          } else {
+            nodes[idx] = { ...nodes[idx], status: "running" as const };
+          }
+        } else if (ev.phase === "token") {
+          if (idx !== -1) {
+            nodes[idx] = { ...nodes[idx], tokens: nodes[idx].tokens + (ev.text ?? "") };
+          }
+        } else if (ev.phase === "done") {
+          if (idx !== -1) {
+            nodes[idx] = {
+              ...nodes[idx],
+              status: "done" as const,
+              elapsedMs: ev.elapsedMs,
+            };
+          }
+        }
+
+        const summaryScore =
+          ev.phase === "done" && ev.node === "evaluator"
+            ? ev.summaryScore ?? m.payload.summaryScore
+            : m.payload.summaryScore;
+        const chain = ev.phase === "done" && ev.node === "master" ? ev.chain : m.payload.chain;
+
+        return {
+          ...m,
+          payload: { ...m.payload, nodes, summaryScore, chain },
+        };
+      })
+    );
+  }
+
+  function finishTurnTrace(turnId: string) {
+    setMessages((prev) =>
+      prev.map((m) =>
+        isTurnTraceMessage(m) && m.id === turnId
+          ? { ...m, payload: { ...m.payload, status: "done" as const } }
+          : m
+      )
+    );
+  }
+
   async function handleStartFirstQuestion() {
     if (isStreaming || isResettingRef.current) return;
 
@@ -285,10 +341,23 @@ export function InterviewChat() {
     const abortController = new AbortController();
     abortRef.current = abortController;
 
-    const assistantIndex = messages.length + 1;
+    const turnId = crypto.randomUUID();
+    const turnIndex = 1;
+
+    const assistantIndex = messages.length + 2;
     setMessages((prev) => [
       ...prev,
       { role: "user", content: "开始本轮面试" },
+      {
+        role: "trace",
+        kind: "turn",
+        id: turnId,
+        payload: {
+          status: "running",
+          nodes: [],
+          turnIndex,
+        },
+      },
       { role: "assistant", content: "" },
     ]);
     setPrepStatus(null);
@@ -314,8 +383,10 @@ export function InterviewChat() {
           deltaBufferRef.current += text;
           scheduleDeltaFlush();
         },
+        onTraceNode: (ev) => updateTurnTrace(turnId, ev),
       });
       flushBufferedDelta();
+      finishTurnTrace(turnId);
     } catch (error) {
       if (abortController.signal.aborted) return;
 
@@ -468,14 +539,29 @@ export function InterviewChat() {
     const abortController = new AbortController();
     abortRef.current = abortController;
 
+    const turnId = crypto.randomUUID();
+    const turnIndex = (progress.question_count ?? 0) + 1;
+
     // 修复 Bug：如果上一轮已结束并生成了报告，再次说话时自动开启新一轮，清空旧视觉状态
     const shouldReset = !!report || progress.stage === "closing";
     
     const userMessage: InterviewChatMessage = { role: "user", content };
-    const assistantIndex = shouldReset ? 1 : messages.length + 1;
+    const traceMessage: InterviewChatMessage = {
+      role: "trace",
+      kind: "turn",
+      id: turnId,
+      payload: {
+        status: "running",
+        nodes: [],
+        turnIndex,
+      },
+    };
+    const assistantMessage: InterviewChatMessage = { role: "assistant" as const, content: "" };
+
+    const assistantIndex = shouldReset ? 2 : messages.length + 2;
     const nextMessages = shouldReset 
-      ? [userMessage, { role: "assistant" as const, content: "" }]
-      : [...messages, userMessage, { role: "assistant" as const, content: "" }];
+      ? [userMessage, traceMessage, assistantMessage]
+      : [...messages, userMessage, traceMessage, assistantMessage];
 
     if (shouldReset) {
       setReport(null);
@@ -503,8 +589,10 @@ export function InterviewChat() {
           deltaBufferRef.current += text;
           scheduleDeltaFlush();
         },
+        onTraceNode: (ev) => updateTurnTrace(turnId, ev),
       });
       flushBufferedDelta();
+      finishTurnTrace(turnId);
     } catch (error) {
       if (abortController.signal.aborted) return;
 
