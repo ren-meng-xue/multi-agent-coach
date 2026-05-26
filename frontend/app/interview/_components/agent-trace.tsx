@@ -1,15 +1,10 @@
 "use client";
 
-import { TraceNode, type TraceNodeStatus } from "./trace-node";
+import type { TraceNodeData } from "@/lib/prepare-types";
 
-export type TraceNodeData = {
-  id: string;
-  label: string;
-  title?: string;
-  status: TraceNodeStatus;
-  tokens: string;
-  elapsedMs?: number;
-};
+import { TraceNode } from "./trace-node";
+
+export type { TraceNodeData };
 
 interface AgentTraceProps {
   nodes: TraceNodeData[];
@@ -24,7 +19,7 @@ const NODE_TITLES: Record<string, string> = {
 
 export function AgentTrace({ nodes }: AgentTraceProps) {
   return (
-    <div className="px-5 py-3">
+    <div className="px-4 py-3">
       {nodes.map((node) => (
         <TraceNode
           key={node.id}

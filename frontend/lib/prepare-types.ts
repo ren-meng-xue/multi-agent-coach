@@ -30,3 +30,14 @@ export interface PrepareSSEEvent {
     code?: string;
   };
 }
+
+export type TraceNodeStatus = "pending" | "running" | "done";
+
+export interface TraceNodeData {
+  id: string;
+  label: string;
+  title?: string;
+  status: TraceNodeStatus;
+  tokens: string;
+  elapsedMs?: number;
+}
