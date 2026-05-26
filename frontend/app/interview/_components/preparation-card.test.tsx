@@ -30,7 +30,7 @@ test("running 状态显示准备中", () => {
       onStart={() => {}}
     />
   );
-  expect(screen.getByText(/就绪中/)).toBeInTheDocument();
+  expect(screen.getByText(/专家组正在工作/)).toBeInTheDocument();
 });
 
 test("done 状态显示准备完成和两个按钮", () => {
@@ -43,7 +43,7 @@ test("done 状态显示准备完成和两个按钮", () => {
       onStart={() => {}}
     />
   );
-  expect(screen.getByText("面试准备就绪")).toBeInTheDocument();
+  expect(screen.getByText("准备完成")).toBeInTheDocument();
   expect(screen.getByText(/开始第\s*1\s*题/)).toBeInTheDocument();
   expect(screen.getByText(/先看题目列表/)).toBeInTheDocument();
 });

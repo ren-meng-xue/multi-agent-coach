@@ -1,4 +1,5 @@
 """面试历史记录服务。"""
+from typing import Literal, cast
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,7 +33,10 @@ async def get_interview_history(
                 topic=s.target_role or "模拟面试",
                 target_role=s.target_role or "",
                 score=float(s.score) if s.score is not None else 0.0,
-                pass_fail=s.pass_fail if s.pass_fail in ("pass", "fail", "partial") else "fail",
+                pass_fail=cast(
+                    Literal["pass", "fail", "partial"],
+                    s.pass_fail if s.pass_fail in ("pass", "fail", "partial") else "fail"
+                ),
                 key_issues=s.key_issues if isinstance(s.key_issues, list) else [],
                 report=s.report_json,
             )

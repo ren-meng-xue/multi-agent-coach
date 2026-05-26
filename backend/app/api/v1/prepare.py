@@ -19,8 +19,19 @@ log = get_logger("app.api.v1.prepare")
 
 
 async def _sse_format(events: AsyncIterator[dict]) -> AsyncIterator[str]:
-    async for ev in events:
-        yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
+    try:
+        async for ev in events:
+            yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
+    except Exception as exc:
+        log.error("prepare_stream_failed", error=str(exc), exc_info=True)
+        error_event = {
+            "event": "error",
+            "data": {
+                "message": "准备流水线失败，请直接进入面试或稍后重试。",
+                "code": "prepare_stream_failed",
+            },
+        }
+        yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
 
 
 @router.post("/prepare/start")

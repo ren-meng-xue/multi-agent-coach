@@ -53,3 +53,27 @@ def test_prepare_start_returns_sse_stream():
     assert "text/event-stream" in resp.headers["content-type"]
     assert "node_start" in resp.text
     assert "测试摘要" in resp.text
+
+
+def test_prepare_start_stream_error_returns_sse_error_event():
+    """prepare 流内部失败时，必须返回 error 事件，避免浏览器收到断裂 chunk。"""
+    app.dependency_overrides[get_current_user_id] = _fake_user
+
+    async def broken_stream(state):
+        yield {"event": "node_start", "data": {"node": "master", "label": "MASTER"}}
+        raise RuntimeError("prepare boom")
+
+    try:
+        with patch("app.api.v1.prepare.stream_prepare_events", side_effect=broken_stream):
+            resp = TestClient(app).post(
+                "/api/v1/prepare/start",
+                data={"user_direction": "AI Agent 工程师"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert resp.status_code == 200
+    assert "text/event-stream" in resp.headers["content-type"]
+    assert "node_start" in resp.text
+    assert '"event": "error"' in resp.text
+    assert "准备流水线失败" in resp.text
