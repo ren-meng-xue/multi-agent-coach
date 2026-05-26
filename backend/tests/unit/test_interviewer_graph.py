@@ -8,7 +8,7 @@ from app.agents.interviewer.graph import (
 
 def test_chain_nodes_exposes_master_subagents():
     """master 子 agent 池必须是 evaluator/followup/ask_question/closing 四者。"""
-    assert CHAIN_NODES == {"evaluator", "followup", "ask_question", "closing"}
+    assert {"evaluator", "followup", "ask_question", "closing"} == CHAIN_NODES
 
 
 def test_route_after_master_empty_chain_fallback_to_followup():

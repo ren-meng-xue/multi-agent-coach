@@ -1,12 +1,13 @@
 # backend/tests/unit/test_jd_extractor.py
-import pytest
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
 from app.services.jd_extractor import (
+    JDSource,
+    NeedManualInput,
     extract_jd_text,
     extract_jd_text_async,
-    NeedManualInput,
-    JDSource,
 )
 
 
