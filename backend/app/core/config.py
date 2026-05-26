@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     # OpenAI
     openai_api_key: SecretStr
     openai_model_chat: str = "gpt-4o"
-    openai_model_chat_fast: str = "claude-haiku-4-5-20251001"
+    openai_model_chat_fast: str = "gpt-4o-mini"
     openai_model_coach: str = "gpt-4o-mini"
     openai_model_embedding: str = "text-embedding-3-small"
     # LLM 调用超时（秒），避免单次请求长时间挂起拖垮连接
