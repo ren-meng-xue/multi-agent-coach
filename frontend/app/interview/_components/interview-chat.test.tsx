@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+
+if (typeof globalThis.crypto === "undefined") {
+  (globalThis as any).crypto = {};
+}
+if (typeof globalThis.crypto.randomUUID === "undefined") {
+  globalThis.crypto.randomUUID = () => "test-uuid-12345678";
+}
 import userEvent from "@testing-library/user-event";
 import { InterviewChat } from "./interview-chat";
 import { startPrepareStreamFetch, streamInterviewChat } from "@/lib/interview-chat";
@@ -448,5 +455,71 @@ describe("InterviewChat", () => {
     render(<InterviewChat />);
 
     expect(screen.getByText(/面试岗位/)).toBeInTheDocument();
+  });
+
+  it("在用户发送回答后，渲染 TurnTraceCard，并通过 onTraceNode 事件更新卡片状态与评分", async () => {
+    sessionStorage.removeItem("interview_context");
+    mockPrepareDone();
+
+    let round = 0;
+    mockStreamInterviewChat.mockImplementation(async (options) => {
+      const { onTraceNode, onDelta, onState } = options;
+      
+      // 等待 10ms，让 React 先把 handleStartFirstQuestion 或 handleSend 产生的消息渲染上屏
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      if (round === 0) {
+        // 第一轮：首题出题（__START__）
+        onTraceNode?.({ phase: "start", node: "master", label: "MASTER" });
+        onTraceNode?.({ phase: "done", node: "master", elapsedMs: 30, chain: ["ask_question"] });
+
+        onTraceNode?.({ phase: "start", node: "ask_question", label: "面试官 · 出题" });
+        onDelta?.("分布式系统的核心难题是什么？");
+        onTraceNode?.({ phase: "done", node: "ask_question", elapsedMs: 300 });
+
+        onState?.({ stage: "interview", question_count: 1, total_questions: 5 });
+        round++;
+      } else {
+        // 第二轮：答题分析 + evaluator + followup
+        onTraceNode?.({ phase: "start", node: "master", label: "MASTER" });
+        onTraceNode?.({ phase: "token", node: "master", text: "正在分析候选人回答" });
+        onTraceNode?.({ phase: "done", node: "master", elapsedMs: 50, chain: ["evaluator", "followup"] });
+
+        // 再等待 10ms
+        await new Promise((resolve) => setTimeout(resolve, 10));
+
+        onTraceNode?.({ phase: "start", node: "evaluator", label: "评估" });
+        onTraceNode?.({ phase: "done", node: "evaluator", elapsedMs: 150, summaryScore: 8.5 });
+
+        // 再等待 10ms
+        await new Promise((resolve) => setTimeout(resolve, 10));
+
+        onTraceNode?.({ phase: "start", node: "followup", label: "面试官 · 追问" });
+        onDelta?.("你提到的 RAG 是如何调优的？");
+        onTraceNode?.({ phase: "done", node: "followup", elapsedMs: 500 });
+
+        onState?.({ stage: "interview", question_count: 1, total_questions: 5 });
+      }
+    });
+
+    render(<InterviewChat />);
+
+    await startPreparedInterview();
+
+    await waitFor(() => {
+      expect(screen.getByText(/分布式系统的核心难题/)).toBeInTheDocument();
+    });
+
+    const input = screen.getByLabelText("输入面试练习内容");
+    await userEvent.type(input, "我是这么做 RAG 的");
+    await userEvent.click(screen.getByRole("button", { name: "发送" }));
+
+    // 断言 TurnTraceCard 在聊天流中正确展现
+    await waitFor(() => {
+      expect(screen.getByText(/本轮分析/)).toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/8\.5/)).toBeInTheDocument();
+    expect(screen.getByText(/你提到的 RAG 是如何调优的/)).toBeInTheDocument();
   });
 });
