@@ -1,5 +1,5 @@
 """
-手动 LLM Eval：验证 decide_next 对强/弱回答的实际判断行为。
+手动 LLM Eval：验证 master_node 对强/弱回答的实际 chain 决策。
 
 运行方式：
     cd backend && .venv/bin/python -m pytest tests/eval/ -s -v
@@ -7,10 +7,17 @@
 不加 assert，只打印 LLM 实际输出，用于人工观察 prompt 效果。
 不纳入 CI，需要真实 OPENAI_API_KEY。
 """
+import os
+
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
-from app.agents.interviewer.nodes import decide_next_action
+from app.agents.interviewer.nodes import master_node
+
+pytestmark = pytest.mark.skipif(
+    os.getenv("RUN_LLM_EVAL") != "1",
+    reason="manual LLM eval; set RUN_LLM_EVAL=1 to run",
+)
 
 _QUESTION = "请介绍你在 AI Agent 项目中遇到的最大技术挑战，以及你是如何解决的。"
 
@@ -26,11 +33,7 @@ _BASE = {
     "total_questions": 5,
     "followup_count": 0,
     "max_followups": 2,
-    "opening_complete": True,
     "assistant_message": "",
-    "decision_action": "",
-    "decision_reason": "",
-    "followup_question": "",
 }
 
 
@@ -38,7 +41,7 @@ _BASE = {
 async def test_weak_answer_expect_followup():
     """
     弱回答：没有量化结果、没有失败/权衡细节。
-    预期：LLM 选 followup，并给出追问方向。
+    预期：LLM 选择需要追问的 chain。
     """
     state = {
         **_BASE,
@@ -47,19 +50,17 @@ async def test_weak_answer_expect_followup():
             HumanMessage(content="我遇到的最大挑战是 Agent 之间的协调。我用了 LangGraph 来解决这个问题，最后效果很好。"),
         ],
     }
-    result = await decide_next_action(state)
+    result = await master_node(state)
     print("\n[弱回答]")
-    print(f"  action  : {result.action}")
-    print(f"  reason  : {result.reason}")
-    if result.followup_question:
-        print(f"  followup: {result.followup_question}")
+    print(f"  chain : {result.get('chain')}")
+    print(f"  reason: {result.get('master_reason')}")
 
 
 @pytest.mark.asyncio
 async def test_strong_answer_expect_next_question():
     """
     强回答：有 STAR 结构、量化结果、失败与权衡。
-    预期：LLM 选 next_question。
+    预期：LLM 选择评估后进入下一题或收尾前的合理 chain。
     """
     state = {
         **_BASE,
@@ -79,9 +80,7 @@ async def test_strong_answer_expect_next_question():
             ),
         ],
     }
-    result = await decide_next_action(state)
+    result = await master_node(state)
     print("\n[强回答]")
-    print(f"  action  : {result.action}")
-    print(f"  reason  : {result.reason}")
-    if result.followup_question:
-        print(f"  followup: {result.followup_question}")
+    print(f"  chain : {result.get('chain')}")
+    print(f"  reason: {result.get('master_reason')}")

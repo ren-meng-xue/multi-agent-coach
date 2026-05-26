@@ -4,12 +4,79 @@ from app.services.coach_opening import COACH_OPENING_SYSTEM_PROMPT
 
 
 def test_coach_opening_prompt_requires_direct_weakness_diagnosis():
-    """老用户开场词必须约束 LLM 输出具体不足，而不是泛化总结。"""
-    assert "最突出的不足或短板" in COACH_OPENING_SYSTEM_PROMPT
-    assert "你在……方面不足" in COACH_OPENING_SYSTEM_PROMPT
+    """新 prompt 必须包含核心约束：用数据说话、禁止泛化、明确下一步。"""
+    # 必须有关键输出字段
     assert "weakness_summary" in COACH_OPENING_SYSTEM_PROMPT
-    assert "evidence 必须是一段可直接展示给用户的证据文案" in COACH_OPENING_SYSTEM_PROMPT
-    assert "禁止在 weakness_summary 和 evidence 中使用" in COACH_OPENING_SYSTEM_PROMPT
-    assert "前端只会逐段渲染返回字段" in COACH_OPENING_SYSTEM_PROMPT
-    assert "规律、改进机会、加强能力、提升空间、建议关注、频繁出现" in COACH_OPENING_SYSTEM_PROMPT
+    assert "evidence" in COACH_OPENING_SYSTEM_PROMPT
+    assert "focus_today" in COACH_OPENING_SYSTEM_PROMPT
+
+    # 必须指导 LLM 用维度分说话
+    assert "recent_sessions" in COACH_OPENING_SYSTEM_PROMPT
+    assert "分数最低" in COACH_OPENING_SYSTEM_PROMPT
+
+    # 必须禁止泛化表达
+    assert "提升空间" in COACH_OPENING_SYSTEM_PROMPT
+    assert "规律" in COACH_OPENING_SYSTEM_PROMPT
+    assert "禁止" in COACH_OPENING_SYSTEM_PROMPT
+
+    # 必须约束 focus_today 格式
     assert "今天重点练" in COACH_OPENING_SYSTEM_PROMPT
+
+    # 必须包含岗位信息使用说明
+    assert "practiced_roles" in COACH_OPENING_SYSTEM_PROMPT
+
+    # 前端渲染约束
+    assert "逐段渲染" in COACH_OPENING_SYSTEM_PROMPT
+
+
+def test_coach_opening_response_has_memory_hint_slots():
+    """schema 必须提供 long_memory_hints / hobby_hints 默认空槽，为第五步记忆 agent 预留位。"""
+    from app.schemas.interview import CoachOpeningMessageResponse
+
+    response = CoachOpeningMessageResponse(
+        greeting="hi",
+        weakness_summary=None,
+        evidence=None,
+        focus_today="练 X",
+        cta_type="new",
+    )
+    assert response.long_memory_hints == []
+    assert response.hobby_hints == []
+
+
+def test_fallback_opening_includes_memory_hint_slots_for_new_user():
+    from app.services.coach_opening import CoachHistoryContext, _fallback_opening_message
+
+    ctx = CoachHistoryContext(
+        session_count=0,
+        recent_scores=[],
+        pass_rate=0.0,
+        common_issues={},
+        trend="flat",
+        is_new=True,
+        practiced_roles={},
+        recent_sessions=[],
+    )
+    response = _fallback_opening_message(ctx)
+    assert response.long_memory_hints == []
+    assert response.hobby_hints == []
+
+
+def test_fallback_opening_includes_memory_hint_slots_for_returning_user():
+    from app.services.coach_opening import CoachHistoryContext, _fallback_opening_message
+
+    ctx = CoachHistoryContext(
+        session_count=3,
+        recent_scores=[3.2, 3.0, 2.8],
+        pass_rate=0.33,
+        common_issues={"量化欠缺": 2},
+        trend="declining",
+        is_new=False,
+        practiced_roles={"AI Agent 工程师": 3},
+        recent_sessions=[],
+    )
+    response = _fallback_opening_message(ctx)
+    assert response.long_memory_hints == []
+    assert response.hobby_hints == []
+
+

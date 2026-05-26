@@ -28,7 +28,6 @@ async def get_profile(
 ):
     """获取当前用户的个人配置。"""
     user = await ensure_user_exists(db, user_id=user_id)
-    await db.commit()
     return Response.ok(data=UserProfile.model_validate(user))
 
 

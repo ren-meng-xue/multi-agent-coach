@@ -47,6 +47,8 @@ class TurnRequest(BaseModel):
     """统一面试入口请求：前端只提交本轮用户输入，历史由后端按 user_id 管理。"""
 
     message: str
+    prepared_questions: list[dict[str, Any]] | None = None
+    jd_context: dict[str, Any] | None = None
 
     @field_validator("message")
     @classmethod
@@ -85,6 +87,9 @@ class CoachOpeningMessageResponse(BaseModel):
     evidence: str | None
     focus_today: str
     cta_type: Literal["new", "returning"]
+    # 第五步「教练 Agent + 共享记忆层」预留：默认空，本次不实现填充逻辑
+    long_memory_hints: list[str] = []
+    hobby_hints: list[str] = []
 
 
 class InterviewHistoryItem(BaseModel):
@@ -104,3 +109,23 @@ class InterviewHistoryResponse(BaseModel):
     """GET /api/v1/interview/history 的响应。"""
 
     sessions: list[InterviewHistoryItem]
+
+
+class ActiveMessageItem(BaseModel):
+    role: str
+    content: str
+
+
+class ActiveSessionResponse(BaseModel):
+    """GET /api/v1/interview/active 的响应。"""
+
+    session_id: str | None = None
+    target_role: str | None = None
+    target_company: str | None = None
+    user_background: str | None = None
+    stage: str | None = None
+    question_count: int = 0
+    total_questions: int = 5
+    followup_count: int = 0
+    messages: list[ActiveMessageItem] = []
+    report: dict[str, Any] | None = None

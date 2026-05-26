@@ -338,7 +338,7 @@ async def test_get_user_interview_context_ignores_sessions_without_role(db):
 
     assert result["is_returning"] is False
     assert result["target_role"] is None
-    assert result["session_count"] == 1
+    assert result["session_count"] == 0  # abandoned session 不计入 completed 场次
 
 
 @pytest.mark.asyncio
@@ -420,3 +420,48 @@ async def test_reset_without_context_does_not_create_new_session(db):
         )
     )
     assert result.scalar_one_or_none() is None
+
+
+@pytest.mark.asyncio
+async def test_stream_interview_turn_emits_node_events(monkeypatch, db):
+    """一次 turn 应包含 node_start / node_done / delta 序列。"""
+    from app.services.interview_turn import stream_interview_turn
+
+    async def fake_graph_events(state):
+        yield {"event": "node_start", "data": {"node": "master", "label": "MASTER"}}
+        yield {"event": "node_token", "data": {"node": "master", "text": "推理 bullet"}}
+        yield {"event": "node_done", "data": {"node": "master", "elapsed_ms": 100, "chain": ["evaluator", "followup"]}}
+        yield {"event": "node_start", "data": {"node": "evaluator", "label": "评估"}}
+        yield {"event": "node_done", "data": {"node": "evaluator", "elapsed_ms": 200, "summary_score": 7.0}}
+        yield {"event": "node_start", "data": {"node": "followup", "label": "面试官 · 追问"}}
+        yield {"event": "token", "data": {"text": "你的故障"}}
+        yield {"event": "token", "data": {"text": "恢复方案是什么？"}}
+        yield {"event": "node_done", "data": {"node": "followup", "elapsed_ms": 800}}
+        yield {"event": "final", "data": {
+            "stage": "interview",
+            "question_count": 1,
+            "total_questions": 5,
+            "followup_count": 1,
+            "target_role": "test",
+            "assistant_message": "你的故障恢复方案是什么？",
+            "turn_evaluations": [{"summary_score": 7.0}],
+        }}
+
+    monkeypatch.setattr(
+        "app.services.interview_turn.stream_interviewer_turn_events",
+        fake_graph_events,
+    )
+
+    events = []
+    async for ev in stream_interview_turn(
+        message="我回答完了",
+        user_id=f"user_node_events_{uuid4().hex}",
+        db=db,
+    ):
+        events.append(ev["event"])
+
+    assert "node_start" in events
+    assert "node_token" in events
+    assert "node_done" in events
+    assert "delta" in events
+    assert "done" in events

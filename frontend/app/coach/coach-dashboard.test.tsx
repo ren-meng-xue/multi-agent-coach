@@ -1,11 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { CoachDashboard } from "./coach-dashboard";
 
 const mockPush = vi.hoisted(() => vi.fn());
+const mockReplace = vi.hoisted(() => vi.fn());
+const mockSearchParams = vi.hoisted(() => vi.fn(() => new URLSearchParams()));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => ({ push: mockPush, replace: mockReplace }),
+  useSearchParams: () => mockSearchParams(),
 }));
 
 vi.mock("@clerk/nextjs", () => ({
@@ -21,6 +24,7 @@ vi.mock("@/lib/interview-chat", () => ({
   fetchInterviewContext: vi.fn(),
   fetchInterviewHistory: vi.fn().mockResolvedValue({ sessions: [] }),
   resetInterviewSession: vi.fn().mockResolvedValue(undefined),
+  enterInterviewRoom: vi.fn(),
 }));
 
 vi.mock("@/lib/user", () => ({
@@ -34,11 +38,13 @@ import {
   fetchInterviewContext,
   fetchInterviewHistory,
   resetInterviewSession,
+  enterInterviewRoom,
 } from "@/lib/interview-chat";
 const mockFetchOpening = vi.mocked(fetchCoachOpeningMessage);
 const mockFetch = vi.mocked(fetchInterviewContext);
 const mockFetchHistory = vi.mocked(fetchInterviewHistory);
 const mockResetInterviewSession = vi.mocked(resetInterviewSession);
+const mockEnterInterviewRoom = vi.mocked(enterInterviewRoom);
 
 describe("CoachDashboard", () => {
   beforeEach(() => {
@@ -46,7 +52,9 @@ describe("CoachDashboard", () => {
     mockFetch.mockReset();
     mockFetchHistory.mockReset();
     mockPush.mockReset();
+    mockReplace.mockReset();
     mockResetInterviewSession.mockClear();
+    mockEnterInterviewRoom.mockReset();
 
     mockFetchHistory.mockResolvedValue({
       sessions: [
@@ -97,7 +105,7 @@ describe("CoachDashboard", () => {
     expect(screen.queryByTestId("coach-skeleton")).not.toBeInTheDocument();
   });
 
-  it("老用户：开场词接口慢时不阻塞页面展示", async () => {
+  it("老用户：开场词接口慢时不阻塞页面展示，显示开场词骨架屏", async () => {
     mockFetchOpening.mockImplementation(() => new Promise(() => {}));
     mockFetch.mockResolvedValue({
       is_returning: true,
@@ -110,10 +118,13 @@ describe("CoachDashboard", () => {
 
     render(<CoachDashboard />);
 
+    // 页面主体渲染完成（header 场次可见）
     await waitFor(() => {
-      expect(screen.getByText("欢迎回来。")).toBeInTheDocument();
+      expect(screen.getAllByText(/7 场/)[0]).toBeInTheDocument();
     });
-    expect(screen.getAllByText(/7 场/)[0]).toBeInTheDocument();
+    // 开场词未到时显示专用骨架屏，不展示旧 fallback 文案
+    expect(screen.getByTestId("coach-opening-skeleton")).toBeInTheDocument();
+    expect(screen.queryByText("欢迎回来。")).not.toBeInTheDocument();
     expect(screen.queryByTestId("coach-skeleton")).not.toBeInTheDocument();
   });
 
@@ -237,13 +248,117 @@ describe("CoachDashboard", () => {
     fireEvent.click(directStartButton);
 
     await waitFor(() => {
-      expect(mockResetInterviewSession).toHaveBeenCalledWith({
-        token: "test-token",
+      expect(mockEnterInterviewRoom).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: {
+            target_role: "AI Agent 工程师",
+            user_background: "我在准备 AI Agent 工程师 的面试",
+          },
+        })
+      );
+    });
+    expect(mockPush).not.toHaveBeenCalledWith("/settings");
+  });
+
+  describe("from=interview 软提示", () => {
+    beforeEach(() => {
+      mockReplace.mockClear();
+      mockFetch.mockResolvedValue({
+        is_returning: true,
         target_role: "AI Agent 工程师",
-        user_background: "我在准备 AI Agent 工程师 的面试",
+        work_years: null,
+        target_company: null,
+        user_background: "熟悉 LangChain",
+        session_count: 7,
       });
     });
-    expect(mockPush).toHaveBeenCalledWith("/interview");
-    expect(mockPush).not.toHaveBeenCalledWith("/settings");
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("URL 带 from=interview 时显示软提示并在 4 秒后消失", async () => {
+      mockSearchParams.mockReturnValue(new URLSearchParams("from=interview"));
+      vi.useFakeTimers();
+
+      render(<CoachDashboard />);
+
+      // 推进 100ms 等待 API 加载的异步 Promise 及状态更新跑完
+      await vi.advanceTimersByTimeAsync(100);
+
+      expect(screen.getByText(/先在这里告诉我练什么/)).toBeInTheDocument();
+      expect(mockReplace).toHaveBeenCalledWith("/coach"); // 立即清 query
+
+      // 快进 4000ms 触发定时器隐藏软提示
+      await vi.advanceTimersByTimeAsync(4000);
+
+      expect(screen.queryByText(/先在这里告诉我练什么/)).not.toBeInTheDocument();
+
+      vi.useRealTimers();
+    });
+
+    it("URL 不带 from=interview 时不显示软提示", () => {
+      mockSearchParams.mockReturnValue(new URLSearchParams(""));
+
+      render(<CoachDashboard />);
+
+      expect(screen.queryByText(/先在这里告诉我练什么/)).not.toBeInTheDocument();
+      expect(mockReplace).not.toHaveBeenCalledWith("/coach");
+    });
+  });
+
+  describe("CoachOpeningCopy 记忆 hints 槽", () => {
+    it("long_memory_hints 有内容时渲染", async () => {
+      mockFetch.mockResolvedValue({
+        is_returning: true,
+        target_role: "AI Agent 工程师",
+        work_years: null,
+        target_company: null,
+        user_background: "熟悉 LangChain",
+        session_count: 7,
+      });
+      mockFetchOpening.mockResolvedValue({
+        greeting: "hi",
+        weakness_summary: null,
+        evidence: null,
+        focus_today: "练 X",
+        cta_type: "new",
+        long_memory_hints: ["上次你说过偏好用 RAG"],
+        hobby_hints: ["你喜欢分布式系统"],
+      });
+
+      render(<CoachDashboard />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/上次你说过偏好用 RAG/)).toBeInTheDocument();
+      });
+      expect(screen.getByText(/你喜欢分布式系统/)).toBeInTheDocument();
+    });
+
+    it("hints 为空/缺失时不渲染槽", async () => {
+      mockFetch.mockResolvedValue({
+        is_returning: true,
+        target_role: "AI Agent 工程师",
+        work_years: null,
+        target_company: null,
+        user_background: "熟悉 LangChain",
+        session_count: 7,
+      });
+      mockFetchOpening.mockResolvedValue({
+        greeting: "hi",
+        weakness_summary: null,
+        evidence: null,
+        focus_today: "练 X",
+        cta_type: "new",
+      });
+
+      render(<CoachDashboard />);
+
+      await waitFor(() => {
+        expect(screen.getByText("hi")).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId("coach-long-memory-hints")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("coach-hobby-hints")).not.toBeInTheDocument();
+    });
   });
 });

@@ -26,11 +26,6 @@ export function SettingsView() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [stories, setStories] = useState<UserStory[]>([]);
   
-  // 编辑状态
-  const [editingProfile, setEditingProfile] = useState(false);
-  const [targetRole, setTargetRole] = useState("");
-  const [workYears, setWorkYears] = useState("");
-  
   // 故事编辑状态
   const [isStoryModalOpen, setIsStoryModalOpen] = useState(false);
   const [currentStory, setCurrentStory] = useState<Partial<UserStory> | null>(null);
@@ -50,8 +45,6 @@ export function SettingsView() {
 
         setProfile(userProfile);
         setStories(userStories);
-        setTargetRole(userProfile.target_role || "");
-        setWorkYears(userProfile.work_years || "");
       } catch (error) {
         console.error("Failed to load settings:", error);
       } finally {
@@ -61,23 +54,6 @@ export function SettingsView() {
 
     loadData();
   }, [authLoaded, isSignedIn, getToken]);
-
-  const handleSaveProfile = async () => {
-    try {
-      const token = await getToken();
-      if (!token) return;
-
-      const updated = await updateUserProfile({
-        token,
-        profile: { target_role: targetRole, work_years: workYears },
-      });
-
-      setProfile(updated);
-      setEditingProfile(false);
-    } catch (error) {
-      console.error("Failed to update profile:", error);
-    }
-  };
 
   const handleOpenStoryModal = (story?: UserStory) => {
     if (story) {
@@ -178,51 +154,18 @@ export function SettingsView() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label className="text-[10px] font-extrabold uppercase tracking-widest text-[#8a8a8a]">目标岗位</Label>
-                {editingProfile ? (
-                  <Input 
-                    value={targetRole} 
-                    onChange={(e) => setTargetRole(e.target.value)}
-                    className="bg-[#fafaf8] border-[#e8e7e2] focus:ring-[#4f46e5]/20 focus:border-[#4f46e5]"
-                    placeholder="例如：AI Agent 工程师"
-                  />
-                ) : (
-                  <p className="text-[#171717] font-medium">{profile?.target_role || "未设置"}</p>
-                )}
+                <p className="text-[#171717] font-medium">{profile?.target_role || "未设置"}</p>
               </div>
 
               <div className="space-y-2">
                 <Label className="text-[10px] font-extrabold uppercase tracking-widest text-[#8a8a8a]">工作年限</Label>
-                {editingProfile ? (
-                  <Input 
-                    value={workYears} 
-                    onChange={(e) => setWorkYears(e.target.value)}
-                    className="bg-[#fafaf8] border-[#e8e7e2] focus:ring-[#4f46e5]/20 focus:border-[#4f46e5]"
-                    placeholder="例如：3 年"
-                  />
-                ) : (
-                  <p className="text-[#171717] font-medium">{profile?.work_years || "未设置"}</p>
-                )}
+                <p className="text-[#171717] font-medium">{profile?.work_years || "未设置"}</p>
               </div>
 
-              <div className="pt-4">
-                {editingProfile ? (
-                  <div className="flex gap-2">
-                    <Button onClick={handleSaveProfile} className="flex-1 bg-[#171717] hover:bg-black text-white">
-                      保存
-                    </Button>
-                    <Button variant="outline" onClick={() => setEditingProfile(false)} className="flex-1 border-[#e8e7e2]">
-                      取消
-                    </Button>
-                  </div>
-                ) : (
-                  <Button 
-                    variant="outline" 
-                    onClick={() => setEditingProfile(true)} 
-                    className="w-full border-[#e8e7e2] hover:bg-[#fafaf8] text-[#525252]"
-                  >
-                    修改资料
-                  </Button>
-                )}
+              <div className="pt-2">
+                <p className="text-[10px] text-[#a1a1a1] italic leading-relaxed">
+                  * 资料由 Coach 根据你的面试表现与岗位选择自动同步，无需手动维护。
+                </p>
               </div>
             </div>
           </Card>

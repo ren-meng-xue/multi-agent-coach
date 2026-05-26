@@ -1,9 +1,63 @@
 import { readSseStream, type SseEvent } from "./sse";
+import type {
+  InterviewTraceNodeEvent,
+  JDContext,
+  PreparedQuestion,
+  TraceNodeData,
+} from "./prepare-types";
 
-export type InterviewChatMessage = {
+export type InterviewChatTextMessage = {
   role: "user" | "assistant";
   content: string;
 };
+
+export type InterviewPrepareTracePayload = {
+  status: "running" | "done" | "waiting_direction";
+  nodes: TraceNodeData[];
+  questions: PreparedQuestion[];
+  summary: string;
+  direction?: string;
+  jdContext?: JDContext;
+};
+
+export type InterviewTurnTracePayload = {
+  status: "running" | "done";
+  nodes: TraceNodeData[];
+  chain?: string[];
+  summaryScore?: number;
+  turnIndex: number;
+  isOpening?: boolean;
+};
+
+export type InterviewPrepareTraceMessage = {
+  role: "trace";
+  kind: "prepare";
+  payload: InterviewPrepareTracePayload;
+};
+
+export type InterviewTurnTraceMessage = {
+  role: "trace";
+  kind: "turn";
+  id: string;
+  payload: InterviewTurnTracePayload;
+};
+
+export type InterviewChatMessage =
+  | InterviewChatTextMessage
+  | InterviewPrepareTraceMessage
+  | InterviewTurnTraceMessage;
+
+export function isTextMessage(m: InterviewChatMessage): m is InterviewChatTextMessage {
+  return m.role === "user" || m.role === "assistant";
+}
+
+export function isPrepareTraceMessage(m: InterviewChatMessage): m is InterviewPrepareTraceMessage {
+  return m.role === "trace" && m.kind === "prepare";
+}
+
+export function isTurnTraceMessage(m: InterviewChatMessage): m is InterviewTurnTraceMessage {
+  return m.role === "trace" && m.kind === "turn";
+}
 
 export type InterviewProgressState = {
   stage: "opening" | "interview" | "closing";
@@ -64,21 +118,62 @@ export async function fetchInterviewHistory({
   return response.json() as Promise<InterviewHistoryResponse>;
 }
 
+export type ActiveMessageItem = {
+  role: string;
+  content: string;
+};
+
+export type ActiveSessionResponse = {
+  session_id?: string;
+  target_role?: string;
+  target_company?: string;
+  user_background?: string;
+  stage?: "opening" | "interview" | "closing";
+  question_count?: number;
+  total_questions?: number;
+  followup_count?: number;
+  messages: ActiveMessageItem[];
+  report?: InterviewReport | null;
+};
+
+/** 获取当前进行中（in_progress）的活动会话及消息历史。 */
+export async function fetchActiveInterviewSession({
+  token,
+}: {
+  token: string;
+}): Promise<ActiveSessionResponse> {
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL;
+  if (!baseUrl) throw new Error("缺少后端接口配置");
+
+  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/interview/active`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!response.ok) throw new Error("获取活动面试会话失败");
+  return response.json() as Promise<ActiveSessionResponse>;
+}
+
 export type CoachOpeningMessageResponse = {
   greeting: string;
   weakness_summary: string | null;
   evidence: string | null;
   focus_today: string;
   cta_type: "new" | "returning";
+  // 第五步「教练 Agent + 共享记忆层」预留：默认空数组，本次不渲染
+  long_memory_hints?: string[];
+  hobby_hints?: string[];
 };
 
 type StreamInterviewChatOptions = {
   token: string;
   message: string;
+  preparedQuestions?: PreparedQuestion[];
+  jdContext?: JDContext | null;
   signal?: AbortSignal;
   onDelta: (text: string) => void;
   onState?: (state: InterviewProgressState) => void;
   onReport?: (report: InterviewReport) => void;
+  onTraceNode?: (ev: InterviewTraceNodeEvent) => void;
 };
 
 const DEFAULT_ERROR_MESSAGE = "请求失败，请稍后重试";
@@ -87,10 +182,13 @@ const DEFAULT_ERROR_MESSAGE = "请求失败，请稍后重试";
 export async function streamInterviewChat({
   token,
   message,
+  preparedQuestions,
+  jdContext,
   signal,
   onDelta,
   onState,
   onReport,
+  onTraceNode,
 }: StreamInterviewChatOptions): Promise<void> {
   const baseUrl = process.env.NEXT_PUBLIC_API_URL;
   if (!baseUrl) {
@@ -103,7 +201,11 @@ export async function streamInterviewChat({
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({
+      message,
+      prepared_questions: preparedQuestions,
+      jd_context: jdContext,
+    }),
     signal,
   });
 
@@ -113,7 +215,7 @@ export async function streamInterviewChat({
 
   await readSseStream({
     stream: response.body,
-    onEvent: (event) => handleSseEvent(event, onDelta, onState, onReport),
+    onEvent: (event) => handleSseEvent(event, onDelta, onState, onReport, onTraceNode),
   });
 }
 
@@ -122,6 +224,7 @@ function handleSseEvent(
   onDelta: (text: string) => void,
   onState?: (state: InterviewProgressState) => void,
   onReport?: (report: InterviewReport) => void,
+  onTraceNode?: (ev: InterviewTraceNodeEvent) => void,
 ) {
   if (event === "done") return;
 
@@ -140,6 +243,28 @@ function handleSseEvent(
   if (event === "report") {
     const payload = parseJsonPayload<InterviewReport>(data);
     onReport?.(payload);
+    return;
+  }
+
+  if (event === "node_start" || event === "node_token" || event === "node_done") {
+    const payload = parseJsonPayload<{
+      node: string;
+      label?: string;
+      text?: string;
+      elapsed_ms?: number;
+      chain?: string[];
+      summary_score?: number;
+    }>(data);
+    const phase = event === "node_start" ? "start" : event === "node_token" ? "token" : "done";
+    onTraceNode?.({
+      phase,
+      node: payload.node,
+      label: payload.label,
+      text: payload.text,
+      elapsedMs: payload.elapsed_ms,
+      chain: payload.chain,
+      summaryScore: payload.summary_score,
+    });
     return;
   }
 
@@ -200,17 +325,16 @@ export async function resetInterviewSession({
   if (target_role) body.target_role = target_role;
   if (user_background) body.user_background = user_background;
 
-  try {
-    await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/interview/reset`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
-  } catch {
-    // 网络错误不阻塞 UI 初始化
+  const res = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/interview/reset`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(`Reset failed with HTTP status: ${res.status}`);
   }
 }
 
@@ -221,3 +345,134 @@ function parseJsonPayload<T>(data: string): T {
     throw new Error(DEFAULT_ERROR_MESSAGE);
   }
 }
+
+/** 启动准备流水线（支持多源 JD，流式 SSE 返回）。 */
+export async function* startPrepareStreamFetch(params: {
+  token: string;
+  userDirection?: string;
+  userBackground?: string;
+  jdText?: string;
+  jdUrl?: string;
+  jdFile?: File;
+  signal?: AbortSignal;
+}): AsyncGenerator<import("./prepare-types").PrepareSSEEvent, void, unknown> {
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
+  const form = new FormData();
+  if (params.userDirection) form.append("user_direction", params.userDirection);
+  if (params.userBackground) form.append("user_background", params.userBackground);
+  if (params.jdText) form.append("jd_text", params.jdText);
+  if (params.jdUrl) form.append("jd_url", params.jdUrl);
+  if (params.jdFile) form.append("jd_file", params.jdFile);
+
+  const resp = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/prepare/start`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${params.token}` },
+    body: form,
+    signal: params.signal,
+  });
+
+  yield* _readPrepareStream(resp);
+}
+
+/** 恢复准备流水线（需要向用户追问方向场景）。 */
+export async function* resumePrepareStreamFetch(params: {
+  token: string;
+  direction: string;
+  userBackground?: string;
+  jdText?: string;
+  weakAreas?: string;
+  starStories?: string;
+  signal?: AbortSignal;
+}): AsyncGenerator<import("./prepare-types").PrepareSSEEvent, void, unknown> {
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
+  const form = new FormData();
+  form.append("direction", params.direction);
+  if (params.userBackground) form.append("user_background", params.userBackground);
+  if (params.jdText) form.append("jd_text", params.jdText);
+  if (params.weakAreas) form.append("weak_areas", params.weakAreas);
+  if (params.starStories) form.append("star_stories", params.starStories);
+
+  const resp = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/prepare/resume`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${params.token}` },
+    body: form,
+    signal: params.signal,
+  });
+
+  yield* _readPrepareStream(resp);
+}
+
+/** 内部通用的 SSE 读取生成器 */
+async function* _readPrepareStream(
+  resp: Response
+): AsyncGenerator<import("./prepare-types").PrepareSSEEvent, void, unknown> {
+  if (!resp.ok || !resp.body) throw new Error("Prepare stream failed");
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (trimmedLine.startsWith("data: ")) {
+          try {
+            yield JSON.parse(trimmedLine.slice(6)) as import("./prepare-types").PrepareSSEEvent;
+          } catch {
+            // ignore parsing error
+          }
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+type AppRouter = {
+  push: (href: string) => void;
+  replace: (href: string) => void;
+};
+
+export type EnterInterviewRoomContext = {
+  target_role: string;
+  user_background?: string;
+  jd_text?: string;
+  jd_url?: string;
+};
+
+/** 统一封装从任意入口进入 /interview 的流程：写 sessionStorage + reset 后台 session + push。
+ *  reset 失败仅 warn，不阻塞跳转 —— 路由守卫层会兜底处理无 active session 的情况。 */
+export async function enterInterviewRoom({
+  getToken,
+  router,
+  context,
+}: {
+  getToken: () => Promise<string | null>;
+  router: AppRouter;
+  context: EnterInterviewRoomContext;
+}): Promise<void> {
+  sessionStorage.setItem("interview_context", JSON.stringify(context));
+
+  const token = await getToken();
+  if (token) {
+    try {
+      await resetInterviewSession({
+        token,
+        target_role: context.target_role,
+        user_background: context.user_background,
+      });
+    } catch (err) {
+      console.warn("enterInterviewRoom: reset failed, proceeding anyway", err);
+    }
+  }
+
+  router.push("/interview");
+}
+

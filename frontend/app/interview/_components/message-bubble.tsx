@@ -1,15 +1,17 @@
 import { cn } from "@/lib/utils";
-import type { InterviewChatMessage } from "@/lib/interview-chat";
+import type { InterviewChatTextMessage, InterviewTurnTraceMessage } from "@/lib/interview-chat";
 import { MarkdownMessage } from "./markdown-message";
 import { TypingIndicator } from "./typing-indicator";
+import { TurnTraceCard } from "./turn-trace-card";
 
 type MessageBubbleProps = {
-  message: InterviewChatMessage;
+  message: InterviewChatTextMessage;
   isPending?: boolean;
+  trace?: InterviewTurnTraceMessage;
 };
 
-/** 渲染单条聊天消息，按角色区分面试官与候选人的视觉样式。 */
-export function MessageBubble({ message, isPending = false }: MessageBubbleProps) {
+/** 渲染单条聊天消息，按角色区分面试官与候选人的视觉样式，支持内嵌 Trace 面板思考抽屉。 */
+export function MessageBubble({ message, isPending = false, trace }: MessageBubbleProps) {
   const isUser = message.role === "user";
 
   return (
@@ -32,6 +34,20 @@ export function MessageBubble({ message, isPending = false }: MessageBubbleProps
             <TypingIndicator />
           ) : (
             <MarkdownMessage content={message.content} isUser={isUser} />
+          )}
+
+          {/* AI 消息底部内嵌多 Agent 协作思考过程，以折叠抽屉形式融合呈现 */}
+          {!isUser && trace && (
+            <div className="mt-3 border-t border-dashed border-black/[0.06] pt-2.5 dark:border-white/[0.06] animate-in fade-in slide-in-from-top-1 duration-300">
+              <TurnTraceCard
+                status={trace.payload.status}
+                nodes={trace.payload.nodes}
+                turnIndex={trace.payload.turnIndex}
+                summaryScore={trace.payload.summaryScore}
+                isOpening={trace.payload.isOpening}
+                isEmbedded={true}
+              />
+            </div>
           )}
         </div>
       </div>

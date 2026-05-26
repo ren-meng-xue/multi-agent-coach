@@ -1,0 +1,118 @@
+"""master_node 单元测试：chain 决策 + 合法性约束 + 流式 bullet。"""
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+from app.agents.interviewer.nodes import master_node
+
+
+@pytest.mark.asyncio
+async def test_master_first_turn_forces_ask_question():
+    """question_count == 0：强制 chain = ['ask_question']，即使 LLM 输出别的。"""
+    fake_decision = MagicMock(chain=["evaluator", "followup"], reason="LLM 的随意输出")
+    state = {"question_count": 0, "messages": []}
+    with patch("app.agents.interviewer.nodes._master_phase1_stream", new=AsyncMock(return_value=None)), \
+         patch("app.agents.interviewer.nodes._master_phase2_decide", new=AsyncMock(return_value=fake_decision)):
+        result = await master_node(state)
+    assert result["chain"] == ["ask_question"]
+
+
+@pytest.mark.asyncio
+async def test_master_exhausted_forces_closing():
+    """题数耗尽且追问耗尽：强制 chain = ['closing']。"""
+    fake_decision = MagicMock(chain=["evaluator", "followup"], reason="")
+    state = {
+        "question_count": 5,
+        "total_questions": 5,
+        "followup_count": 2,
+        "max_followups": 2,
+        "messages": [],
+    }
+    with patch("app.agents.interviewer.nodes._master_phase1_stream", new=AsyncMock(return_value=None)), \
+         patch("app.agents.interviewer.nodes._master_phase2_decide", new=AsyncMock(return_value=fake_decision)):
+        result = await master_node(state)
+    assert result["chain"] == ["closing"]
+
+
+@pytest.mark.asyncio
+async def test_master_normal_chain_passes_through():
+    """中段轮次：LLM 的 chain 不被覆盖。"""
+    fake_decision = MagicMock(chain=["evaluator", "followup"], reason="OK")
+    state = {
+        "question_count": 2,
+        "total_questions": 5,
+        "followup_count": 0,
+        "max_followups": 2,
+        "messages": [],
+    }
+    with patch("app.agents.interviewer.nodes._master_phase1_stream", new=AsyncMock(return_value=None)), \
+         patch("app.agents.interviewer.nodes._master_phase2_decide", new=AsyncMock(return_value=fake_decision)):
+        result = await master_node(state)
+    assert result["chain"] == ["evaluator", "followup"]
+
+
+@pytest.mark.asyncio
+async def test_master_strips_after_closing():
+    """chain 含 closing 时，closing 之后的节点被丢弃。"""
+    fake_decision = MagicMock(chain=["closing", "ask_question"], reason="")
+    state = {
+        "question_count": 2,
+        "total_questions": 5,
+        "followup_count": 0,
+        "max_followups": 2,
+        "messages": [],
+    }
+    with patch("app.agents.interviewer.nodes._master_phase1_stream", new=AsyncMock(return_value=None)), \
+         patch("app.agents.interviewer.nodes._master_phase2_decide", new=AsyncMock(return_value=fake_decision)):
+        result = await master_node(state)
+    assert result["chain"] == ["closing"]
+
+
+@pytest.mark.asyncio
+async def test_master_appends_followup_when_tail_is_evaluator():
+    """末尾是 evaluator（非合法终态）时，追加 followup。"""
+    fake_decision = MagicMock(chain=["evaluator"], reason="")
+    state = {
+        "question_count": 2,
+        "total_questions": 5,
+        "followup_count": 0,
+        "max_followups": 2,
+        "messages": [],
+    }
+    with patch("app.agents.interviewer.nodes._master_phase1_stream", new=AsyncMock(return_value=None)), \
+         patch("app.agents.interviewer.nodes._master_phase2_decide", new=AsyncMock(return_value=fake_decision)):
+        result = await master_node(state)
+    assert result["chain"][-1] in {"followup", "ask_question", "closing"}
+    assert result["chain"] == ["evaluator", "followup"]
+
+
+@pytest.mark.asyncio
+async def test_master_phase2_failure_falls_back():
+    """Phase 2 抛错：fallback chain。"""
+    state = {
+        "question_count": 2,
+        "total_questions": 5,
+        "followup_count": 0,
+        "max_followups": 2,
+        "messages": [],
+    }
+    with patch("app.agents.interviewer.nodes._master_phase1_stream", new=AsyncMock(return_value=None)), \
+         patch("app.agents.interviewer.nodes._master_phase2_decide", new=AsyncMock(side_effect=RuntimeError("LLM down"))):
+        result = await master_node(state)
+    assert result["chain"] == ["evaluator", "followup"]
+
+
+@pytest.mark.asyncio
+async def test_master_empty_chain_falls_back():
+    fake_decision = MagicMock(chain=[], reason="")
+    state = {
+        "question_count": 2,
+        "total_questions": 5,
+        "followup_count": 0,
+        "max_followups": 2,
+        "messages": [],
+    }
+    with patch("app.agents.interviewer.nodes._master_phase1_stream", new=AsyncMock(return_value=None)), \
+         patch("app.agents.interviewer.nodes._master_phase2_decide", new=AsyncMock(return_value=fake_decision)):
+        result = await master_node(state)
+    assert result["chain"] == ["evaluator", "followup"]

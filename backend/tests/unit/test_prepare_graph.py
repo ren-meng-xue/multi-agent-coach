@@ -1,0 +1,35 @@
+# backend/tests/unit/test_prepare_graph.py
+import pytest
+
+from app.agents.prepare.state import PrepareState
+
+
+@pytest.mark.asyncio
+async def test_route_after_master_includes_jd_when_has_jd():
+    from app.agents.prepare.graph import route_after_master
+
+    state: PrepareState = {
+        "chain": ["memory_search", "jd_analysis", "question_gen"],
+    }
+    assert route_after_master(state) == "memory_search"
+
+
+@pytest.mark.asyncio
+async def test_route_after_master_skips_to_question_gen():
+    from app.agents.prepare.graph import route_after_master
+
+    state: PrepareState = {
+        "chain": ["question_gen"],
+    }
+    assert route_after_master(state) == "question_gen"
+
+
+@pytest.mark.asyncio
+async def test_route_after_master_need_direction_returns_wait():
+    from app.agents.prepare.graph import route_after_master
+
+    state: PrepareState = {
+        "chain": [],
+        "need_direction": True,
+    }
+    assert route_after_master(state) == "wait_direction"
