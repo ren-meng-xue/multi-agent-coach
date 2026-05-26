@@ -3,10 +3,14 @@ from typing import Any
 
 from langchain_core.messages import BaseMessage, SystemMessage
 from langchain_openai import ChatOpenAI
+from openai import APIConnectionError, APITimeoutError, InternalServerError, RateLimitError
 from pydantic import BaseModel
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from app.agents.interviewer.prompts import (
     CLOSING_SYSTEM_PROMPT,
+    MASTER_DECISION_PROMPT,
+    MASTER_REASONING_PROMPT,
     FOLLOWUP_SYSTEM_PROMPT,
     QUESTION_SYSTEM_PROMPT,
 )
@@ -15,6 +19,15 @@ from app.core.config import get_settings
 from app.core.logging import get_logger
 
 log = get_logger("app.agents.interviewer.nodes")
+
+_RETRYABLE = (APIConnectionError, APITimeoutError, InternalServerError, RateLimitError)
+
+_retry_llm = retry(
+    retry=retry_if_exception_type(_RETRYABLE),
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=0.5, max=4),
+    reraise=True,
+)
 
 
 # ─────────────────────────────────────────────
@@ -92,19 +105,116 @@ async def load_context_node(state: InterviewState) -> InterviewState:
     }
 
 
+class _InterviewMasterDecision(BaseModel):
+    chain: list[str] = []
+    reason: str = ""
+
+
+VALID_CHAIN_NODES = {"evaluator", "followup", "ask_question", "closing"}
+TERMINAL_NODES = {"followup", "ask_question", "closing"}
+DEFAULT_FALLBACK_CHAIN = ["evaluator", "followup"]
+
+
+def _build_master_context(state: InterviewState) -> str:
+    parts: list[str] = []
+    parts.append(f"题目进度：{state.get('question_count', 0)} / {state.get('total_questions', 5)}")
+    parts.append(f"当题追问次数：{state.get('followup_count', 0)} / {state.get('max_followups', 2)}")
+    if state.get("target_role"):
+        parts.append(f"目标岗位：{state['target_role']}")
+    last_user_msg = ""
+    for m in reversed(state.get("messages", [])):
+        if getattr(m, "type", "") == "human":
+            last_user_msg = str(getattr(m, "content", ""))
+            break
+    if last_user_msg:
+        snippet = last_user_msg[:200]
+        parts.append(f"候选人最新回答（节选）：{snippet}")
+    return "\n".join(parts)
+
+
 async def _master_phase1_stream(context: str) -> None:
-    """Task 8 实装。占位是为了让 Task 7 的测试能 patch 这个符号。"""
-    raise NotImplementedError("_master_phase1_stream is implemented in Task 8")
+    """Phase 1：流式输出推理 bullet。tag 让 SSE 层捕获。"""
+    model = _chat_model(fast=True, streaming=True).with_config(tags=["master_token_stream"])
+    prompt = MASTER_REASONING_PROMPT.format(context=context)
+    async for _ in model.astream([SystemMessage(content=prompt)]):
+        pass
 
 
-async def _master_phase2_decide(context: str):
-    """Task 8 实装。"""
-    raise NotImplementedError("_master_phase2_decide is implemented in Task 8")
+@_retry_llm
+async def _master_phase2_decide(context: str) -> _InterviewMasterDecision:
+    """Phase 2：结构化输出 chain。"""
+    model = _chat_model(fast=True).with_structured_output(_InterviewMasterDecision)
+    prompt = MASTER_DECISION_PROMPT.format(context=context)
+    out = await model.ainvoke([SystemMessage(content=prompt)])
+    if isinstance(out, _InterviewMasterDecision):
+        return out
+    return _InterviewMasterDecision(chain=[], reason="非预期输出")
+
+
+def _enforce_chain(chain: list[str], state: InterviewState) -> list[str]:
+    """按 spec §6.2 五条合法性约束修正 chain。"""
+    question_count = state.get("question_count", 0)
+    total_questions = state.get("total_questions", 5)
+    followup_count = state.get("followup_count", 0)
+    max_followups = state.get("max_followups", 2)
+
+    # 1. 首轮强制 ask_question
+    if question_count == 0:
+        if chain != ["ask_question"]:
+            log.warning("master_chain_forced_first_turn", original=chain)
+        return ["ask_question"]
+
+    # 2. 题数 + 追问都耗尽强制 closing
+    if question_count >= total_questions and followup_count >= max_followups:
+        if chain != ["closing"]:
+            log.warning("master_chain_forced_closing", original=chain)
+        return ["closing"]
+
+    # 3. 过滤非法节点 + 去空
+    cleaned = [n for n in chain if n in VALID_CHAIN_NODES]
+    if not cleaned:
+        log.warning("master_chain_empty_fallback", original=chain)
+        cleaned = list(DEFAULT_FALLBACK_CHAIN)
+
+    # 4. closing 后的节点丢弃
+    if "closing" in cleaned:
+        idx = cleaned.index("closing")
+        cleaned = cleaned[: idx + 1]
+
+    # 5. 末尾必须是终态节点
+    if cleaned[-1] not in TERMINAL_NODES:
+        log.warning("master_chain_tail_invalid", original=chain, fixed=cleaned)
+        cleaned.append("followup")
+
+    return cleaned
 
 
 async def master_node(state: InterviewState) -> InterviewState:
-    """Phase 3+ 真·动态调度。Task 8 实现。"""
-    raise NotImplementedError("master_node is implemented in Task 8")
+    """Phase 3+ 真·动态调度：LLM 决定 chain。"""
+    context = _build_master_context(state)
+
+    try:
+        await _master_phase1_stream(context)
+    except Exception as exc:
+        log.warning("master_phase1_failed", error=str(exc))
+
+    try:
+        decision = await _master_phase2_decide(context)
+        chain = list(decision.chain)
+        reason = decision.reason
+    except Exception as exc:
+        log.error("master_phase2_failed", error=str(exc))
+        chain = []
+        reason = "Phase 2 fallback"
+
+    final_chain = _enforce_chain(chain, state)
+
+    log.info("master_done", chain=final_chain, reason=reason)
+    return {
+        **state,
+        "chain": final_chain,
+        "master_reason": reason,
+    }
 
 
 async def _evaluator_reason_stream(context: str) -> None:
