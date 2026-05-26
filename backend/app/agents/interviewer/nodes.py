@@ -9,12 +9,14 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 
 from app.agents.interviewer.prompts import (
     CLOSING_SYSTEM_PROMPT,
+    EVALUATOR_REASONING_PROMPT,
+    EVALUATOR_SCORING_PROMPT,
+    FOLLOWUP_SYSTEM_PROMPT,
     MASTER_DECISION_PROMPT,
     MASTER_REASONING_PROMPT,
-    FOLLOWUP_SYSTEM_PROMPT,
     QUESTION_SYSTEM_PROMPT,
 )
-from app.agents.interviewer.state import InterviewState
+from app.agents.interviewer.state import InterviewState, TurnEvaluation
 from app.core.config import get_settings
 from app.core.logging import get_logger
 
@@ -217,19 +219,80 @@ async def master_node(state: InterviewState) -> InterviewState:
     }
 
 
+class _EvaluatorScoring(BaseModel):
+    bullets: list[str] = []
+    technical_depth: float = 5.0
+    quantified_results: float = 5.0
+    failure_tradeoffs: float = 5.0
+    structure: float = 5.0
+    summary_score: float = 5.0
+
+
+def _build_evaluator_context(state: InterviewState) -> str:
+    parts: list[str] = []
+    if state.get("target_role"):
+        parts.append(f"目标岗位：{state['target_role']}")
+    # 最近一题（问题文本）+ 最近一句用户回答
+    last_user = ""
+    last_ai = ""
+    for m in reversed(state.get("messages", [])):
+        if not last_user and getattr(m, "type", "") == "human":
+            last_user = str(getattr(m, "content", ""))[:600]
+        elif not last_ai and getattr(m, "type", "") == "ai":
+            last_ai = str(getattr(m, "content", ""))[:300]
+        if last_user and last_ai:
+            break
+    if last_ai:
+        parts.append(f"面试官刚问的：{last_ai}")
+    if last_user:
+        parts.append(f"候选人回答：{last_user}")
+    return "\n".join(parts)
+
+
 async def _evaluator_reason_stream(context: str) -> None:
-    """Task 9 实装。"""
-    raise NotImplementedError("_evaluator_reason_stream is implemented in Task 9")
+    model = _chat_model(streaming=True).with_config(tags=["evaluator_token_stream"])
+    prompt = EVALUATOR_REASONING_PROMPT.format(context=context)
+    async for _ in model.astream([SystemMessage(content=prompt)]):
+        pass
 
 
-async def _evaluator_score(context: str):
-    """Task 9 实装。"""
-    raise NotImplementedError("_evaluator_score is implemented in Task 9")
+@_retry_llm
+async def _evaluator_score(context: str) -> _EvaluatorScoring:
+    model = _chat_model().with_structured_output(_EvaluatorScoring)
+    prompt = EVALUATOR_SCORING_PROMPT.format(context=context)
+    out = await model.ainvoke([SystemMessage(content=prompt)])
+    if isinstance(out, _EvaluatorScoring):
+        return out
+    return _EvaluatorScoring()
 
 
 async def evaluator_node(state: InterviewState) -> InterviewState:
-    """每轮 4 维度评分。Task 9 实现。"""
-    raise NotImplementedError("evaluator_node is implemented in Task 9")
+    context = _build_evaluator_context(state)
+    try:
+        await _evaluator_reason_stream(context)
+    except Exception as exc:
+        log.warning("evaluator_reason_failed", error=str(exc))
+
+    try:
+        scoring = await _evaluator_score(context)
+    except Exception as exc:
+        log.error("evaluator_score_failed", error=str(exc))
+        return {**state, "turn_evaluations": list(state.get("turn_evaluations", []))}
+
+    entry: TurnEvaluation = {
+        "question_index": state.get("current_question_index", state.get("question_count", 0)),
+        "followup_index": state.get("followup_count", 0),
+        "bullets": list(scoring.bullets),
+        "technical_depth": scoring.technical_depth,
+        "quantified_results": scoring.quantified_results,
+        "failure_tradeoffs": scoring.failure_tradeoffs,
+        "structure": scoring.structure,
+        "summary_score": scoring.summary_score,
+    }
+    updated = list(state.get("turn_evaluations", []))
+    updated.append(entry)
+    log.info("evaluator_done", summary_score=scoring.summary_score)
+    return {**state, "turn_evaluations": updated}
 
 
 async def _report_aggregate_text(state: InterviewState, dim_avg: dict[str, float]):
