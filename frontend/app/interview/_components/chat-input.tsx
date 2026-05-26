@@ -445,6 +445,7 @@ export function ChatInput({ onSend, isStreaming, onUploadFile }: ChatInputProps)
                 }
               }}
               disabled={isStreaming || isUploading}
+              suppressHydrationWarning
             />
 
             {/* 动态自动展开的 TextArea 区域：上传期间输入框处于禁用状态，placeholder保持干净清爽 */}
@@ -468,6 +469,7 @@ export function ChatInput({ onSend, isStreaming, onUploadFile }: ChatInputProps)
               placeholder="输入方向、题目或粘贴 JD..."
               value={value}
               rows={1}
+              suppressHydrationWarning
             />
 
             {/* 发送消息按钮与微动效 Tooltip */}
