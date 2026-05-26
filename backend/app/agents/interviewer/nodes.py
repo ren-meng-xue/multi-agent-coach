@@ -1,4 +1,6 @@
 """Node functions for the multi-agent interviewer LangGraph."""
+from __future__ import annotations
+
 from typing import Any
 
 from langchain_core.messages import BaseMessage, SystemMessage
@@ -15,6 +17,8 @@ from app.agents.interviewer.prompts import (
     MASTER_DECISION_PROMPT,
     MASTER_REASONING_PROMPT,
     QUESTION_SYSTEM_PROMPT,
+    REPORT_AGGREGATE_SYSTEM_PROMPT,
+    REPORT_FALLBACK_SYSTEM_PROMPT,
 )
 from app.agents.interviewer.state import InterviewState, TurnEvaluation
 from app.core.config import get_settings
@@ -295,14 +299,79 @@ async def evaluator_node(state: InterviewState) -> InterviewState:
     return {**state, "turn_evaluations": updated}
 
 
-async def _report_aggregate_text(state: InterviewState, dim_avg: dict[str, float]):
-    """Task 10 实装。"""
-    raise NotImplementedError("_report_aggregate_text is implemented in Task 10")
+class _ReportTextOutput(BaseModel):
+    highlights: list[str] = []
+    improvements: list[str] = []
+    key_concepts: list[str] = []
+    common_mistakes: list[str] = []
 
 
-async def _report_fallback_full_eval(state: InterviewState):
-    """Task 10 实装。"""
-    raise NotImplementedError("_report_fallback_full_eval is implemented in Task 10")
+@_retry_llm
+async def _report_aggregate_text(state: InterviewState, dim_avg: dict[str, float]) -> _ReportTextOutput:
+    """已有 turn_evaluations：仅做文字归纳，不重新打分。"""
+    bullet_lines: list[str] = []
+    for ev in state.get("turn_evaluations", []):
+        for b in ev.get("bullets", []):
+            bullet_lines.append(f"- 第{ev.get('question_index', '?')}题: {b}")
+    bullet_block = "\n".join(bullet_lines) if bullet_lines else "（无）"
+    score_block = (
+        f"维度平均：技术深度 {dim_avg['technical_depth']:.1f}，"
+        f"量化 {dim_avg['quantified_results']:.1f}，"
+        f"失败处理 {dim_avg['failure_tradeoffs']:.1f}，"
+        f"结构 {dim_avg['structure']:.1f}"
+    )
+    context_msg = SystemMessage(
+        content=f"{REPORT_AGGREGATE_SYSTEM_PROMPT}\n\n"
+                f"【评分上下文】：\n{score_block}\n\n"
+                f"【每轮要点摘要】：\n{bullet_block}"
+    )
+    model = _chat_model().with_structured_output(_ReportTextOutput)
+    history = list(state.get("messages", []))
+    out = await model.ainvoke([*history, context_msg])
+    if isinstance(out, _ReportTextOutput):
+        return out
+    return _ReportTextOutput()
+
+
+@_retry_llm
+async def _report_fallback_full_eval(state: InterviewState) -> ReportOutput:
+    model = _chat_model().with_structured_output(ReportOutput)
+    out = await model.ainvoke(
+        [*_state_messages(state), SystemMessage(content=REPORT_FALLBACK_SYSTEM_PROMPT)]
+    )
+    if isinstance(out, ReportOutput):
+        return out
+    return ReportOutput(
+        overall_score=0.0,
+        technical_depth=0.0, quantified_results=0.0,
+        failure_tradeoffs=0.0, structure=0.0,
+        highlights=[], improvements=[], key_concepts=[], common_mistakes=[],
+    )
+
+
+def _average_dimensions(evals: list[dict]) -> dict[str, float]:
+    n = max(len(evals), 1)
+    dims = ("technical_depth", "quantified_results", "failure_tradeoffs", "structure")
+    return {d: sum(float(e.get(d, 0)) for e in evals) / n for d in dims}
+
+
+def _report_output_to_dict(out: Any) -> dict[str, Any]:
+    if hasattr(out, "model_dump"):
+        dumped = out.model_dump()
+        if isinstance(dumped, dict):
+            return dumped
+    fields = (
+        "overall_score",
+        "technical_depth",
+        "quantified_results",
+        "failure_tradeoffs",
+        "structure",
+        "highlights",
+        "improvements",
+        "key_concepts",
+        "common_mistakes",
+    )
+    return {field: getattr(out, field) for field in fields}
 
 
 async def generate_prepared_question_reply(question_text: str, state: InterviewState) -> str:
@@ -373,5 +442,36 @@ class ReportOutput(BaseModel):
 
 
 async def report_node(state: InterviewState) -> InterviewState:
-    """聚合 turn_evaluations 出最终报告。Task 11 实现。"""
-    raise NotImplementedError("report_node aggregation is implemented in Task 11")
+    evals = state.get("turn_evaluations", [])
+
+    if not evals:
+        log.warning("report_fallback_no_turn_evals")
+        try:
+            out = await _report_fallback_full_eval(state)
+            return {"report": _report_output_to_dict(out)}
+        except Exception as exc:
+            log.error("report_fallback_failed", error=str(exc))
+            return {"report": {}}
+
+    dim_avg = _average_dimensions(evals)
+    overall = sum(dim_avg.values()) / 4
+
+    try:
+        text = await _report_aggregate_text(state, dim_avg)
+    except Exception as exc:
+        log.error("report_aggregate_text_failed", error=str(exc))
+        return {"report": {}}
+
+    report = {
+        "overall_score": round(overall, 1),
+        "technical_depth": round(dim_avg["technical_depth"], 1),
+        "quantified_results": round(dim_avg["quantified_results"], 1),
+        "failure_tradeoffs": round(dim_avg["failure_tradeoffs"], 1),
+        "structure": round(dim_avg["structure"], 1),
+        "highlights": list(text.highlights),
+        "improvements": list(text.improvements),
+        "key_concepts": list(text.key_concepts),
+        "common_mistakes": list(text.common_mistakes),
+        "turn_evaluations": list(evals),
+    }
+    return {"report": report}
