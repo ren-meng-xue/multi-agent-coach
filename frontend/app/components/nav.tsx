@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 
 const navItems = [
   { label: "Coach", href: "/coach" },
-  { label: "面试房间", href: "/interview" },
   { label: "个人仪表盘", href: "/dashboard" },
   { label: "复盘报告", href: "/reports" },
   { label: "设置 & 故事库", href: "/settings" },

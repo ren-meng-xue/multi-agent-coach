@@ -24,6 +24,7 @@ export interface PrepareSSEEvent {
     chain?: string[];
     need_direction?: boolean;
     prepared_questions?: PreparedQuestion[];
+    jd_context?: JDContext;
     summary?: string;
     direction?: string;
     message?: string;

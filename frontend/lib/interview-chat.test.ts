@@ -213,10 +213,10 @@ describe("resetInterviewSession", () => {
     );
   });
 
-  it("HTTP 失败时静默忽略（不抛错）", async () => {
+  it("HTTP 失败时向上抛出错误", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 500 })));
 
-    await expect(resetInterviewSession({ token: "test-token" })).resolves.toBeUndefined();
+    await expect(resetInterviewSession({ token: "test-token" })).rejects.toThrow("Reset failed");
   });
 });
 
@@ -345,3 +345,74 @@ describe("resetInterviewSession with context", () => {
     expect(body).toEqual({});
   });
 });
+
+describe("enterInterviewRoom", () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  it("写 sessionStorage 并 push /interview", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ status: "ok" }), { status: 200 }),
+    );
+    const push = vi.fn();
+    const router = { push, replace: vi.fn() } as unknown as any;
+
+    process.env.NEXT_PUBLIC_API_URL = "http://api";
+
+    const { enterInterviewRoom } = await import("./interview-chat");
+    await enterInterviewRoom({
+      getToken: async () => "tok",
+      router,
+      context: { target_role: "AI Agent 工程师", user_background: "bg" },
+    });
+
+    const raw = sessionStorage.getItem("interview_context");
+    expect(raw).toBeTruthy();
+    expect(JSON.parse(raw!)).toMatchObject({ target_role: "AI Agent 工程师", user_background: "bg" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api/api/v1/interview/reset",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(push).toHaveBeenCalledWith("/interview");
+  });
+
+  it("reset 接口失败时仍然 push，仅 warn", async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error("network"));
+    vi.stubGlobal("fetch", fetchMock);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const push = vi.fn();
+    const router = { push, replace: vi.fn() } as unknown as any;
+
+    process.env.NEXT_PUBLIC_API_URL = "http://api";
+
+    const { enterInterviewRoom } = await import("./interview-chat");
+    await enterInterviewRoom({
+      getToken: async () => "tok",
+      router,
+      context: { target_role: "前端工程师" },
+    });
+
+    expect(push).toHaveBeenCalledWith("/interview");
+    expect(warn).toHaveBeenCalled();
+  });
+
+  it("getToken 返回 null 时跳过 reset 但仍 push", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const push = vi.fn();
+    const router = { push, replace: vi.fn() } as unknown as any;
+
+    const { enterInterviewRoom } = await import("./interview-chat");
+    await enterInterviewRoom({
+      getToken: async () => null,
+      router,
+      context: { target_role: "后端工程师" },
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(push).toHaveBeenCalledWith("/interview");
+  });
+});
+

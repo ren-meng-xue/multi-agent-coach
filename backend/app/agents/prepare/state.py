@@ -37,6 +37,8 @@ class PrepareState(TypedDict, total=False):
     star_stories: list[dict[str, Any]]  # 来自 UserStory 表
     jd_context: JDContext | None
     prepared_questions: list[PreparedQuestion]
+    # 第五步「教练 Agent + 共享记忆层」预留：长期记忆/爱好记忆注入槽。本次不实现填充。
+    long_memory: list[dict[str, Any]]
 
     # 最终输出
     summary: str                 # LLM 生成的一句话摘要（非固定文案）

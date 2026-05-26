@@ -159,6 +159,9 @@ export type CoachOpeningMessageResponse = {
   evidence: string | null;
   focus_today: string;
   cta_type: "new" | "returning";
+  // 第五步「教练 Agent + 共享记忆层」预留：默认空数组，本次不渲染
+  long_memory_hints?: string[];
+  hobby_hints?: string[];
 };
 
 type StreamInterviewChatOptions = {
@@ -322,17 +325,16 @@ export async function resetInterviewSession({
   if (target_role) body.target_role = target_role;
   if (user_background) body.user_background = user_background;
 
-  try {
-    await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/interview/reset`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
-  } catch {
-    // 网络错误不阻塞 UI 初始化
+  const res = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/interview/reset`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(`Reset failed with HTTP status: ${res.status}`);
   }
 }
 
@@ -432,3 +434,45 @@ async function* _readPrepareStream(
     reader.releaseLock();
   }
 }
+
+type AppRouter = {
+  push: (href: string) => void;
+  replace: (href: string) => void;
+};
+
+export type EnterInterviewRoomContext = {
+  target_role: string;
+  user_background?: string;
+  jd_text?: string;
+  jd_url?: string;
+};
+
+/** 统一封装从任意入口进入 /interview 的流程：写 sessionStorage + reset 后台 session + push。
+ *  reset 失败仅 warn，不阻塞跳转 —— 路由守卫层会兜底处理无 active session 的情况。 */
+export async function enterInterviewRoom({
+  getToken,
+  router,
+  context,
+}: {
+  getToken: () => Promise<string | null>;
+  router: AppRouter;
+  context: EnterInterviewRoomContext;
+}): Promise<void> {
+  sessionStorage.setItem("interview_context", JSON.stringify(context));
+
+  const token = await getToken();
+  if (token) {
+    try {
+      await resetInterviewSession({
+        token,
+        target_role: context.target_role,
+        user_background: context.user_background,
+      });
+    } catch (err) {
+      console.warn("enterInterviewRoom: reset failed, proceeding anyway", err);
+    }
+  }
+
+  router.push("/interview");
+}
+
