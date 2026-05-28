@@ -55,7 +55,7 @@ async def trigger_eval(
     if not suite:
         raise HTTPException(status_code=404, detail="Suite not found")
 
-    cases = suite.cases
+    cases = list(suite.cases)
     if request.limit:
         cases = cases[:request.limit]
 
@@ -79,11 +79,17 @@ async def trigger_eval(
         total_cases=len(cases),
         system_version=request.system_version
     )
+    run_id = run.id
 
-    runner = EvalRunner(storage, judge, dispatch_system_call)
-    background_tasks.add_task(runner.run, run.id, cases)
+    # background task 会在请求 session 关闭后才运行，必须把 cases 从
+    # 请求 session 解绑，否则 runner 内部并发 task 仍会撞共享 session race。
+    for c in cases:
+        db.expunge(c)
 
-    return run.id
+    runner = EvalRunner(async_session_factory, judge, dispatch_system_call)
+    background_tasks.add_task(runner.run, run_id, cases)
+
+    return run_id
 
 
 @router.get("/runs", response_model=list[EvalRunResponse])

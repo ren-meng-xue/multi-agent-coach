@@ -6,7 +6,7 @@ from uuid import UUID
 from app.db.session import async_session_factory
 from app.eval.datasets import load_suite
 from app.eval.dimensions import JudgeMode
-from app.eval.judge import BinaryJudge, ComparativeJudge, RubricJudge
+from app.eval.judge import BaseJudge, BinaryJudge, ComparativeJudge, RubricJudge
 from app.eval.regression import RegressionTester
 from app.eval.reporter import EvalReporter
 from app.eval.runner import EvalRunner
@@ -24,6 +24,7 @@ async def run_eval(args):
             return
 
         judge_config = JudgeConfig(model=args.judge_model, mode=args.judge_mode)
+        judge: BaseJudge
         if args.judge_mode == JudgeMode.RUBRIC:
             judge = RubricJudge(judge_config)
         elif args.judge_mode == JudgeMode.COMPARATIVE:
@@ -31,12 +32,10 @@ async def run_eval(args):
         else:
             judge = BinaryJudge(judge_config)
 
-        runner = EvalRunner(storage, judge, dispatch_system_call)
-        
-        cases = suite.cases
+        cases = list(suite.cases)
         if args.limit:
             cases = cases[:args.limit]
-            
+
         print(f"Running {len(cases)} cases for suite {args.suite}...")
         run = await storage.create_run(
             suite_id=suite.id,
@@ -46,12 +45,19 @@ async def run_eval(args):
             total_cases=len(cases),
             system_version=args.system_version
         )
-        
-        if not args.dry_run:
-            await runner.run(run.id, cases)
-            print(f"Run {run.id} completed.")
-        else:
-            print(f"Dry run: created run {run.id}")
+        run_id = run.id
+
+        # 把 cases 从外层 session 解绑，避免并发 task 与外层 session 共用
+        for c in cases:
+            db.expunge(c)
+
+    # 关闭外层 session 后，runner 用 factory 自己管理 per-task session
+    runner = EvalRunner(async_session_factory, judge, dispatch_system_call)
+    if not args.dry_run:
+        await runner.run(run_id, cases)
+        print(f"Run {run_id} completed.")
+    else:
+        print(f"Dry run: created run {run_id}")
 
 
 async def import_suite_cmd(args):

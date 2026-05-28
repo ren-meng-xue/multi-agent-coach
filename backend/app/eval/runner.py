@@ -1,7 +1,16 @@
+"""EvalRunner：并发跑 eval case，每个 case 在自己的 AsyncSession 里。
+
+为什么不共享 session：SQLAlchemy AsyncSession 不是协程安全的。
+当 max_concurrency > 1 时，多协程同时 commit/rollback 会撞
+InvalidRequestError / PendingRollbackError（S6 全量跑时实测过）。
+解法是 per-task session：每个并发单元从 session_factory 拿一个新的。
+"""
 import asyncio
 from collections.abc import Awaitable, Callable
+from contextlib import AbstractAsyncContextManager
 from datetime import UTC, datetime
 from typing import Any
+from uuid import UUID
 
 from app.core.logging import get_logger
 from app.eval.dimensions import TargetType
@@ -9,6 +18,7 @@ from app.eval.judge import BaseJudge
 from app.eval.storage import EvalStorage
 
 SystemCall = Callable[[TargetType, dict[str, Any]], Awaitable[dict[str, Any]]]
+SessionFactory = Callable[[], AbstractAsyncContextManager[Any]]
 
 log = get_logger("app.eval.runner")
 
@@ -16,90 +26,122 @@ log = get_logger("app.eval.runner")
 class EvalRunner:
     def __init__(
         self,
-        storage: EvalStorage,
+        session_factory: SessionFactory,
         judge: BaseJudge,
         system_call: SystemCall,
         max_concurrency: int = 5,
     ):
-        self.storage = storage
+        self.session_factory = session_factory
         self.judge = judge
         self.system_call = system_call
         self.max_concurrency = max_concurrency
 
-    async def run(self, run_id, cases):
+    async def run(self, run_id: UUID, cases: list[Any]) -> None:
         semaphore = asyncio.Semaphore(self.max_concurrency)
-        tasks = []
-        
-        await self.storage.update_run(run_id, status="running", started_at=datetime.now(UTC))
 
-        async def _run_one(case):
-            async with semaphore:
-                start_time = datetime.now(UTC).timestamp()
-                try:
-                    target_type = TargetType(case.target_type)
-                    # 1. System output：调真实 Agent 节点
-                    system_output = await self.system_call(target_type, case.input_json)
-                    latency = int((datetime.now(UTC).timestamp() - start_time) * 1000)
+        # 起跑：在自己的 session 里把 status 置 running
+        async with self.session_factory() as session:
+            storage = EvalStorage(session)
+            await storage.update_run(
+                run_id, status="running", started_at=datetime.now(UTC)
+            )
 
-                    # 2. Judge
-                    judge_result = await self.judge.judge(
-                        case.input_json, system_output, golden=case.golden_json, target_type=target_type
-                    )
+        async def _run_one(case: Any) -> None:
+            # 每个 case 在自己的 session 里执行，避免共享 AsyncSession 并发崩
+            async with semaphore, self.session_factory() as session:
+                    storage = EvalStorage(session)
+                    start_time = datetime.now(UTC).timestamp()
+                    try:
+                        target_type = TargetType(case.target_type)
+                        # 1. System output：调真实 Agent 节点
+                        system_output = await self.system_call(target_type, case.input_json)
+                        latency = int(
+                            (datetime.now(UTC).timestamp() - start_time) * 1000
+                        )
 
-                    # 3. Save
-                    await self.storage.save_result({
-                        "run_id": run_id,
-                        "case_id": case.id,
-                        "case_key": case.case_key,
-                        "target_type": case.target_type,
-                        "system_output": system_output,
-                        "judge_scores": judge_result.model_dump() if hasattr(judge_result, "model_dump") else {},
-                        "judge_reasoning": getattr(judge_result, "reasoning", ""),
-                        "overall_score": getattr(judge_result, "overall", None),
-                        "binary_pass": getattr(judge_result, "passed", None),
-                        "latency_ms": latency,
-                    })
-                except Exception as e:
-                    log.error("eval_case_failed", case_key=case.case_key, error=str(e))
-                finally:
-                    # Increment completed cases
-                    run = await self.storage.get_run(run_id)
-                    if run:
-                        await self.storage.update_run(run_id, completed_cases=run.completed_cases + 1)
+                        # 2. Judge
+                        judge_result = await self.judge.judge(
+                            case.input_json,
+                            system_output,
+                            golden=case.golden_json,
+                            target_type=target_type,
+                        )
 
-        for case in cases:
-            tasks.append(_run_one(case))
-        
-        await asyncio.gather(*tasks)
-        results = await self.storage.get_results(run_id)
-        stats: dict[str, dict[str, float]] = {}
-        for r in results:
-            t = r.target_type
-            if t not in stats:
-                stats[t] = {"sum": 0.0, "pass": 0.0, "count": 0.0}
-            stats[t]["sum"] += float(r.overall_score or 0.0)
-            if r.binary_pass:
-                stats[t]["pass"] += 1.0
-            stats[t]["count"] += 1.0
+                        # 3. Save
+                        await storage.save_result({
+                            "run_id": run_id,
+                            "case_id": case.id,
+                            "case_key": case.case_key,
+                            "target_type": case.target_type,
+                            "system_output": system_output,
+                            "judge_scores": (
+                                judge_result.model_dump()
+                                if hasattr(judge_result, "model_dump") else {}
+                            ),
+                            "judge_reasoning": getattr(judge_result, "reasoning", ""),
+                            "overall_score": getattr(judge_result, "overall", None),
+                            "binary_pass": getattr(judge_result, "passed", None),
+                            "latency_ms": latency,
+                        })
+                    except Exception as e:
+                        log.error(
+                            "eval_case_failed",
+                            case_key=case.case_key,
+                            error=str(e),
+                        )
+                    finally:
+                        # 更新 completed_cases。
+                        # 已知问题：get→add→update 模式在并发下仍可能丢更新（race）。
+                        # 修复需要把它改成原子 SQL `completed_cases = completed_cases + 1`，
+                        # 留作单独 commit / QA §5 已知问题。本次只修 session race。
+                        try:
+                            run_row = await storage.get_run(run_id)
+                            if run_row:
+                                await storage.update_run(
+                                    run_id,
+                                    completed_cases=run_row.completed_cases + 1,
+                                )
+                        except Exception as exc:
+                            log.warning(
+                                "eval_progress_update_failed",
+                                case_key=case.case_key,
+                                error=str(exc),
+                            )
 
-        by_target_type = {
-            t: {
-                "avg": v["sum"] / v["count"] if v["count"] > 0 else 0.0,
-                "pass_rate": v["pass"] / v["count"] if v["count"] > 0 else 0.0,
-                "count": int(v["count"]),
+        await asyncio.gather(*(_run_one(c) for c in cases))
+
+        # 收尾：用自己的 session 聚合结果 + 标记完成
+        async with self.session_factory() as session:
+            storage = EvalStorage(session)
+            results = await storage.get_results(run_id)
+            stats: dict[str, dict[str, float]] = {}
+            for r in results:
+                t = r.target_type
+                if t not in stats:
+                    stats[t] = {"sum": 0.0, "pass": 0.0, "count": 0.0}
+                stats[t]["sum"] += float(r.overall_score or 0.0)
+                if r.binary_pass:
+                    stats[t]["pass"] += 1.0
+                stats[t]["count"] += 1.0
+
+            by_target_type = {
+                t: {
+                    "avg": v["sum"] / v["count"] if v["count"] > 0 else 0.0,
+                    "pass_rate": v["pass"] / v["count"] if v["count"] > 0 else 0.0,
+                    "count": int(v["count"]),
+                }
+                for t, v in stats.items()
             }
-            for t, v in stats.items()
-        }
-        overall = (
-            sum(v["avg"] for v in by_target_type.values()) / len(by_target_type)
-            if by_target_type
-            else 0.0
-        )
-        aggregate_scores = {"overall": overall, "by_target_type": by_target_type}
+            overall = (
+                sum(v["avg"] for v in by_target_type.values()) / len(by_target_type)
+                if by_target_type
+                else 0.0
+            )
+            aggregate_scores = {"overall": overall, "by_target_type": by_target_type}
 
-        await self.storage.update_run(
-            run_id,
-            aggregate_scores=aggregate_scores,
-            status="completed",
-            completed_at=datetime.now(UTC),
-        )
+            await storage.update_run(
+                run_id,
+                aggregate_scores=aggregate_scores,
+                status="completed",
+                completed_at=datetime.now(UTC),
+            )
