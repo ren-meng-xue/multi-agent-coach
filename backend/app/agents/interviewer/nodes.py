@@ -129,6 +129,11 @@ def _build_master_context(state: InterviewState) -> str:
     parts.append(f"当题追问次数：{state.get('followup_count', 0)} / {state.get('max_followups', 2)}")
     if state.get("target_role"):
         parts.append(f"目标岗位：{state['target_role']}")
+
+    profile = state.get("candidate_profile") or {}
+    if profile.get("latest_level"):
+        parts.append(f"候选人画像：{profile['latest_level']}；已识别信号：{', '.join(profile.get('latent_signals', [])[:5])}")
+
     last_user_msg = ""
     for m in reversed(state.get("messages", [])):
         if getattr(m, "type", "") == "human":
@@ -220,10 +225,12 @@ async def master_node(state: InterviewState) -> InterviewState:
         decision = await _master_phase2_decide(context)
         chain = list(decision.chain)
         reason = decision.reason
+        followup_focus = decision.followup_focus
     except Exception as exc:
         log.error("master_phase2_failed", error=str(exc))
         chain = []
         reason = "Phase 2 fallback"
+        followup_focus = ""
 
     final_chain = _enforce_chain(chain, state)
 
@@ -232,6 +239,7 @@ async def master_node(state: InterviewState) -> InterviewState:
         **state,
         "chain": final_chain,
         "master_reason": reason,
+        "followup_focus": followup_focus,
     }
 
 

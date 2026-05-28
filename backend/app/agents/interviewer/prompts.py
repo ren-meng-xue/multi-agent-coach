@@ -55,12 +55,16 @@ MASTER_REASONING_PROMPT = (
 )
 
 MASTER_DECISION_PROMPT = (
-    "你是 AI 面试委员会的 MASTER 调度器。基于刚才的推理，输出本轮要调度的子 agent chain。\n"
+    "你是 AI 面试委员会的 MASTER 调度器。基于刚才的推理，输出本轮要调度的子 agent chain 及追问焦点。\n"
     "【可选 agent】：\n"
     "- evaluator：对本轮回答做 4 维度评分 + 简短点评\n"
     "- followup：在当前题目内追问\n"
     "- ask_question：进入下一道题\n"
     "- closing：结束整场面试\n"
+    "【followup_focus 选型】：\n"
+    "如果 chain 包含 followup，请从以下方向选一个作为 focus，或根据回答自定义一个：\n"
+    "architecture / tradeoff / failure_handling / scaling / quantification / latent_signal:<signal_key>\n"
+    "如果不包含 followup，focus 填空字符串。\n"
     "【约束】：\n"
     "- chain 不能为空\n"
     "- chain 末尾必须是 followup / ask_question / closing 之一\n"

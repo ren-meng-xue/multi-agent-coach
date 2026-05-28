@@ -2,6 +2,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from langchain_core.messages import HumanMessage
 
 from app.agents.interviewer.nodes import master_node
 
@@ -128,3 +129,56 @@ def test_master_decision_defaults_followup_focus():
 
     d = _InterviewMasterDecision()
     assert d.followup_focus == ""
+
+
+# ─────────────────────────────────────────────
+# Phase 4+ Step 3 业务逻辑测试
+# ─────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_master_writes_followup_focus_to_state():
+    from app.agents.interviewer.nodes import master_node
+    fake_decision = MagicMock(
+        chain=["evaluator", "followup"],
+        reason="深挖架构",
+        followup_focus="architecture",
+    )
+    state = {
+        "question_count": 1,  # 非首轮
+        "total_questions": 5,
+        "followup_count": 0,
+        "max_followups": 2,
+        "messages": [HumanMessage(content="我用了 Redis 做缓存")],
+        "candidate_profile": {"latest_level": "junior", "latent_signals": ["caching"]},
+    }
+    with patch("app.agents.interviewer.nodes._master_phase1_stream", new=AsyncMock()), \
+         patch("app.agents.interviewer.nodes._master_phase2_decide", new=AsyncMock(return_value=fake_decision)):
+        result = await master_node(state)
+    assert result["followup_focus"] == "architecture"
+    assert result["chain"] == ["evaluator", "followup"]
+
+
+@pytest.mark.asyncio
+async def test_master_context_contains_candidate_profile():
+    from app.agents.interviewer.nodes import master_node
+    captured = {}
+    fake_decision = MagicMock(chain=["evaluator", "followup"], reason="", followup_focus="")
+    async def fake_decide(context: str):
+        captured["context"] = context
+        return fake_decision
+    state = {
+        "question_count": 1,
+        "total_questions": 5,
+        "followup_count": 0,
+        "max_followups": 2,
+        "messages": [HumanMessage(content="我处理事件流")],
+        "candidate_profile": {
+            "latest_level": "beginner",
+            "latent_signals": ["workflow_orchestration"],
+        },
+    }
+    with patch("app.agents.interviewer.nodes._master_phase1_stream", new=AsyncMock()), \
+         patch("app.agents.interviewer.nodes._master_phase2_decide", new=AsyncMock(side_effect=fake_decide)):
+        await master_node(state)
+    assert "beginner" in captured["context"]
+    assert "workflow_orchestration" in captured["context"]
