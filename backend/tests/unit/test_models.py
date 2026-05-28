@@ -9,7 +9,14 @@ register_models()
 def test_users_table_registered():
     """确保核心业务表被 SQLAlchemy 发现。"""
     table_names = set(Base.metadata.tables.keys())
-    assert table_names == {"users", "user_stories", "interview_sessions", "interview_messages"}
+    assert table_names == {
+        "users",
+        "user_stories",
+        "interview_sessions",
+        "interview_messages",
+        "candidate_memory",
+        "coach_plans",
+    }
 
 
 def test_users_table_columns():
