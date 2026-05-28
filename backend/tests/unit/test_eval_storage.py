@@ -1,11 +1,9 @@
 """测试 EvalStorage 原子 increment 操作。"""
-import asyncio
 from uuid import uuid4
 
 import pytest
 
 from app.eval.storage import EvalStorage
-from app.models.eval import EvalRun
 
 
 @pytest.mark.asyncio
