@@ -116,3 +116,15 @@ async def test_master_empty_chain_falls_back():
          patch("app.agents.interviewer.nodes._master_phase2_decide", new=AsyncMock(return_value=fake_decision)):
         result = await master_node(state)
     assert result["chain"] == ["evaluator", "followup"]
+
+
+# ─────────────────────────────────────────────
+# Phase 4+ schema 扩展（Step 1）
+# ─────────────────────────────────────────────
+
+def test_master_decision_defaults_followup_focus():
+    """_InterviewMasterDecision 必须默认 followup_focus='' 以兼容旧 LLM 输出。"""
+    from app.agents.interviewer.nodes import _InterviewMasterDecision
+
+    d = _InterviewMasterDecision()
+    assert d.followup_focus == ""

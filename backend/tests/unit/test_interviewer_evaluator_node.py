@@ -74,3 +74,46 @@ async def test_evaluator_appends_not_overwrites():
         result = await evaluator_node(state)
     assert len(result["turn_evaluations"]) == 2
     assert result["turn_evaluations"][0]["summary_score"] == 7.0
+
+
+# ─────────────────────────────────────────────
+# Phase 4+ schema 扩展（Step 1）
+# ─────────────────────────────────────────────
+
+def test_turn_evaluation_accepts_new_optional_fields():
+    """TurnEvaluation TypedDict 接受 candidate_level / latent_signals / missing_dimensions。"""
+    from app.agents.interviewer.state import TurnEvaluation
+
+    entry: TurnEvaluation = {
+        "question_index": 1,
+        "candidate_level": "junior",
+        "latent_signals": ["workflow_orchestration"],
+        "missing_dimensions": ["quantification"],
+    }
+    assert entry["candidate_level"] == "junior"
+    assert entry["latent_signals"] == ["workflow_orchestration"]
+    assert entry["missing_dimensions"] == ["quantification"]
+
+
+def test_evaluator_scoring_defaults_new_fields():
+    """_EvaluatorScoring 新字段必须有默认值，避免 LLM 缺字段时崩溃。"""
+    from app.agents.interviewer.nodes import _EvaluatorScoring
+
+    s = _EvaluatorScoring()
+    assert s.candidate_level == "junior"
+    assert s.latent_signals == []
+    assert s.missing_dimensions == []
+
+
+def test_candidate_profile_typed_dict_shape():
+    """CandidateProfile TypedDict 字段可读写。"""
+    from app.agents.interviewer.state import CandidateProfile
+
+    profile: CandidateProfile = {
+        "latest_level": "mid",
+        "latent_signals": ["a", "b"],
+        "last_updated_turn": 3,
+    }
+    assert profile["latest_level"] == "mid"
+    assert profile["latent_signals"] == ["a", "b"]
+    assert profile["last_updated_turn"] == 3

@@ -1,7 +1,7 @@
 """Node functions for the multi-agent interviewer LangGraph."""
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from langchain_core.messages import BaseMessage, SystemMessage
 from langchain_openai import ChatOpenAI
@@ -114,6 +114,8 @@ async def load_context_node(state: InterviewState) -> InterviewState:
 class _InterviewMasterDecision(BaseModel):
     chain: list[str] = []
     reason: str = ""
+    # Phase 4+：追问朝哪个方向（空串表示无 focus）
+    followup_focus: str = ""
 
 
 CHAIN_NODES = {"evaluator", "followup", "ask_question", "closing"}
@@ -240,6 +242,10 @@ class _EvaluatorScoring(BaseModel):
     failure_tradeoffs: float = 5.0
     structure: float = 5.0
     summary_score: float = 5.0
+    # Phase 4+：候选人建模 + 隐含信号
+    candidate_level: Literal["beginner", "junior", "mid", "senior"] = "junior"
+    latent_signals: list[str] = []
+    missing_dimensions: list[str] = []
 
 
 def _build_evaluator_context(state: InterviewState) -> str:

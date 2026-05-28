@@ -6,6 +6,9 @@ from langchain_core.messages import BaseMessage
 InterviewStage = Literal["opening", "interview", "closing"]
 
 
+CandidateLevel = Literal["beginner", "junior", "mid", "senior"]
+
+
 class TurnEvaluation(TypedDict, total=False):
     """单轮答题的评估结果，由 evaluator_node 写入。"""
 
@@ -17,6 +20,18 @@ class TurnEvaluation(TypedDict, total=False):
     failure_tradeoffs: float
     structure: float
     summary_score: float
+    # Phase 4+：候选人建模 + 隐含信号
+    candidate_level: CandidateLevel
+    latent_signals: list[str]
+    missing_dimensions: list[str]
+
+
+class CandidateProfile(TypedDict, total=False):
+    """跨轮累积的候选人画像（仅 session 内）。"""
+
+    latest_level: CandidateLevel
+    latent_signals: list[str]  # 累积去重保序
+    last_updated_turn: int
 
 
 class InterviewState(TypedDict, total=False):
@@ -46,6 +61,10 @@ class InterviewState(TypedDict, total=False):
     chain: list[str]  # 本轮 chain，由 master_node 输出
     master_reason: str  # log 用，不展示
     turn_evaluations: list[TurnEvaluation]  # 累积所有轮次评估，report_node 聚合
+
+    # Phase 4+：候选人建模 + 追问方向
+    candidate_profile: CandidateProfile  # 跨轮累积
+    followup_focus: str  # 由 master 输出，followup 消费，单轮有效
 
     # 报告
     report: dict[str, Any]
