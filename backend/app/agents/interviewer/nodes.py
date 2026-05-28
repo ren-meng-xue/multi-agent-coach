@@ -538,8 +538,9 @@ async def report_node(state: InterviewState) -> InterviewState:
     db = state.get("db")
     user_id = state.get("user_id")
     if user_id and hasattr(db, "execute"):  # 简单的 AsyncSession 运行时检查
-        from sqlalchemy.ext.asyncio import AsyncSession
         from uuid import UUID
+
+        from sqlalchemy.ext.asyncio import AsyncSession
 
         if isinstance(db, AsyncSession):
             try:
