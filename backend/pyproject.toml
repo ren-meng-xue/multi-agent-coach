@@ -30,6 +30,9 @@ dependencies = [
     "beautifulsoup4>=4.12.3",
 ]
 
+[project.scripts]
+eval-cli = "app.eval.cli:main"
+
 [dependency-groups]
 dev = [
     "pytest>=8.3",

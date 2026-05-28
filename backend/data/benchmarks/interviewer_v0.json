@@ -1,0 +1,12 @@
+{
+  "name": "interviewer_v0",
+  "judge_mode": "rubric",
+  "cases": [
+    {
+      "id": "q_001",
+      "target_type": "question",
+      "input_json": {"role": "AI"},
+      "golden": {"overall": 8.0}
+    }
+  ]
+}

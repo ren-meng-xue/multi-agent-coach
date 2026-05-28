@@ -23,6 +23,18 @@ config.set_main_option("sqlalchemy.url", settings.database_url)
 target_metadata = Base.metadata
 
 
+def include_object(obj, name, type_, reflected, compare_to):
+    """排除由 LangGraph 等其他工具管理的表。"""
+    if type_ == "table" and name in [
+        "checkpoints",
+        "checkpoint_blobs",
+        "checkpoint_writes",
+        "checkpoint_migrations",
+    ]:
+        return False
+    return True
+
+
 def run_migrations_offline() -> None:
     """离线模式：生成 SQL 脚本而不连接数据库。"""
     url = config.get_main_option("sqlalchemy.url")
@@ -31,6 +43,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_object=include_object,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -38,7 +51,9 @@ def run_migrations_offline() -> None:
 
 def do_run_migrations(connection: Connection) -> None:
     """在线模式：在给定连接上执行迁移。"""
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection, target_metadata=target_metadata, include_object=include_object
+    )
     with context.begin_transaction():
         context.run_migrations()
 
