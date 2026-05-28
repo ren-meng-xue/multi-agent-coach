@@ -1,8 +1,11 @@
 """验证用户阶段派生逻辑。"""
-import pytest
 from datetime import datetime
-from app.models.core import User, InterviewSession, CoachPlan
+
+import pytest
+
+from app.models.core import CoachPlan, InterviewSession, User
 from app.services.user_stage import derive_user_stage
+
 
 @pytest.fixture
 async def test_user(db):
