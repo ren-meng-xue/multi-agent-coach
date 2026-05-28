@@ -23,6 +23,7 @@ from app.agents.interviewer.prompts import (
 from app.agents.interviewer.state import CandidateProfile, InterviewState, TurnEvaluation
 from app.core.config import get_settings
 from app.core.logging import get_logger
+from app.services.candidate_memory import upsert_candidate_memory
 
 log = get_logger("app.agents.interviewer.nodes")
 
@@ -532,4 +533,38 @@ async def report_node(state: InterviewState) -> InterviewState:
         "common_mistakes": list(text.common_mistakes),
         "turn_evaluations": list(evals),
     }
+
+    # Phase 5: 持久化候选人画像到长期记忆
+    db = state.get("db")
+    user_id = state.get("user_id")
+    if user_id and hasattr(db, "execute"):  # 简单的 AsyncSession 运行时检查
+        from sqlalchemy.ext.asyncio import AsyncSession
+        from uuid import UUID
+
+        if isinstance(db, AsyncSession):
+            try:
+                profile = state.get("candidate_profile") or {}
+                # 聚合所有轮次的缺失维度作为弱点标签
+                weakness_tags = []
+                for ev in evals:
+                    for dim in ev.get("missing_dimensions", []):
+                        if dim not in weakness_tags:
+                            weakness_tags.append(dim)
+
+                raw_sid = state.get("session_id")
+                session_id = UUID(str(raw_sid)) if raw_sid else None
+
+                await upsert_candidate_memory(
+                    db,
+                    user_id,
+                    latest_level=profile.get("latest_level"),
+                    latent_signals=profile.get("latent_signals") or [],
+                    weakness_tags=weakness_tags,
+                    session_id=session_id,
+                )
+                log.info("report_node_memory_persisted", user_id=user_id)
+            except Exception as exc:
+                # 失败不阻塞报告产出
+                log.warning("report_node_memory_persist_failed", error=str(exc), user_id=user_id)
+
     return {"report": report}
