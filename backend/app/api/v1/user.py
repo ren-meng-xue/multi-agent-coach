@@ -17,8 +17,19 @@ from app.schemas.user import (
     UserStoryUpdate,
 )
 from app.services.interview_turn import ensure_user_exists
+from app.services.user_stage import derive_user_stage
 
 router = APIRouter(prefix="/user")
+
+
+@router.get("/stage", response_model=Response[dict])
+async def get_user_stage(
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取用户当前所处的模拟面试阶段。"""
+    stage = await derive_user_stage(db, user_id=user_id)
+    return Response.ok(data={"stage": stage})
 
 
 @router.get("/profile", response_model=Response[UserProfile])
