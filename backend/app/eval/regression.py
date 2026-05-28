@@ -37,6 +37,49 @@ class RegressionTester:
                 comparison["degraded"].append(key)
             else:
                 comparison["stable"].append(key)
+
+        run_a = await self.storage.get_run(run_a_id)
+        suite_name = run_a.suite.name if run_a and run_a.suite else "unknown"
+
+        def _avg_by_type(results):
+            stats: dict[str, dict[str, float]] = {}
+            for r in results:
+                t = r.target_type
+                if t not in stats:
+                    stats[t] = {"sum": 0.0, "count": 0.0}
+                stats[t]["sum"] += float(r.overall_score or 0.0)
+                stats[t]["count"] += 1.0
+            return {
+                t: (v["sum"] / v["count"] if v["count"] > 0 else 0.0)
+                for t, v in stats.items()
+            }
+
+        avg_a = _avg_by_type(results_a)
+        avg_b = _avg_by_type(results_b)
+        all_types = set(avg_a) | set(avg_b)
+
+        for target_type in sorted(all_types):
+            score_a = avg_a.get(target_type, 0.0)
+            score_b = avg_b.get(target_type, 0.0)
+            delta = score_b - score_a
+            significant = abs(delta) > 0.5
+            if delta > 0.5:
+                winner = "b"
+            elif delta < -0.5:
+                winner = "a"
+            else:
+                winner = "tie"
+            await self.storage.save_comparison({
+                "run_a_id": run_a_id,
+                "run_b_id": run_b_id,
+                "suite_name": suite_name,
+                "metric": target_type,
+                "score_a": score_a,
+                "score_b": score_b,
+                "delta": delta,
+                "winner": winner,
+                "significant": significant,
+            })
         
         return comparison
 

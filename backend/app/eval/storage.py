@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.eval import EvalCase, EvalResult, EvalRun, EvalSuite
+from app.models.eval import EvalCase, EvalComparison, EvalResult, EvalRun, EvalSuite
 
 
 class EvalStorage:
@@ -101,6 +101,12 @@ class EvalStorage:
         stmt = select(EvalResult).where(EvalResult.run_id == run_id)
         res = await self.db.execute(stmt)
         return list(res.scalars().all())
+
+    async def save_comparison(self, comparison_data: dict) -> EvalComparison:
+        comparison = EvalComparison(**comparison_data)
+        self.db.add(comparison)
+        await self.db.commit()
+        return comparison
     
     async def get_latest_runs(self, suite_id: UUID, limit: int = 10) -> list[EvalRun]:
         stmt = select(EvalRun).where(EvalRun.suite_id == suite_id).order_by(EvalRun.created_at.desc()).limit(limit)
