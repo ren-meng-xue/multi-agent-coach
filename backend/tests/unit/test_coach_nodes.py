@@ -1,15 +1,18 @@
 """验证教练 Agent 各节点逻辑。"""
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
+
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.agents.coach.nodes import (
+    CoachPlanSchema,
     load_memory_node,
-    review_node,
-    plan_node,
     persist_node,
-    CoachPlanSchema
+    plan_node,
+    review_node,
 )
+
 
 @pytest.fixture
 def mock_db():
@@ -85,6 +88,11 @@ async def test_persist_node_writes_to_db(mock_db):
         "session_id": sid,
         "plan_json": {"summary": "总结"}
     }
+    
+    # 模拟 DB 查询：返回 None (表示无已有计划)
+    mock_res = MagicMock()
+    mock_res.scalar_one_or_none.return_value = None
+    mock_db.execute = AsyncMock(return_value=mock_res)
     
     # 模拟 SQLAlchemy 对象的行为
     def mock_add(obj):

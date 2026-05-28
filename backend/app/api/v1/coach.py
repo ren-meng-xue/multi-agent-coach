@@ -7,14 +7,13 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
-from app.agents.coach.graph import stream_coach_events
+from app.agents.coach.graph import stream_coach_full_events
 from app.api.v1.auth import get_current_user_id
 from app.core.logging import get_logger
 from app.db.session import get_db
 from app.models.core import CoachPlan, InterviewSession
 from app.schemas.coach import CoachPlanResponse
 from app.schemas.interview import CoachOpeningMessageResponse
-from app.schemas.response import Response
 from app.services.coach_opening import generate_coach_opening_message
 
 router = APIRouter(prefix="/coach")
@@ -66,29 +65,27 @@ async def start_coach_review(
                 "last_session_report": None,
             }
             
-            async for event in stream_coach_events(state):
-                # 将 Graph 的更新转换为前端需要的 SSE 事件
-                # 逻辑映射：
-                # review 节点运行 -> 产出 review_token (待 Graph 内部 tag 支持，此处先做节点级通知)
-                # plan 节点结束 -> plan_done
-                # persist 节点结束 -> final
-                
-                if "review" in event:
+            async for event in stream_coach_full_events(state):
+                kind = event.get("kind")
+                if kind == "token":
                     yield {
                         "event": "review_token",
-                        "data": json.dumps({"token": event["review"].get("review_text", "")})
+                        "data": json.dumps({"token": event["token"]})
                     }
-                elif "plan" in event:
-                    yield {
-                        "event": "plan_done",
-                        "data": json.dumps(event["plan"].get("plan_json", {}))
-                    }
-                elif "persist" in event:
-                    plan_id = event["persist"].get("plan_id")
-                    yield {
-                        "event": "final",
-                        "data": json.dumps({"plan_id": str(plan_id) if plan_id else None})
-                    }
+                elif kind == "node_update":
+                    node = event.get("node")
+                    data = event.get("data")
+                    if node == "plan":
+                        yield {
+                            "event": "plan_done",
+                            "data": json.dumps(data.get("plan_json", {}))
+                        }
+                    elif node == "persist":
+                        plan_id = data.get("plan_id")
+                        yield {
+                            "event": "final",
+                            "data": json.dumps({"plan_id": str(plan_id) if plan_id else None})
+                        }
         except Exception as exc:
             log.error("coach_review_sse_failed", error=str(exc))
             yield {
@@ -98,7 +95,8 @@ async def start_coach_review(
 
     return EventSourceResponse(event_generator())
 
-@router.get("/plans/latest", response_model=Response[CoachPlanResponse | None])
+
+@router.get("/plans/latest")
 async def get_latest_plan(
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
@@ -112,14 +110,15 @@ async def get_latest_plan(
     )
     result = await db.execute(stmt)
     plan = result.scalar_one_or_none()
-    
+
     if not plan:
-        return Response.ok(data=None)
-        
-    return Response.ok(data=CoachPlanResponse(
+        return {"code": 200, "msg": "success", "data": None}
+
+    data = CoachPlanResponse(
         id=plan.id,
         session_id=plan.session_id,
         plan_json=plan.plan_json,
         created_at=plan.created_at.isoformat(),
-        consumed=plan.consumed
-    ))
+        consumed=plan.consumed,
+    )
+    return {"code": 200, "msg": "success", "data": data}

@@ -190,6 +190,7 @@ export function CoachDashboard() {
 
   const [reviewText, setReviewText] = useState("");
   const [isReviewing, setIsReviewing] = useState(false);
+  const [isReviewStarted, setIsReviewStarted] = useState(false);
   const [streamingPlan, setStreamingPlan] = useState<CoachPlanData | null>(null);
 
   const [inputText, setInputText] = useState("");
@@ -216,9 +217,8 @@ export function CoachDashboard() {
         setMemorySessions(history.sessions.map((s, idx, arr) => mapHistoryItemToSession(s, idx, arr.length)));
         setIsLoading(false);
 
-        if (stageVal === "coach" && context.last_session_id) {
-          void startCoachReviewStream(token, context.last_session_id);
-        } else {
+        // 不再自动触发复盘流
+        if (stageVal !== "coach") {
           const opening = await fetchCoachOpeningMessage({ token });
           setCoachMessage(opening);
         }
@@ -229,10 +229,16 @@ export function CoachDashboard() {
     });
   }, [isLoaded, isSignedIn]);
 
-  const startCoachReviewStream = async (token: string, sessionId: string) => {
+  const startCoachReviewStream = async () => {
+    const token = isDevAuthBypassEnabled ? DEV_AUTH_BYPASS_TOKEN : await getToken();
+    const sessionId = contextData?.last_session_id;
+    if (!token || !sessionId) return;
+
+    setIsReviewStarted(true);
     setIsReviewing(true);
     setReviewText("");
-    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "";
+    
+    const baseUrl = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
     const response = await fetch(`${baseUrl}/api/v1/coach/review?session_id=${sessionId}`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
@@ -248,10 +254,14 @@ export function CoachDashboard() {
       const chunks = buffer.split("\n\n");
       buffer = chunks.pop() || "";
       for (const chunk of chunks) {
-        if (!chunk.startsWith("event: ")) continue;
         const lines = chunk.split("\n");
-        const eventName = lines[0].replace("event: ", "").trim();
-        const dataStr = lines[1].replace("data: ", "").trim();
+        let eventName = "";
+        let dataStr = "";
+        for (const line of lines) {
+          if (line.startsWith("event: ")) eventName = line.replace("event: ", "").trim();
+          if (line.startsWith("data: ")) dataStr = line.replace("data: ", "").trim();
+        }
+        if (!eventName || !dataStr) continue;
         try {
           const data = JSON.parse(dataStr);
           if (eventName === "review_token") setReviewText(prev => prev + data.token);
@@ -296,10 +306,22 @@ export function CoachDashboard() {
               
               {stage === "coach" && (
                 <div className="animate-in fade-in duration-700">
-                  <div className="text-xl md:text-2xl leading-relaxed text-[#171717] whitespace-pre-wrap font-medium">
-                    <CoachHighlightedText text={reviewText || (isReviewing ? "正在深度复盘本次面试..." : "")} />
-                  </div>
-                  {streamingPlan && <div className="mt-8"><CoachPlanCard plan={streamingPlan} onStart={() => handleStartInterview(streamingPlan)} /></div>}
+                  {!isReviewStarted ? (
+                    <div className="p-10 text-center rounded-3xl bg-[#faf9f5] border border-[#e8e7e2] shadow-sm">
+                      <h3 className="text-2xl font-bold mb-4 text-[#171717]">面试已圆满结束</h3>
+                      <p className="text-[#525252] mb-8 leading-relaxed">专家委员会已经完成了对你表现的初步评估。点击下方按钮，开始 1 对 1 深度复盘并获取专属训练计划。</p>
+                      <Button onClick={() => startCoachReviewStream()} className="bg-gradient-to-br from-[#7c3aed] to-[#4f46e5] text-white px-10 py-7 text-lg rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl font-bold">
+                        开始深度复盘 →
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="text-xl md:text-2xl leading-relaxed text-[#171717] whitespace-pre-wrap font-medium">
+                        <CoachHighlightedText text={reviewText || (isReviewing ? "正在深度复盘本次面试..." : "")} />
+                      </div>
+                      {streamingPlan && <div className="mt-8"><CoachPlanCard plan={streamingPlan} onStart={() => handleStartInterview(streamingPlan)} /></div>}
+                    </>
+                  )}
                 </div>
               )}
 

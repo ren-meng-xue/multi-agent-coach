@@ -15,6 +15,7 @@ from sqlalchemy import (
     Text,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -207,8 +208,8 @@ class CandidateMemory(Base):
         primary_key=True,
     )
     latest_level: Mapped[str | None] = mapped_column(String(20))
-    cumulative_signals: Mapped[list[str]] = mapped_column(JSON, server_default="[]")
-    weakness_tags: Mapped[list[dict]] = mapped_column(JSON, server_default="[]")
+    cumulative_signals: Mapped[list[str]] = mapped_column(JSONB, server_default="[]")
+    weakness_tags: Mapped[list[dict]] = mapped_column(JSONB, server_default="[]")
     last_session_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("interview_sessions.id", ondelete="SET NULL"),
@@ -252,7 +253,7 @@ class CoachPlan(Base):
         PG_UUID(as_uuid=True),
         ForeignKey("interview_sessions.id", ondelete="SET NULL"),
     )
-    plan_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    plan_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
     consumed: Mapped[bool] = mapped_column(Boolean, server_default="false", nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

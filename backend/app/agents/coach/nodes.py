@@ -150,21 +150,35 @@ async def persist_node(state: CoachState) -> dict[str, Any]:
     user_id = state["user_id"]
     session_id = state["session_id"]
     plan_json = state["plan_json"]
-    
+
     if not plan_json:
         return {"plan_id": None}
-        
+
     try:
+        # 幂等检查：如果 session_id 已有 plan，则更新它
+        stmt = select(CoachPlan).where(CoachPlan.session_id == session_id)
+        result = await db.execute(stmt)
+        existing_plan = result.scalar_one_or_none()
+
+        if existing_plan:
+            existing_plan.plan_json = plan_json
+            existing_plan.consumed = False  # 重置消费状态，允许按新计划练习
+            db.add(existing_plan)
+            await db.commit()
+            await db.refresh(existing_plan)
+            log.info("coach_plan_updated", plan_id=existing_plan.id, user_id=user_id)
+            return {"plan_id": existing_plan.id}
+
         new_plan = CoachPlan(
             user_id=user_id,
             session_id=session_id,
             plan_json=plan_json,
-            consumed=False
+            consumed=False,
         )
         db.add(new_plan)
         await db.commit()
         await db.refresh(new_plan)
-        
+
         log.info("coach_plan_persisted", plan_id=new_plan.id, user_id=user_id)
         return {"plan_id": new_plan.id}
     except Exception as exc:

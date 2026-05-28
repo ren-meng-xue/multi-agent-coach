@@ -1,5 +1,5 @@
 """集成测试：验证教练复盘 API 路由挂载。"""
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
@@ -47,7 +47,7 @@ def test_get_latest_plan_endpoint_exists(mock_auth):
             resp = client.get("/api/v1/coach/plans/latest")
             assert resp.status_code == 200
             data = resp.json()
-            # Response.ok(data=None) 返回空字典 {}
-            assert data["data"] == {}
+            # 后端修复后返回的是 null
+            assert data["data"] is None
     finally:
         app.dependency_overrides.pop(get_db, None)

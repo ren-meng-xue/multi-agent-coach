@@ -29,8 +29,9 @@ export type UserStage = "prepare" | "interview" | "coach";
 
 /** 获取用户当前阶段。 */
 export async function fetchUserStage({ token }: { token: string }): Promise<UserStage> {
-  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "";
-  const resp = await fetch(`${baseUrl}/api/v1/user/stage`, {
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
+  const cleanBaseUrl = baseUrl.replace(/\/$/, "");
+  const resp = await fetch(`${cleanBaseUrl}/api/v1/user/stage`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!resp.ok) throw new Error(`Failed to fetch user stage: ${resp.statusText}`);
@@ -40,11 +41,13 @@ export async function fetchUserStage({ token }: { token: string }): Promise<User
 
 /** 获取最新教练计划。 */
 export async function fetchLatestCoachPlan({ token }: { token: string }): Promise<CoachPlanResponse | null> {
-  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "";
-  const resp = await fetch(`${baseUrl}/api/v1/coach/plans/latest`, {
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
+  const cleanBaseUrl = baseUrl.replace(/\/$/, "");
+  const resp = await fetch(`${cleanBaseUrl}/api/v1/coach/plans/latest`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!resp.ok) throw new Error(`Failed to fetch latest coach plan: ${resp.statusText}`);
   const json = await resp.json();
-  return json.data;
+  // 后端修复后返回的是 null 或 CoachPlanResponse
+  return json.data || null;
 }
