@@ -12,6 +12,9 @@ interface TraceNodeProps {
   tokens: string; // 流式积累的文本（LLM 逐字输出，非固定文案）
   elapsedMs?: number;
   isLast?: boolean; // 标识是否为最后一个节点，用于完美裁断尾部悬空竖线
+  candidateLevel?: "beginner" | "junior" | "mid" | "senior";
+  latentSignals?: string[];
+  missingDimensions?: string[];
 }
 
 export function TraceNode({
@@ -22,6 +25,9 @@ export function TraceNode({
   tokens,
   elapsedMs,
   isLast = false,
+  candidateLevel,
+  latentSignals,
+  missingDimensions,
 }: TraceNodeProps) {
   const badgeClass = getBadgeClass(id);
 
@@ -113,6 +119,25 @@ export function TraceNode({
             </span>
           )}
         </div>
+
+        {/* 画像 + 信号区域 */}
+        {id === "evaluator" && status === "done" && (candidateLevel || latentSignals?.length || missingDimensions?.length) && (
+          <div className="mb-2.5 flex flex-wrap gap-1.5 pl-2.5 border-l-[1.5px] border-black/[0.04] dark:border-white/[0.04] animate-in fade-in slide-in-from-top-1 duration-500">
+            {candidateLevel && (
+              <span className="rounded bg-[#E1F5F2] text-[#0D6B5E] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider">
+                {candidateLevel}
+              </span>
+            )}
+            {latentSignals?.map((sig) => (
+              <span key={sig} className="rounded bg-[#534AB7]/5 text-[#534AB7]/70 px-1.5 py-0.5 text-[9px] font-medium">
+                {sig}
+              </span>
+            ))}
+            {missingDimensions && missingDimensions.length > 0 && (
+              <span className="text-[9px] text-rose-500/60 font-medium">缺失：{missingDimensions.join(" · ")}</span>
+            )}
+          </div>
+        )}
 
         {/* 出题节点：动态解析 JSON 令牌并展示题目列表 */}
         {id === "question_gen" && tokens && (

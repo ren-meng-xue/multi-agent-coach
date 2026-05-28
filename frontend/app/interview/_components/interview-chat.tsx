@@ -407,6 +407,10 @@ export function InterviewChat() {
               ...nodes[idx],
               status: "done" as const,
               elapsedMs: ev.elapsedMs,
+              candidateLevel: ev.candidateLevel,
+              latentSignals: ev.latentSignals,
+              missingDimensions: ev.missingDimensions,
+              followupFocus: ev.followupFocus,
             };
           }
         }

@@ -41,6 +41,10 @@ export interface TraceNodeData {
   status: TraceNodeStatus;
   tokens: string;
   elapsedMs?: number;
+  candidateLevel?: "beginner" | "junior" | "mid" | "senior";
+  latentSignals?: string[];
+  missingDimensions?: string[];
+  followupFocus?: string;
 }
 
 export interface InterviewTraceNodeEvent {
@@ -51,4 +55,8 @@ export interface InterviewTraceNodeEvent {
   elapsedMs?: number;
   chain?: string[];
   summaryScore?: number;
+  candidateLevel?: "beginner" | "junior" | "mid" | "senior";
+  latentSignals?: string[];
+  missingDimensions?: string[];
+  followupFocus?: string;
 }

@@ -59,3 +59,35 @@ test("done 状态显示绿色勾 + 耗时", () => {
   expect(screen.getByTestId("trace-status-done")).toBeInTheDocument();
   expect(screen.getByText("62ms")).toBeInTheDocument();
 });
+
+test("evaluator done 且带有候选人画像时渲染 chips", () => {
+  render(
+    <TraceNode
+      id="evaluator"
+      label="评估官"
+      title="评估"
+      status="done"
+      tokens="已评分"
+      candidateLevel="junior"
+      latentSignals={["architecture", "scaling"]}
+      missingDimensions={["quantification"]}
+    />
+  );
+  expect(screen.getByText("junior")).toBeInTheDocument();
+  expect(screen.getByText("architecture")).toBeInTheDocument();
+  expect(screen.getByText("scaling")).toBeInTheDocument();
+  expect(screen.getByText(/缺失：quantification/)).toBeInTheDocument();
+});
+
+test("evaluator 无画像数据时不渲染额外区域", () => {
+  const { queryByText } = render(
+    <TraceNode
+      id="evaluator"
+      label="评估官"
+      title="评估"
+      status="done"
+      tokens="已评分"
+    />
+  );
+  expect(queryByText("缺失")).toBeNull();
+});

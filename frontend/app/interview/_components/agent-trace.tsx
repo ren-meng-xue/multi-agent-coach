@@ -32,6 +32,9 @@ export function AgentTrace({ nodes, nodeTitles, nodeLabels }: AgentTraceProps) {
           tokens={node.tokens}
           elapsedMs={node.elapsedMs}
           isLast={index === nodes.length - 1}
+          candidateLevel={node.candidateLevel}
+          latentSignals={node.latentSignals}
+          missingDimensions={node.missingDimensions}
         />
       ))}
     </div>
