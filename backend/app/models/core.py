@@ -148,6 +148,11 @@ class InterviewSession(Base):
         cascade="all, delete-orphan",
         order_by="InterviewMessage.created_at",
     )
+    coach_plan: Mapped["CoachPlan | None"] = relationship(
+        back_populates="session",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
 
 
 class InterviewMessage(Base):
@@ -189,3 +194,71 @@ class InterviewMessage(Base):
     )
 
     session: Mapped[InterviewSession] = relationship(back_populates="messages")
+
+
+class CandidateMemory(Base):
+    """跨 session 的候选人画像汇总，user_id 维度聚合。"""
+
+    __tablename__ = "candidate_memory"
+
+    user_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    latest_level: Mapped[str | None] = mapped_column(String(20))
+    cumulative_signals: Mapped[list[str]] = mapped_column(JSON, server_default="[]")
+    weakness_tags: Mapped[list[dict]] = mapped_column(JSON, server_default="[]")
+    last_session_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("interview_sessions.id", ondelete="SET NULL"),
+    )
+    total_sessions: Mapped[int] = mapped_column(Integer, server_default="0", nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    user: Mapped["User"] = relationship()
+    last_session: Mapped["InterviewSession | None"] = relationship()
+
+
+class CoachPlan(Base):
+    """每次 coach 复盘产出的训练计划。"""
+
+    __tablename__ = "coach_plans"
+    __table_args__ = (
+        Index(
+            "idx_coach_plans_user_unconsumed",
+            "user_id",
+            postgresql_where=text("consumed = false"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    session_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("interview_sessions.id", ondelete="SET NULL"),
+    )
+    plan_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    consumed: Mapped[bool] = mapped_column(Boolean, server_default="false", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    user: Mapped["User"] = relationship()
+    session: Mapped["InterviewSession | None"] = relationship(back_populates="coach_plan")
