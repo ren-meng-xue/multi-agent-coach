@@ -68,4 +68,35 @@ class EvalRunner:
             tasks.append(_run_one(case))
         
         await asyncio.gather(*tasks)
-        await self.storage.update_run(run_id, status="completed", completed_at=datetime.now(UTC))
+        results = await self.storage.get_results(run_id)
+        stats: dict[str, dict[str, float]] = {}
+        for r in results:
+            t = r.target_type
+            if t not in stats:
+                stats[t] = {"sum": 0.0, "pass": 0.0, "count": 0.0}
+            stats[t]["sum"] += float(r.overall_score or 0.0)
+            if r.binary_pass:
+                stats[t]["pass"] += 1.0
+            stats[t]["count"] += 1.0
+
+        by_target_type = {
+            t: {
+                "avg": v["sum"] / v["count"] if v["count"] > 0 else 0.0,
+                "pass_rate": v["pass"] / v["count"] if v["count"] > 0 else 0.0,
+                "count": int(v["count"]),
+            }
+            for t, v in stats.items()
+        }
+        overall = (
+            sum(v["avg"] for v in by_target_type.values()) / len(by_target_type)
+            if by_target_type
+            else 0.0
+        )
+        aggregate_scores = {"overall": overall, "by_target_type": by_target_type}
+
+        await self.storage.update_run(
+            run_id,
+            aggregate_scores=aggregate_scores,
+            status="completed",
+            completed_at=datetime.now(UTC),
+        )
