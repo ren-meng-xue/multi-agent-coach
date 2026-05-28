@@ -3,11 +3,14 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
 
+from app.core.logging import get_logger
 from app.eval.dimensions import TargetType
 from app.eval.judge import BaseJudge
 from app.eval.storage import EvalStorage
 
 SystemCall = Callable[[TargetType, dict[str, Any]], Awaitable[dict[str, Any]]]
+
+log = get_logger("app.eval.runner")
 
 
 class EvalRunner:
@@ -57,7 +60,7 @@ class EvalRunner:
                         "latency_ms": latency,
                     })
                 except Exception as e:
-                    print(f"Error running case {case.case_key}: {e}")
+                    log.error("eval_case_failed", case_key=case.case_key, error=str(e))
                 finally:
                     # Increment completed cases
                     run = await self.storage.get_run(run_id)

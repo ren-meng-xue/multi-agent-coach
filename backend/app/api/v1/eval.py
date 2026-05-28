@@ -1,10 +1,10 @@
-import os
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.db.session import async_session_factory
 from app.eval.dimensions import JudgeMode
 from app.eval.judge import BaseJudge, BinaryJudge, ComparativeJudge, RubricJudge
@@ -31,11 +31,15 @@ async def get_db():
 
 
 def verify_eval_auth(run_llm_eval: Annotated[str | None, Header()] = None):
-    # 鉴权：dev_auth_bypass 或 RUN_LLM_EVAL 环境变量
-    if os.getenv("RUN_LLM_EVAL") and run_llm_eval == os.getenv("RUN_LLM_EVAL"):
+    settings = get_settings()
+    secret = (
+        settings.run_llm_eval_secret.get_secret_value()
+        if settings.run_llm_eval_secret
+        else None
+    )
+    if secret and run_llm_eval == secret:
         return
-    # Check for dev bypass in settings if needed, but for simplicity:
-    if os.getenv("APP_ENV") == "dev":
+    if settings.app_env == "dev":
         return
     raise HTTPException(status_code=403, detail="Not authorized to run evaluation")
 

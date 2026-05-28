@@ -1,9 +1,9 @@
-import os
 from unittest.mock import AsyncMock, patch
 from uuid import UUID
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from pydantic import SecretStr
 
 from app.main import app
 
@@ -12,7 +12,12 @@ from app.main import app
 async def test_eval_auth_failure():
     # Set APP_ENV to prod to trigger auth check
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        with patch.dict(os.environ, {"APP_ENV": "prod", "RUN_LLM_EVAL": "secret"}):
+        with patch("app.api.v1.eval.get_settings") as mock_settings:
+            mock_settings.return_value = type(
+                "Settings",
+                (),
+                {"run_llm_eval_secret": SecretStr("secret"), "app_env": "prod"},
+            )()
             response = await ac.post("/api/v1/eval/runs", json={"suite": "test"})
             assert response.status_code == 403
 
@@ -40,7 +45,12 @@ async def test_trigger_eval_api():
             mock_create_run.return_value = mock_run
             
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-                with patch.dict(os.environ, {"APP_ENV": "dev"}):
+                with patch("app.api.v1.eval.get_settings") as mock_settings:
+                    mock_settings.return_value = type(
+                        "Settings",
+                        (),
+                        {"run_llm_eval_secret": None, "app_env": "dev"},
+                    )()
                     response = await ac.post("/api/v1/eval/runs", json={"suite": "interviewer_v0"})
                     assert response.status_code == 200
                     assert response.json() == str(mock_run.id)

@@ -17,7 +17,7 @@ def test_settings_loads_required_env(monkeypatch):
     assert "PUBLIC KEY" in s.clerk_jwt_key
     assert s.clerk_issuer == "https://clerk.example.dev"
     assert s.clerk_jwt_audience == "multi-agent-coach"
-    assert s.app_env in {"dev", "test", "prod"}
+    assert s.app_env in {"dev", "prod"}
 
 
 def test_settings_missing_required_raises(monkeypatch):
