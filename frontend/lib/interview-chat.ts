@@ -82,6 +82,7 @@ export type UserContextResponse = {
   target_company: string | null;
   user_background: string | null;
   session_count: number;
+  last_session_id: string | null;
 };
 
 export type InterviewHistoryItem = {
