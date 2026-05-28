@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -85,6 +85,16 @@ class EvalStorage:
             for k, v in kwargs.items():
                 setattr(run, k, v)
             await self.db.commit()
+
+    async def increment_completed_cases(self, run_id: UUID) -> None:
+        await self.db.execute(
+            text(
+                "UPDATE eval_runs SET completed_cases = completed_cases + 1 "
+                "WHERE id = :run_id"
+            ),
+            {"run_id": run_id},
+        )
+        await self.db.commit()
 
     async def save_result(self, result_data: dict) -> EvalResult:
         result = EvalResult(**result_data)
