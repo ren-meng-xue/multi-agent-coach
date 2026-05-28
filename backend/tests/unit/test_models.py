@@ -10,12 +10,19 @@ def test_users_table_registered():
     """确保核心业务表被 SQLAlchemy 发现。"""
     table_names = set(Base.metadata.tables.keys())
     assert table_names == {
+        # 业务表
         "users",
         "user_stories",
         "interview_sessions",
         "interview_messages",
         "candidate_memory",
         "coach_plans",
+        # 评估系统表（phase4-parallel-eval）
+        "eval_suites",
+        "eval_cases",
+        "eval_runs",
+        "eval_results",
+        "eval_comparisons",
     }
 
 

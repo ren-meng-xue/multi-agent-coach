@@ -12,6 +12,7 @@ from app.eval.reporter import EvalReporter
 from app.eval.runner import EvalRunner
 from app.eval.schemas import JudgeConfig
 from app.eval.storage import EvalStorage
+from app.eval.system_calls import dispatch_system_call
 
 
 async def run_eval(args):
@@ -22,11 +23,6 @@ async def run_eval(args):
             print(f"Suite {args.suite} not found in DB.")
             return
 
-        # Mock system call for now (actual logic would involve calling the Agent)
-        async def mock_system_call(input_json):
-            await asyncio.sleep(0.1)
-            return {"answer": "mock answer"}
-
         judge_config = JudgeConfig(model=args.judge_model, mode=args.judge_mode)
         if args.judge_mode == JudgeMode.RUBRIC:
             judge = RubricJudge(judge_config)
@@ -35,7 +31,7 @@ async def run_eval(args):
         else:
             judge = BinaryJudge(judge_config)
 
-        runner = EvalRunner(storage, judge, mock_system_call)
+        runner = EvalRunner(storage, judge, dispatch_system_call)
         
         cases = suite.cases
         if args.limit:

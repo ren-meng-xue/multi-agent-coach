@@ -1,5 +1,5 @@
 import asyncio
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
 
@@ -7,13 +7,15 @@ from app.eval.dimensions import TargetType
 from app.eval.judge import BaseJudge
 from app.eval.storage import EvalStorage
 
+SystemCall = Callable[[TargetType, dict[str, Any]], Awaitable[dict[str, Any]]]
+
 
 class EvalRunner:
     def __init__(
         self,
         storage: EvalStorage,
         judge: BaseJudge,
-        system_call: Callable[[dict], Any],
+        system_call: SystemCall,
         max_concurrency: int = 5,
     ):
         self.storage = storage
@@ -31,12 +33,12 @@ class EvalRunner:
             async with semaphore:
                 start_time = datetime.now(UTC).timestamp()
                 try:
-                    # 1. System output
-                    system_output = await self.system_call(case.input_json)
+                    target_type = TargetType(case.target_type)
+                    # 1. System output：调真实 Agent 节点
+                    system_output = await self.system_call(target_type, case.input_json)
                     latency = int((datetime.now(UTC).timestamp() - start_time) * 1000)
 
                     # 2. Judge
-                    target_type = TargetType(case.target_type)
                     judge_result = await self.judge.judge(
                         case.input_json, system_output, golden=case.golden_json, target_type=target_type
                     )

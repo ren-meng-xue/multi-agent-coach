@@ -7,11 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import async_session_factory
 from app.eval.dimensions import JudgeMode
-from app.eval.judge import BinaryJudge, ComparativeJudge, RubricJudge
+from app.eval.judge import BaseJudge, BinaryJudge, ComparativeJudge, RubricJudge
 from app.eval.regression import RegressionTester
 from app.eval.runner import EvalRunner
 from app.eval.schemas import JudgeConfig
 from app.eval.storage import EvalStorage
+from app.eval.system_calls import dispatch_system_call
 from app.schemas.eval import (
     CompareRequest,
     EvalRunResponse,
@@ -53,17 +54,12 @@ async def trigger_eval(
     cases = suite.cases
     if request.limit:
         cases = cases[:request.limit]
-    
-    # Mock system call
-    async def mock_system_call(input_json):
-        import asyncio
-        await asyncio.sleep(0.1)
-        return {"answer": "mock api answer"}
 
     judge_config = JudgeConfig(
         model=request.judge_model or "gpt-4o",
         mode=JudgeMode(request.judge_mode)
     )
+    judge: BaseJudge
     if request.judge_mode == "rubric":
         judge = RubricJudge(judge_config)
     elif request.judge_mode == "comparative":
@@ -80,7 +76,7 @@ async def trigger_eval(
         system_version=request.system_version
     )
 
-    runner = EvalRunner(storage, judge, mock_system_call)
+    runner = EvalRunner(storage, judge, dispatch_system_call)
     background_tasks.add_task(runner.run, run.id, cases)
 
     return run.id
