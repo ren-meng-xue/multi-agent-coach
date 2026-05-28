@@ -224,10 +224,15 @@ async def stream_interviewer_turn_events(state: InterviewState) -> AsyncIterator
 
             if ev_node == "master" and isinstance(node_dict, dict):
                 payload["chain"] = node_dict.get("chain", [])
+                payload["followup_focus"] = node_dict.get("followup_focus", "")
             if ev_node == "evaluator" and isinstance(node_dict, dict):
                 evals = node_dict.get("turn_evaluations") or []
                 if evals:
-                    payload["summary_score"] = evals[-1].get("summary_score")
+                    last = evals[-1]
+                    payload["summary_score"] = last.get("summary_score")
+                    payload["candidate_level"] = last.get("candidate_level")
+                    payload["latent_signals"] = last.get("latent_signals", [])
+                    payload["missing_dimensions"] = last.get("missing_dimensions", [])
             yield {"event": "node_done", "data": payload}
 
         # 全图结束
