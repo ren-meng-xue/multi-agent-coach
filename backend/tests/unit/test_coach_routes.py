@@ -31,7 +31,8 @@ def test_opening_message_returns_structured_json():
     mock_generate = AsyncMock(return_value=payload)
 
     try:
-        with patch("app.api.coach.generate_coach_opening_message", mock_generate):
+        # Phase 5 重构后，/api/coach 指向 v1/coach.py 中的实现
+        with patch("app.api.v1.coach.generate_coach_opening_message", mock_generate):
             resp = TestClient(app).get("/api/coach/opening-message")
     finally:
         app.dependency_overrides.clear()
