@@ -460,7 +460,19 @@ async def ask_question_node(state: InterviewState) -> InterviewState:
 
 async def followup_node(state: InterviewState) -> InterviewState:
     """流式生成追问（不再依赖 decide_next 输出的 followup_question）。"""
-    text = await _generate_text(FOLLOWUP_SYSTEM_PROMPT, state)
+    focus = state.get("followup_focus", "")
+    last_eval = (state.get("turn_evaluations") or [{}])[-1]
+    latent = last_eval.get("latent_signals", []) or []
+    missing = last_eval.get("missing_dimensions", []) or []
+
+    extra_ctx = (
+        f"\n【本轮追问信号】\n"
+        f"- followup_focus: {focus or '无'}\n"
+        f"- latent_signals: {', '.join(latent) or '无'}\n"
+        f"- missing_dimensions: {', '.join(missing) or '无'}"
+    )
+
+    text = await _generate_text(FOLLOWUP_SYSTEM_PROMPT + extra_ctx, state)
     return {
         "stage": "interview",
         "followup_count": state.get("followup_count", 0) + 1,

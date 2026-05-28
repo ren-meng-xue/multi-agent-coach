@@ -206,3 +206,51 @@ async def test_evaluator_accumulates_signals_dedup_ordered():
 
     assert result["candidate_profile"]["latent_signals"] == ["a", "b", "c"]
     assert result["candidate_profile"]["latest_level"] == "mid"  # 用最新值
+
+
+# ─────────────────────────────────────────────
+# Phase 4+ Step 4 业务逻辑测试
+# ─────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_followup_injects_focus_and_signals_into_prompt():
+    from app.agents.interviewer.nodes import followup_node
+    captured = {}
+
+    async def fake_generate(system_prompt: str, state):
+        captured["prompt"] = system_prompt
+        return "针对 event lifecycle 的追问"
+
+    state = {
+        "followup_count": 0,
+        "messages": [HumanMessage(content="不知道事件流")],
+        "followup_focus": "latent_signal:workflow_orchestration",
+        "turn_evaluations": [
+            {
+                "latent_signals": ["workflow_orchestration", "event_driven_architecture"],
+                "missing_dimensions": ["architecture"],
+            }
+        ],
+    }
+    with patch("app.agents.interviewer.nodes._generate_text", new=AsyncMock(side_effect=fake_generate)):
+        result = await followup_node(state)
+
+    assert "workflow_orchestration" in captured["prompt"]
+    assert "architecture" in captured["prompt"]
+    assert "followup_focus" in captured["prompt"]
+    assert result["assistant_message"] == "针对 event lifecycle 的追问"
+    assert result["followup_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_followup_works_without_focus_or_signals():
+    """无 focus / 无 signals 时不崩，行为退化到原版。"""
+    from app.agents.interviewer.nodes import followup_node
+    state = {
+        "followup_count": 0,
+        "messages": [HumanMessage(content="...")],
+    }
+    with patch("app.agents.interviewer.nodes._generate_text", new=AsyncMock(return_value="ok")):
+        result = await followup_node(state)
+    assert result["assistant_message"] == "ok"
+    assert result["followup_count"] == 1
