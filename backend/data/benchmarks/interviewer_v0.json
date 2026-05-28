@@ -5,8 +5,386 @@
     {
       "id": "q_001",
       "target_type": "question",
-      "input_json": {"role": "AI"},
-      "golden": {"overall": 8.0}
+      "input_json": {
+        "direction": "后端工程师",
+        "user_direction": "分布式系统",
+        "weak_areas": ["缓存一致性", "高并发容量评估"],
+        "star_stories": [
+          {"title": "订单系统重构", "summary": "拆分单体、引入异步队列与缓存层。"}
+        ],
+        "jd_context": {
+          "focus_areas": ["系统设计", "稳定性", "性能优化"],
+          "key_skills": ["Python", "Redis", "Kafka"]
+        }
+      },
+      "golden": {
+        "questions": [
+          "请描述订单系统重构中如何保证缓存与数据库一致性，遇到哪些边界场景？",
+          "高峰流量来临前你如何做容量评估？具体指标和压测方法是什么？",
+          "异步队列引入后如何确保消息不丢失且可追踪？"
+        ],
+        "overall": 7.6,
+        "_human_review_pending": true
+      }
+    },
+    {
+      "id": "q_002",
+      "target_type": "question",
+      "input_json": {
+        "direction": "前端工程师",
+        "user_direction": "性能优化",
+        "weak_areas": ["首屏渲染", "监控指标解读"],
+        "star_stories": [
+          {"title": "增长落地页优化", "summary": "通过分包与预渲染提升转化。"}
+        ],
+        "jd_context": {
+          "focus_areas": ["性能", "可观测性"],
+          "key_skills": ["React", "Web Vitals", "Next.js"]
+        }
+      },
+      "golden": {
+        "questions": [
+          "你是如何定位首屏渲染瓶颈的？具体使用了哪些指标和工具？",
+          "为了提升 LCP，你做过哪些权衡？如何验证收益？",
+          "监控到 CLS 异常波动时，你的排查流程是什么？"
+        ],
+        "overall": 7.4,
+        "_human_review_pending": true
+      }
+    },
+    {
+      "id": "q_003",
+      "target_type": "question",
+      "input_json": {
+        "direction": "数据工程师",
+        "user_direction": "实时数据链路",
+        "weak_areas": ["数据质量校验", "延迟控制"],
+        "star_stories": [
+          {"title": "实时指标平台", "summary": "搭建 Flink + Kafka 指标链路。"}
+        ],
+        "jd_context": {
+          "focus_areas": ["实时计算", "稳定性"],
+          "key_skills": ["Flink", "Kafka", "监控告警"]
+        }
+      },
+      "golden": {
+        "questions": [
+          "实时链路中如何做数据质量校验？哪些校验规则最关键？",
+          "延迟控制的主要瓶颈在哪里，你是怎么定位和优化的？",
+          "当 Kafka 出现积压时，你如何保障核心指标不失真？"
+        ],
+        "overall": 7.3,
+        "_human_review_pending": true
+      }
+    },
+    {
+      "id": "q_004",
+      "target_type": "question",
+      "input_json": {
+        "direction": "SRE",
+        "user_direction": "可用性",
+        "weak_areas": ["故障演练", "容量水位管理"],
+        "star_stories": [
+          {"title": "核心业务容灾", "summary": "多活架构与演练流程落地。"}
+        ],
+        "jd_context": {
+          "focus_areas": ["高可用", "灾备演练"],
+          "key_skills": ["Kubernetes", "Prometheus", "容灾"]
+        }
+      },
+      "golden": {
+        "questions": [
+          "你们的故障演练是如何设计的？演练指标如何验证有效性？",
+          "容量水位管理有哪些预警阈值？如何确定阈值合理？",
+          "多活切换时如何避免数据不一致或双写冲突？"
+        ],
+        "overall": 7.5,
+        "_human_review_pending": true
+      }
+    },
+    {
+      "id": "q_005",
+      "target_type": "question",
+      "input_json": {
+        "direction": "AI 工程师",
+        "user_direction": "RAG 应用",
+        "weak_areas": ["召回策略", "评测方法"],
+        "star_stories": [
+          {"title": "企业知识库", "summary": "构建混合检索 + 结果重排。"}
+        ],
+        "jd_context": {
+          "focus_areas": ["检索质量", "评测体系"],
+          "key_skills": ["向量检索", "评测", "Prompt"]
+        }
+      },
+      "golden": {
+        "questions": [
+          "混合检索策略中你如何平衡召回与精确率？",
+          "评测体系里你选了哪些指标来衡量检索质量？",
+          "当黄金答案缺失时，你如何设计合理的评测集？"
+        ],
+        "overall": 7.7,
+        "_human_review_pending": true
+      }
+    },
+    {
+      "id": "s_001",
+      "target_type": "scoring",
+      "input_json": {
+        "messages": [
+          {"role": "user", "content": "我设计了订单系统的去重流程，使用了全局唯一键和幂等表。"},
+          {"role": "assistant", "content": "你如何处理幂等表膨胀的问题？"}
+        ],
+        "target_role": "后端工程师",
+        "candidate_profile": {"strengths": ["稳定性"], "risks": ["容量评估"]},
+        "turn_evaluations": [
+          {"overall_score": 6.0, "latent_signals": ["设计能力"], "missing_dimensions": ["可扩展性"]}
+        ],
+        "question_count": 3,
+        "followup_count": 1,
+        "current_question_index": 2
+      },
+      "golden": {
+        "expected_scores": {
+          "technical_depth": 7.0,
+          "structure": 6.5,
+          "tradeoffs": 6.0
+        },
+        "overall": 6.8,
+        "_human_review_pending": true
+      }
+    },
+    {
+      "id": "s_002",
+      "target_type": "scoring",
+      "input_json": {
+        "messages": [
+          {"role": "user", "content": "我把 LCP 降低到 1.8s，主要通过预渲染和图片压缩。"},
+          {"role": "assistant", "content": "你如何验证 CLS 没有恶化？"}
+        ],
+        "target_role": "前端工程师",
+        "candidate_profile": {"strengths": ["性能优化"], "risks": ["监控"]},
+        "turn_evaluations": [],
+        "question_count": 4,
+        "followup_count": 0,
+        "current_question_index": 1
+      },
+      "golden": {
+        "expected_scores": {
+          "technical_depth": 7.5,
+          "quantified_results": 7.0,
+          "structure": 6.5
+        },
+        "overall": 7.1,
+        "_human_review_pending": true
+      }
+    },
+    {
+      "id": "s_003",
+      "target_type": "scoring",
+      "input_json": {
+        "messages": [
+          {"role": "user", "content": "我用 Flink 做实时聚合，延迟控制在 3 秒内。"},
+          {"role": "assistant", "content": "你如何处理延迟抖动和补数？"}
+        ],
+        "target_role": "数据工程师",
+        "candidate_profile": {"strengths": ["实时计算"], "risks": ["数据质量"]},
+        "turn_evaluations": [
+          {"overall_score": 7.0, "latent_signals": ["工程能力"], "missing_dimensions": ["质量保障"]}
+        ],
+        "question_count": 5,
+        "followup_count": 2,
+        "current_question_index": 4
+      },
+      "golden": {
+        "expected_scores": {
+          "technical_depth": 7.0,
+          "failure_tradeoffs": 6.5,
+          "signal_reasonableness": 6.0
+        },
+        "overall": 6.9,
+        "_human_review_pending": true
+      }
+    },
+    {
+      "id": "s_004",
+      "target_type": "scoring",
+      "input_json": {
+        "messages": [
+          {"role": "user", "content": "我们做了蓝绿发布，核心指标稳定后才全量切换。"},
+          {"role": "assistant", "content": "如果监控指标异常，你的回滚策略是什么？"}
+        ],
+        "target_role": "SRE",
+        "candidate_profile": {"strengths": ["发布流程"], "risks": ["回滚"]},
+        "turn_evaluations": [],
+        "question_count": 2,
+        "followup_count": 1,
+        "current_question_index": 0
+      },
+      "golden": {
+        "expected_scores": {
+          "technical_depth": 6.5,
+          "structure": 6.0,
+          "signal_reasonableness": 6.5
+        },
+        "overall": 6.6,
+        "_human_review_pending": true
+      }
+    },
+    {
+      "id": "s_005",
+      "target_type": "scoring",
+      "input_json": {
+        "messages": [
+          {"role": "user", "content": "我用混合检索把准确率提升到 82%。"},
+          {"role": "assistant", "content": "提升是如何评估的？测试集怎么构造？"}
+        ],
+        "target_role": "AI 工程师",
+        "candidate_profile": {"strengths": ["检索优化"], "risks": ["评测"]},
+        "turn_evaluations": [],
+        "question_count": 3,
+        "followup_count": 0,
+        "current_question_index": 2
+      },
+      "golden": {
+        "expected_scores": {
+          "technical_depth": 7.0,
+          "quantified_results": 7.5,
+          "structure": 6.5
+        },
+        "overall": 7.0,
+        "_human_review_pending": true
+      }
+    },
+    {
+      "id": "f_001",
+      "target_type": "followup",
+      "input_json": {
+        "followup_focus": "缓存一致性",
+        "turn_evaluations": [
+          {
+            "latent_signals": ["方案可行"],
+            "missing_dimensions": ["异常恢复", "数据一致性"]
+          }
+        ],
+        "messages": [
+          {"role": "user", "content": "我用双写和延迟删除保证一致性。"},
+          {"role": "assistant", "content": "能描述下异常场景吗？"}
+        ],
+        "target_role": "后端工程师",
+        "target_company": "大厂",
+        "user_background": "3 年经验",
+        "followup_count": 1
+      },
+      "golden": {
+        "followup_text": "请补充说明双写失败或延迟删除失败时的补偿策略，以及如何验证最终一致。",
+        "overall": 7.4,
+        "_human_review_pending": true
+      }
+    },
+    {
+      "id": "f_002",
+      "target_type": "followup",
+      "input_json": {
+        "followup_focus": "性能优化",
+        "turn_evaluations": [
+          {
+            "latent_signals": ["数据驱动"],
+            "missing_dimensions": ["权衡", "监控"]
+          }
+        ],
+        "messages": [
+          {"role": "user", "content": "我把 bundle 拆分后首屏快了 30%。"},
+          {"role": "assistant", "content": "拆分后有副作用吗？"}
+        ],
+        "target_role": "前端工程师",
+        "target_company": "SaaS",
+        "user_background": "5 年经验",
+        "followup_count": 2
+      },
+      "golden": {
+        "followup_text": "拆分带来的请求数上升如何处理？是否监控到了 FID/INP 的变化？",
+        "overall": 7.2,
+        "_human_review_pending": true
+      }
+    },
+    {
+      "id": "f_003",
+      "target_type": "followup",
+      "input_json": {
+        "followup_focus": "数据质量",
+        "turn_evaluations": [
+          {
+            "latent_signals": ["工程能力"],
+            "missing_dimensions": ["质量保障", "补数策略"]
+          }
+        ],
+        "messages": [
+          {"role": "user", "content": "我们做了实时聚合，延迟 3 秒。"},
+          {"role": "assistant", "content": "延迟抖动时怎么补？"}
+        ],
+        "target_role": "数据工程师",
+        "target_company": "电商",
+        "user_background": "4 年经验",
+        "followup_count": 1
+      },
+      "golden": {
+        "followup_text": "请说明抖动期间的补数策略，以及如何保证补数不重复、不遗漏。",
+        "overall": 7.1,
+        "_human_review_pending": true
+      }
+    },
+    {
+      "id": "f_004",
+      "target_type": "followup",
+      "input_json": {
+        "followup_focus": "容灾演练",
+        "turn_evaluations": [
+          {
+            "latent_signals": ["稳健性"],
+            "missing_dimensions": ["验证方法", "演练频率"]
+          }
+        ],
+        "messages": [
+          {"role": "user", "content": "我们每季度做故障演练。"},
+          {"role": "assistant", "content": "演练具体验证什么？"}
+        ],
+        "target_role": "SRE",
+        "target_company": "金融",
+        "user_background": "6 年经验",
+        "followup_count": 1
+      },
+      "golden": {
+        "followup_text": "演练的关键验证指标是什么？如何判断演练是否真的覆盖关键链路？",
+        "overall": 7.3,
+        "_human_review_pending": true
+      }
+    },
+    {
+      "id": "f_005",
+      "target_type": "followup",
+      "input_json": {
+        "followup_focus": "评测集构造",
+        "turn_evaluations": [
+          {
+            "latent_signals": ["研究能力"],
+            "missing_dimensions": ["评测方法", "数据覆盖"]
+          }
+        ],
+        "messages": [
+          {"role": "user", "content": "我们用人工标注的 QA 做评测。"},
+          {"role": "assistant", "content": "覆盖如何保证？"}
+        ],
+        "target_role": "AI 工程师",
+        "target_company": "创业公司",
+        "user_background": "3 年经验",
+        "followup_count": 2
+      },
+      "golden": {
+        "followup_text": "评测集如何覆盖不同问题类型？如何验证标注一致性？",
+        "overall": 7.0,
+        "_human_review_pending": true
+      }
     }
   ]
 }
