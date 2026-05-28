@@ -20,7 +20,7 @@ from app.agents.interviewer.prompts import (
     REPORT_AGGREGATE_SYSTEM_PROMPT,
     REPORT_FALLBACK_SYSTEM_PROMPT,
 )
-from app.agents.interviewer.state import InterviewState, TurnEvaluation
+from app.agents.interviewer.state import CandidateProfile, InterviewState, TurnEvaluation
 from app.core.config import get_settings
 from app.core.logging import get_logger
 
@@ -249,23 +249,25 @@ class _EvaluatorScoring(BaseModel):
 
 
 def _build_evaluator_context(state: InterviewState) -> str:
-    parts: list[str] = []
+    """改：保留最近 N 轮上下文 + 候选人画像。"""
+    MAX_TURNS = 8  # 最近 8 条消息（约 4 轮一问一答），token 上限兜底
+    msgs = state.get("messages", [])[-MAX_TURNS:]
+    transcript = []
+    for m in msgs:
+        role = "面试官" if getattr(m, "type", "") == "ai" else "候选人"
+        text = str(getattr(m, "content", ""))[:400]
+        transcript.append(f"{role}：{text}")
+
+    profile = state.get("candidate_profile") or {}
+    signals_so_far = profile.get("latent_signals") or []
+
+    parts = []
     if state.get("target_role"):
         parts.append(f"目标岗位：{state['target_role']}")
-    # 最近一题（问题文本）+ 最近一句用户回答
-    last_user = ""
-    last_ai = ""
-    for m in reversed(state.get("messages", [])):
-        if not last_user and getattr(m, "type", "") == "human":
-            last_user = str(getattr(m, "content", ""))[:600]
-        elif not last_ai and getattr(m, "type", "") == "ai":
-            last_ai = str(getattr(m, "content", ""))[:300]
-        if last_user and last_ai:
-            break
-    if last_ai:
-        parts.append(f"面试官刚问的：{last_ai}")
-    if last_user:
-        parts.append(f"候选人回答：{last_user}")
+    if signals_so_far:
+        parts.append(f"已识别的隐含信号：{', '.join(signals_so_far[:10])}")
+    parts.append("【最近对话】")
+    parts.extend(transcript)
     return "\n".join(parts)
 
 
@@ -308,11 +310,26 @@ async def evaluator_node(state: InterviewState) -> InterviewState:
         "failure_tradeoffs": scoring.failure_tradeoffs,
         "structure": scoring.structure,
         "summary_score": scoring.summary_score,
+        # Phase 4+ 新增
+        "candidate_level": scoring.candidate_level,
+        "latent_signals": list(scoring.latent_signals),
+        "missing_dimensions": list(scoring.missing_dimensions),
     }
     updated = list(state.get("turn_evaluations", []))
     updated.append(entry)
+
+    # 累积 candidate_profile
+    old_profile = state.get("candidate_profile") or {}
+    old_signals = old_profile.get("latent_signals") or []
+    new_signals = list(dict.fromkeys(old_signals + list(scoring.latent_signals)))[:20]
+    new_profile: CandidateProfile = {
+        "latest_level": scoring.candidate_level,
+        "latent_signals": new_signals,
+        "last_updated_turn": state.get("question_count", 0),
+    }
+
     log.info("evaluator_done", summary_score=scoring.summary_score)
-    return {**state, "turn_evaluations": updated}
+    return {**state, "turn_evaluations": updated, "candidate_profile": new_profile}
 
 
 class _ReportTextOutput(BaseModel):

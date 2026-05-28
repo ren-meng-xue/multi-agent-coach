@@ -117,3 +117,92 @@ def test_candidate_profile_typed_dict_shape():
     assert profile["latest_level"] == "mid"
     assert profile["latent_signals"] == ["a", "b"]
     assert profile["last_updated_turn"] == 3
+
+
+# ─────────────────────────────────────────────
+# Phase 4+ Step 2 业务逻辑测试
+# ─────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_evaluator_uses_last_n_messages_in_context():
+    """超出 8 条时只保留最近 8 条。"""
+    messages = []
+    for i in range(20):
+        messages.append(HumanMessage(content=f"user msg {i}"))
+        messages.append(AIMessage(content=f"ai msg {i}"))
+    state = {
+        "question_count": 2,
+        "messages": messages,
+        "turn_evaluations": [],
+    }
+    captured = {}
+
+    async def fake_score(context: str):
+        captured["context"] = context
+        return MagicMock(
+            bullets=[], technical_depth=5.0, quantified_results=5.0,
+            failure_tradeoffs=5.0, structure=5.0, summary_score=5.0,
+            candidate_level="junior", latent_signals=[], missing_dimensions=[],
+        )
+
+    with patch("app.agents.interviewer.nodes._evaluator_reason_stream", new=AsyncMock()), \
+         patch("app.agents.interviewer.nodes._evaluator_score", new=AsyncMock(side_effect=fake_score)):
+        await evaluator_node(state)
+
+    # 最早的 user msg 0 不应该出现在 context 里
+    assert "user msg 0" not in captured["context"]
+    # 最新的 user msg 19 应该出现
+    assert "user msg 19" in captured["context"]
+
+
+@pytest.mark.asyncio
+async def test_evaluator_writes_candidate_profile():
+    fake_scoring = MagicMock(
+        bullets=[], technical_depth=5.0, quantified_results=5.0,
+        failure_tradeoffs=5.0, structure=5.0, summary_score=5.0,
+        candidate_level="junior",
+        latent_signals=["workflow_orchestration", "event_driven_architecture"],
+        missing_dimensions=["quantification"],
+    )
+    state = {
+        "question_count": 1,
+        "messages": [],
+        "turn_evaluations": [],
+        "candidate_profile": {},
+    }
+    with patch("app.agents.interviewer.nodes._evaluator_reason_stream", new=AsyncMock()), \
+         patch("app.agents.interviewer.nodes._evaluator_score", new=AsyncMock(return_value=fake_scoring)):
+        result = await evaluator_node(state)
+
+    last = result["turn_evaluations"][-1]
+    assert last["candidate_level"] == "junior"
+    assert "workflow_orchestration" in last["latent_signals"]
+    assert "quantification" in last["missing_dimensions"]
+
+    profile = result["candidate_profile"]
+    assert profile["latest_level"] == "junior"
+    assert set(profile["latent_signals"]) == {"workflow_orchestration", "event_driven_architecture"}
+
+
+@pytest.mark.asyncio
+async def test_evaluator_accumulates_signals_dedup_ordered():
+    """连续两轮的 latent_signals 去重保序累积。"""
+    fake_scoring = MagicMock(
+        bullets=[], technical_depth=5.0, quantified_results=5.0,
+        failure_tradeoffs=5.0, structure=5.0, summary_score=5.0,
+        candidate_level="mid",
+        latent_signals=["b", "c"],
+        missing_dimensions=[],
+    )
+    state = {
+        "question_count": 2,
+        "messages": [],
+        "turn_evaluations": [],
+        "candidate_profile": {"latent_signals": ["a", "b"], "latest_level": "junior"},
+    }
+    with patch("app.agents.interviewer.nodes._evaluator_reason_stream", new=AsyncMock()), \
+         patch("app.agents.interviewer.nodes._evaluator_score", new=AsyncMock(return_value=fake_scoring)):
+        result = await evaluator_node(state)
+
+    assert result["candidate_profile"]["latent_signals"] == ["a", "b", "c"]
+    assert result["candidate_profile"]["latest_level"] == "mid"  # 用最新值
