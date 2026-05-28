@@ -27,8 +27,8 @@ _RETRYABLE = (APIConnectionError, APITimeoutError, InternalServerError, RateLimi
 
 _retry_llm = retry(
     retry=retry_if_exception_type(_RETRYABLE),
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=0.5, max=4),
+    stop=stop_after_attempt(4),
+    wait=wait_exponential(multiplier=1, min=1, max=30),
     reraise=True,
 )
 
@@ -94,6 +94,7 @@ class RubricJudge(BaseJudge):
                 reasoning=f"Judge failed: {str(exc)}",
             )
 
+    @_retry_llm
     async def _reasoning_stream(self, context: dict) -> None:
         model = self._chat_model(streaming=True).with_config(tags=["eval_judge_reasoning"])
         prompt = self._build_reasoning_prompt(context)

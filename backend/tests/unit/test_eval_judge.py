@@ -181,4 +181,61 @@ async def test_judge_retry(judge_config):
             result = await judge.judge({"input": "query"}, {"output": "answer"})
             assert result.overall == 8.0
 
-    # I will implement retry on the internal LLM call method.
+    # Verify the retry decorator works on _rubric_score via _chat_model mock.
+
+
+@pytest.mark.asyncio
+async def test_reasoning_stream_retries_on_rate_limit(judge_config):
+    """_reasoning_stream 遇到 RateLimitError 必须重试而不是直接 fallback。"""
+    from openai import RateLimitError
+
+    judge = RubricJudge(judge_config)
+
+    mock_score = RubricJudgeScore(
+        target_type="question",
+        dimensions=[
+            RubricDimensionScore(dimension_name="relevance", score=8.0, reasoning="ok")
+        ],
+        overall=8.0,
+        reasoning="good",
+    )
+
+    stream_attempt = 0
+    chat_calls = []
+
+    def flaky_astream(messages):
+        nonlocal stream_attempt
+        stream_attempt += 1
+        if stream_attempt < 3:
+            raise RateLimitError(
+                "rate limit",
+                response=MagicMock(status_code=429),
+                body=None,
+            )
+
+        async def _gen():
+            yield "ok"
+
+        return _gen()
+
+    def side_effect_chat_model(streaming=False):
+        chat_calls.append(streaming)
+        model = MagicMock()
+        if streaming:
+            model.with_config = MagicMock(return_value=model)
+            model.astream = flaky_astream
+        else:
+            runnable = AsyncMock()
+            runnable.ainvoke.return_value = mock_score
+            model.with_structured_output = MagicMock(return_value=runnable)
+        return model
+
+    with patch.object(RubricJudge, "_chat_model", side_effect=side_effect_chat_model):
+        result = await judge.judge({"input": "query"}, {"output": "answer"})
+
+    assert result.overall == 8.0, (
+        f"重试成功应返回 overall=8.0，实际 {result.overall}"
+    )
+    assert stream_attempt == 3, (
+        f"期望 _reasoning_stream 被调用 3 次（前 2 次 429 重试），实际 {stream_attempt} 次"
+    )
