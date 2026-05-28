@@ -118,3 +118,207 @@ async def test_runner_isolates_case_failures_between_tasks():
     assert "c0" in call_log
     assert "c1" in call_log
     assert "c2" in call_log
+
+
+@pytest.mark.asyncio
+async def test_runner_retries_system_call_on_rate_limit():
+    """system_call 遇到 OpenAI RateLimitError 时自动重试。"""
+    from openai import RateLimitError
+
+    sessions: list = []
+    judge = _build_judge()
+
+    call_count = 0
+
+    async def flaky_system_call(tt, inp):
+        nonlocal call_count
+        call_count += 1
+        if call_count < 3:
+            raise RateLimitError(
+                "rate limit",
+                response=MagicMock(status_code=429),
+                body=None,
+            )
+        return {"answer": "ok"}
+
+    with patch("app.eval.runner.EvalStorage", side_effect=_build_storage_factory()):
+        runner = EvalRunner(_make_factory(sessions), judge, flaky_system_call,
+                            max_concurrency=1)
+        cases = [
+            MagicMock(id=uuid4(), case_key="c0", target_type="question",
+                      input_json={}, golden_json=None),
+        ]
+        await runner.run(uuid4(), cases)
+
+    # 前 2 次失败被重试，第 3 次成功
+    assert call_count == 3, (
+        f"期望 system_call 被重试 3 次才成功，实际调用了 {call_count} 次"
+    )
+
+
+@pytest.mark.asyncio
+async def test_runner_completed_cases_exact_after_concurrent_run():
+    """并发 3 个成功 case 后 completed_cases 必须精确为 3。"""
+    sessions: list = []
+
+    async def fake_system_call(tt, inp):
+        return {"answer": "ok"}
+
+    counter = {"value": 0}
+
+    def _make_storage_by_session(session):
+        s = MagicMock()
+        s.bound_session = session
+        s.update_run = AsyncMock()
+        s.save_result = AsyncMock()
+
+        async def fake_increment(run_id):
+            counter["value"] += 1
+
+        s.increment_completed_cases = fake_increment
+        s.get_run = AsyncMock(return_value=MagicMock(completed_cases=0))
+        s.get_results = AsyncMock(return_value=[])
+        return s
+
+    with patch("app.eval.runner.EvalStorage", side_effect=_make_storage_by_session):
+        runner = EvalRunner(
+            _make_factory(sessions),
+            _build_judge(),
+            fake_system_call,
+            max_concurrency=3,
+        )
+        cases = [
+            MagicMock(id=uuid4(), case_key=f"c{i}", target_type="question",
+                      input_json={}, golden_json=None)
+            for i in range(3)
+        ]
+        await runner.run(uuid4(), cases)
+
+    assert counter["value"] == 3, (
+        f"并发 3 个成功 case 后期望 completed_cases=3，实际 {counter['value']}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_runner_binary_pass_maps_from_overall_score():
+    """binary_pass 应该从 overall_score 显式计算，overall >= 7.0 为 True。"""
+    sessions: list = []
+    judge = _build_judge()
+
+    saved_results = []
+
+    def _make_storage_by_session(session):
+        s = MagicMock()
+        s.bound_session = session
+        s.update_run = AsyncMock()
+        s.increment_completed_cases = AsyncMock()
+
+        async def fake_save_result(result_data):
+            saved_results.append(result_data)
+
+        s.save_result = fake_save_result
+        s.get_run = AsyncMock(return_value=MagicMock(completed_cases=0))
+        s.get_results = AsyncMock(return_value=[])
+        return s
+
+    async def fake_system_call(tt, inp):
+        return {"answer": "ok"}
+
+    with patch("app.eval.runner.EvalStorage", side_effect=_make_storage_by_session):
+        runner = EvalRunner(
+            _make_factory(sessions),
+            judge,
+            fake_system_call,
+            max_concurrency=1,
+        )
+        cases = [
+            MagicMock(id=uuid4(), case_key="c0", target_type="question",
+                      input_json={}, golden_json=None),
+        ]
+        await runner.run(uuid4(), cases)
+
+    assert len(saved_results) == 1
+    assert saved_results[0]["binary_pass"] is True, (
+        f"overall=7.0 期望 binary_pass=True，实际 {saved_results[0]['binary_pass']}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_runner_binary_pass_false_when_below_threshold():
+    """overall < 7.0 时 binary_pass 应为 False。"""
+    sessions: list = []
+    judge = MagicMock()
+    judge.judge = AsyncMock(return_value=MagicMock(
+        model_dump=lambda: {"overall": 5.0},
+        reasoning="r",
+        overall=5.0,
+    ))
+
+    saved_results = []
+
+    def _make_storage_by_session(session):
+        s = MagicMock()
+        s.bound_session = session
+        s.update_run = AsyncMock()
+        s.increment_completed_cases = AsyncMock()
+
+        async def fake_save_result(result_data):
+            saved_results.append(result_data)
+
+        s.save_result = fake_save_result
+        s.get_run = AsyncMock(return_value=MagicMock(completed_cases=0))
+        s.get_results = AsyncMock(return_value=[])
+        return s
+
+    async def fake_system_call(tt, inp):
+        return {"answer": "ok"}
+
+    with patch("app.eval.runner.EvalStorage", side_effect=_make_storage_by_session):
+        runner = EvalRunner(
+            _make_factory(sessions),
+            judge,
+            fake_system_call,
+            max_concurrency=1,
+        )
+        cases = [
+            MagicMock(id=uuid4(), case_key="c0", target_type="question",
+                      input_json={}, golden_json=None),
+        ]
+        await runner.run(uuid4(), cases)
+
+    assert len(saved_results) == 1
+    assert saved_results[0]["binary_pass"] is False
+
+
+@pytest.mark.asyncio
+async def test_judge_semaphore_initialized():
+    """judge semaphore 必须正确初始化，默认值为 max(1, max_concurrency // 2)。"""
+    sessions: list = []
+
+    with patch("app.eval.runner.EvalStorage", side_effect=_build_storage_factory()):
+        runner = EvalRunner(
+            _make_factory(sessions),
+            _build_judge(),
+            AsyncMock(return_value={"answer": "ok"}),
+            max_concurrency=5,
+        )
+
+    assert runner._judge_semaphore is not None
+    assert runner._judge_semaphore._value == 2  # max(1, 5 // 2) = 2
+
+
+@pytest.mark.asyncio
+async def test_judge_semaphore_configurable():
+    """judge_max_concurrency 应可显式配置。"""
+    sessions: list = []
+
+    with patch("app.eval.runner.EvalStorage", side_effect=_build_storage_factory()):
+        runner = EvalRunner(
+            _make_factory(sessions),
+            _build_judge(),
+            AsyncMock(return_value={"answer": "ok"}),
+            max_concurrency=5,
+            judge_max_concurrency=3,
+        )
+
+    assert runner._judge_semaphore._value == 3

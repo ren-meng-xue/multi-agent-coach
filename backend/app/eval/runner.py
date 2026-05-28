@@ -12,6 +12,9 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
+from openai import APIConnectionError, APITimeoutError, InternalServerError, RateLimitError
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+
 from app.core.logging import get_logger
 from app.eval.dimensions import TargetType
 from app.eval.judge import BaseJudge
@@ -22,6 +25,15 @@ SessionFactory = Callable[[], AbstractAsyncContextManager[Any]]
 
 log = get_logger("app.eval.runner")
 
+_SYSTEM_RETRYABLE = (APIConnectionError, APITimeoutError, InternalServerError, RateLimitError)
+
+_system_retry = retry(
+    retry=retry_if_exception_type(_SYSTEM_RETRYABLE),
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, max=8),
+    reraise=True,
+)
+
 
 class EvalRunner:
     def __init__(
@@ -30,11 +42,17 @@ class EvalRunner:
         judge: BaseJudge,
         system_call: SystemCall,
         max_concurrency: int = 5,
+        judge_max_concurrency: int | None = None,
     ):
         self.session_factory = session_factory
         self.judge = judge
         self.system_call = system_call
         self.max_concurrency = max_concurrency
+        self._judge_semaphore = asyncio.Semaphore(
+            judge_max_concurrency
+            if judge_max_concurrency is not None
+            else max(1, max_concurrency // 2)
+        )
 
     async def run(self, run_id: UUID, cases: list[Any]) -> None:
         semaphore = asyncio.Semaphore(self.max_concurrency)
@@ -53,19 +71,24 @@ class EvalRunner:
                     start_time = datetime.now(UTC).timestamp()
                     try:
                         target_type = TargetType(case.target_type)
-                        # 1. System output：调真实 Agent 节点
-                        system_output = await self.system_call(target_type, case.input_json)
+                        # 1. System output：调真实 Agent 节点（带 rate limit 重试）
+                        @_system_retry
+                        async def _do_system_call():
+                            return await self.system_call(target_type, case.input_json)
+
+                        system_output = await _do_system_call()
                         latency = int(
                             (datetime.now(UTC).timestamp() - start_time) * 1000
                         )
 
-                        # 2. Judge
-                        judge_result = await self.judge.judge(
-                            case.input_json,
-                            system_output,
-                            golden=case.golden_json,
-                            target_type=target_type,
-                        )
+                        # 2. Judge（用 semaphore 限制并发 LLM 调用）
+                        async with self._judge_semaphore:
+                            judge_result = await self.judge.judge(
+                                case.input_json,
+                                system_output,
+                                golden=case.golden_json,
+                                target_type=target_type,
+                            )
 
                         # 3. Save
                         await storage.save_result({
@@ -80,7 +103,11 @@ class EvalRunner:
                             ),
                             "judge_reasoning": getattr(judge_result, "reasoning", ""),
                             "overall_score": getattr(judge_result, "overall", None),
-                            "binary_pass": getattr(judge_result, "passed", None),
+                            "binary_pass": (
+                                (judge_result.overall >= 7.0)
+                                if hasattr(judge_result, "overall") and judge_result.overall is not None
+                                else None
+                            ),
                             "latency_ms": latency,
                         })
                     except Exception as e:
@@ -90,17 +117,8 @@ class EvalRunner:
                             error=str(e),
                         )
                     finally:
-                        # 更新 completed_cases。
-                        # 已知问题：get→add→update 模式在并发下仍可能丢更新（race）。
-                        # 修复需要把它改成原子 SQL `completed_cases = completed_cases + 1`，
-                        # 留作单独 commit / QA §5 已知问题。本次只修 session race。
                         try:
-                            run_row = await storage.get_run(run_id)
-                            if run_row:
-                                await storage.update_run(
-                                    run_id,
-                                    completed_cases=run_row.completed_cases + 1,
-                                )
+                            await storage.increment_completed_cases(run_id)
                         except Exception as exc:
                             log.warning(
                                 "eval_progress_update_failed",
