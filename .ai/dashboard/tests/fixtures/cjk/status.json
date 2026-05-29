@@ -1,0 +1,8 @@
+{
+  "task_id": "cjk",
+  "state": "REVIEW",
+  "current_owner": "frontend",
+  "next_owner": "reviewer",
+  "updated_at": "2026-05-29T11:00:00+08:00",
+  "notes": "首跑：验证多 agent 协作 + cockpit 链路"
+}

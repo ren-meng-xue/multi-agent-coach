@@ -1,0 +1,8 @@
+{
+  "task_id": "happy",
+  "state": "IN_PROGRESS",
+  "current_owner": "backend",
+  "next_owner": "reviewer",
+  "updated_at": "2026-05-29T10:00:00+08:00",
+  "notes": "normal ascii notes"
+}
