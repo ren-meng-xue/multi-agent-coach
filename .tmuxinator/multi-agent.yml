@@ -1,0 +1,21 @@
+name: multi-agent
+root: ~/learn/AI项目/multi-agent-coach
+
+windows:
+  - cockpit:
+      layout: main-horizontal
+      panes:
+        - watch -n 2 'bash scripts/utils/dashboard.sh'
+        - until bash scripts/control-plane.sh; do sleep 5; done
+  - planner:
+      panes:
+        - claude code
+  - backend:
+      panes:
+        - claude code
+  - frontend:
+      panes:
+        - claude code
+  - reviewer:
+      panes:
+        - claude code
