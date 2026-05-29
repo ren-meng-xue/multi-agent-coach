@@ -3,7 +3,7 @@
 模拟真实面试一问一答，直接调 LangGraph，不需要启动 HTTP 服务。
 
 运行：
-    cd backend && .venv/bin/python scripts/chat_demo.py
+    cd backend && .venv/bin/python scripts-old/chat_demo.py
 """
 import asyncio
 import sys

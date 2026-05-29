@@ -1,171 +1,250 @@
-# Multi Agent Coach · Claude Code 主控规范
+# Multi-Agent Workflow
 
-所有回复必须使用简体中文。
+定义智能体在 Multi-Agent Cockpit 架构下的协作与执行工作流。
 
----
+## Workflow Authority
 
-# 确认与许可
+在多智能体协同处理任务时，规则与上下文文件的权威优先级如下（数字越小优先级越高）：
 
-| 触发词 | 含义 |
-|--------|------|
-| `ok` `1` `好` `可以` `继续` `确认` | 确认/允许继续当前待办操作 |
+|  优先级  | 文件 / 目录                    | 冲突处理原则                |
+| :---: | :------------------------- | :-------------------- |
+| **1** | `CLAUDE.md`                | 最高准则，所有 Agent 必须无条件遵守 |
+| **2** | `agents/*.md`              | 各 Agent 的角色定义与专属行为规范  |
+| **3** | `shared/decisions/*`       | 长期有效的架构与流程决策          |
+| **4** | `shared/current/tasks.md`  | 当前活跃任务清单              |
+| **5** | `shared/current/status.md` | 当前执行状态                |
+| **6** | `shared/current/review.md` | Reviewer 的评审与 QA 反馈   |
 
-- 仅用于确认/许可语义，不改变其他 Git 规则（仍禁止自动 `push` `merge` `rebase`）
-- 无待确认操作时收到上述回复，必须先澄清再执行
-
----
-
-# Git 规则
-
-| 规则 | 说明 |
-|------|------|
-| 禁止 `git add -A` / `git add .` | 只按文件名精确添加 |
-| 禁止自动 `push` `merge` `rebase` | 需用户明确指令 |
-| 每完成一个单元后询问 commit | 先总结修改内容再询问 |
-| Conventional commits | `feat` `fix` `test` `refactor` `docs` `chore` `build` |
+当各文件内容发生冲突时，必须按上述优先级执行。
 
 ---
 
-# 开发流程
+## Required Context
 
-| 规则 | 说明 |
-|------|------|
-| TDD 优先 | 先写失败测试，再实现功能 |
-| Bug 修复 | 必须补 regression test |
-| 修改后验证 | lint → typecheck → tests → build（如适用） |
-| 验证失败 | 只修失败原因，不做无关重构 |
-| 禁止大规模重构 | 除非用户明确要求 |
-| 较大修改前 | 先分析 → 给计划 → 说影响 → 再改代码 |
-| 默认优先 | correctness > stability > maintainability |
-| 禁止超前设计 | 不为「未来扩展」建复杂框架 |
+所有 Agent 在开始任何任务前，必须读取：
 
----
+* `CLAUDE.md`
+* 对应 Agent 文件
+* `shared/current/tasks.md`
+* `shared/current/status.md`
+* `shared/decisions/*`
 
-# 代码设计原则
+Reviewer 额外读取：
 
-| 原则 | 说明 |
-|------|------|
-| 优先简单实现 | 避免过度抽象 |
-| 避免无意义模式 | factory / manager / registry / generic framework |
-| 优先 | 可读性 / 可维护性 / 清晰数据流 |
-| 禁止 | 引入与当前需求无关的架构层 |
+* `shared/current/review.md`
 
 ---
 
-# 后端规范
+## Workflow Lifecycle
 
-| 规则 | 要求 |
-|------|------|
-| 配置 | 必须走 `pydantic-settings` |
-| 硬编码禁止 | API Key / Secret / Token / DB URL |
-| 数据库迁移 | 必须走 Alembic，禁止手改表结构 |
-| 异步 DB | SQLAlchemy 2.x async + asyncpg |
-| 日志 | `structlog`，禁止 `print` |
-| LLM 调用 | retry 装饰器 + timeout + 失败日志 |
-| 外部 API | 错误处理 + 超时控制 + 重试机制 |
-| 异常处理 | 禁止 silently swallow exceptions |
-| Fallback | 必须记录 warning/error 日志 |
-| 用户可见失败 | 必须返回明确错误 |
+标准协作流程：
 
----
+```txt
+Human
+↓
+Planner
+↓
+Backend / Frontend
+↓
+Reviewer
+↓
+Planner
+```
 
-# 前端规范
+### Planner
 
-| 规则 | 说明 |
-|------|------|
-| 组件库 | 优先 shadcn/ui，不新增 UI 依赖 |
-| 组件职责 | 单一，不写复杂业务逻辑 |
-| 数据获取 | hooks / services / server actions |
-| 避免 | 深层 prop drilling / 巨型组件 / 隐式状态 |
-| 状态覆盖 | loading / error / empty state |
+负责：
 
----
+* 创建任务
+* 拆解任务
+* 维护架构一致性
+* 更新 decisions
+* 分配任务
+* 关闭任务
+* 执行归档
 
-# 注释规范
+### Backend / Frontend
 
-| 原则 | 示例 |
-|------|------|
-| 公共函数必须有说明 | |
-| 复杂逻辑必须注释 | |
-| 非显然决策解释原因 | |
-| 解释 why / 风险 / 边界条件 | |
-| 禁止废话注释 | ❌ `# 获取用户` ✅ `# 必须刷新缓存，权限变更后旧缓存可能导致越权` |
+负责：
 
----
+* 读取任务
+* 更新状态
+* 完成实现
+* 编写测试
+* 执行验证
 
-# Review 重点
+### Reviewer
 
-| | | |
-|------|------|------|
-| type safety | async / race condition | auth bypass |
-| hardcoded secrets | DB migration risk | missing retry/timeout |
-| missing failure logs | missing regression tests | edge cases |
-| production incident risk | memory leak | duplicate requests |
-| cache consistency | error handling completeness | rollback safety |
+负责：
+
+* Review
+* QA
+* 风险检查
+* 更新 review.md
 
 ---
 
-# 测试规范
+## Task States
 
-| 规则 | 说明 |
-|------|------|
-| 新功能 | 至少 success case + failure case |
-| Bug 修复 | 必须含 regression test |
-| Async 流程 | timeout/retry/cancellation 路径必须覆盖 |
-| 禁止 | 只测 happy path |
-| 避免 | sleep / 不稳定时间依赖 / 外部真实服务 |
+统一状态名称：
 
----
+* `pending`
+* `in-progress`
+* `review`
+* `blocked`
+* `done`
 
-# 验证命令
-
-| 端 | 命令 |
-|----|------|
-| 后端 lint | `cd backend && .venv/bin/python -m ruff check .` |
-| 后端 typecheck | `cd backend && .venv/bin/python -m mypy app` |
-| 后端 test | `cd backend && .venv/bin/python -m pytest tests/` |
-| 前端 test | `cd frontend && pnpm test` |
-| 前端 typecheck | `cd frontend && pnpm typecheck` |
-| 前端 build | `cd frontend && pnpm build` |
+禁止 Agent 自行创造新的状态名称。
 
 ---
 
-# 默认工作流
+## State Ownership
 
-较大改动按完整流程；小改动至少走「开发流程」+「验证命令」：
+任务状态只能按以下职责更新：
 
-1. 分析需求 → 2. 阅读代码 → 3. 提实现计划 → 4. 写失败测试（TDD）→ 5. 实现 → 6. 验证 → 7. 修复失败 → 8. review → 9. 补 regression test → 10. 总结风险 → 11. 等用户确认后 commit
+| 状态          | Owner              |
+| ----------- | ------------------ |
+| pending     | Planner            |
+| in-progress | Backend / Frontend |
+| review      | Reviewer           |
+| blocked     | 当前执行 Agent         |
+| done        | Planner            |
+
+### 状态流转规则
+
+* Planner 创建任务时设置为 `pending`
+* Backend / Frontend 开始执行任务后更新为 `in-progress`
+* Reviewer 开始 Review 或 QA 后更新为 `review`
+* 任意 Agent 遇到阻塞时可更新为 `blocked`
+* Reviewer 在 `shared/current/review.md` 中给出 `approved` 结论后，由 Planner 更新为 `done`
+* 只有 Planner 可以关闭任务并执行归档
+
+### 状态修改原则
+
+* Agent 只能修改自己负责的状态
+* 禁止跳过状态流转
+* 禁止自行创造新的状态名称
+* 所有状态变更必须同步更新 `shared/current/status.md`
+* `blocked` 状态必须附带阻塞原因
+* `done` 状态必须满足任务完成标准与 Review 通过条件
+
+### 标准状态流转
+
+```txt
+pending
+↓
+in-progress
+↓
+review
+↓
+done
+```
+
+发生阻塞：
+
+```txt
+pending
+↓
+in-progress
+↓
+blocked
+↓
+in-progress
+↓
+review
+↓
+done
+```
 
 ---
 
-# Skill Routing
+## File Ownership
 
-匹配到可用 skill 时必须 invoke。不确定时也 invoke。
-
-| 场景 | Skill |
-|------|-------|
-| 产品创意/头脑风暴 | /office-hours |
-| 战略/scope | /plan-ceo-review |
-| 架构 | /plan-eng-review |
-| 设计系统/设计评审 | /design-consultation 或 /plan-design-review |
-| 完整评审管线 | /autoplan |
-| Bug/错误 | /investigate |
-| QA/测试行为 | /qa 或 /qa-only |
-| 代码审查/diff | /review |
-| 视觉打磨 | /design-review |
-| 发布/部署/PR | /ship 或 /land-and-deploy |
-| 保存进度 | /context-save |
-| 恢复上下文 | /context-restore |
+| 文件                         | Owner    | 权限               |
+| -------------------------- | -------- | ---------------- |
+| `shared/current/tasks.md`  | Planner  | 仅 Planner 可修改    |
+| `shared/current/status.md` | Shared   | 所有 Agent 可更新自身状态 |
+| `shared/current/review.md` | Reviewer | 仅 Reviewer 可修改   |
+| `shared/decisions/*`       | Planner  | 仅 Planner 可修改    |
 
 ---
 
-# AI 编排协议
+## Handoff Rules
 
-| 文件 | 内容 |
-|------|------|
-| `docs/protocols/ai-workflow-protocol.md` | 风险等级、流程权重、产物约定 |
-| `docs/protocols/review-protocol.md` | 独立 review 原则、角色视角 |
-| `docs/protocols/artifact-protocol.md` | Artifact 约定与生命周期 |
-| `docs/protocols/synthesis-protocol.md` | Review 后综合汇聚准则 |
+### Planner → Backend / Frontend
 
-高风险任务必须遵循多角色独立 review + artifact-driven workflow + synthesis 更新流程。
+条件：
+
+```txt
+Task State = pending
+```
+
+Planner：
+
+* 创建任务
+* 分配任务
+
+Backend / Frontend：
+
+* 开始执行
+* 更新状态为 `in-progress`
+
+---
+
+### Backend / Frontend → Reviewer
+
+条件：
+
+```txt
+Task State = in-progress
+```
+
+Backend / Frontend：
+
+* 完成实现
+* 完成测试
+* 更新状态
+
+Reviewer：
+
+* 开始 Review
+* 更新状态为 `review`
+
+---
+
+### Reviewer → Planner
+
+条件：
+
+```txt
+review.md
+Decision = approved
+```
+
+Planner：
+
+* 标记任务完成
+* 更新状态为 `done`
+* 执行归档
+
+---
+
+### Blocked Flow
+
+任意 Agent：
+
+```txt
+Task State = blocked
+```
+
+必须记录：
+
+* 阻塞原因
+* 所需协助
+* 下一步行动
+
+阻塞解除后恢复：
+
+```txt
+in-progress
+```

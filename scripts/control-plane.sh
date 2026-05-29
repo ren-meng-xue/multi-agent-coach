@@ -41,8 +41,15 @@ read_json_field() {
   perl -ne "print \"\$1\" if /\"$key\":\"([^\"]*)\"/" "$file" 2>/dev/null | head -1 || echo ""
 }
 
-# 死锁检测
-declare -A stall_count
+# 死锁检测 (Bash 3.2 兼容：使用变量名动态拼接)
+get_stall_count() {
+  local tid=$(echo "$1" | tr -cd '[:alnum:]')
+  eval "echo \${stall_count_$tid:-0}"
+}
+set_stall_count() {
+  local tid=$(echo "$1" | tr -cd '[:alnum:]')
+  eval "stall_count_$tid=$2"
+}
 
 # 首次启动 / 重连：检测 agent window 是否已 bootstrap
 bootstrap_if_needed() {
@@ -82,9 +89,15 @@ while true; do
 ## Active dispatches
 NEXTEOF
 
-  # 按 agent 聚合
-  declare -A agent_next
-  declare -A agent_queue
+  # 按 agent 聚合 (Bash 3.2 兼容)
+  planner_next=""
+  planner_queue=""
+  backend_next=""
+  backend_queue=""
+  frontend_next=""
+  frontend_queue=""
+  reviewer_next=""
+  reviewer_queue=""
 
   while IFS= read -r line; do
     [ -z "$line" ] && continue
@@ -119,15 +132,17 @@ NEXTEOF
     if [ "$last_state" = "$current_state:$agent" ]; then
       # 去重：上一轮已派过同一个 (task, state, agent)
       # 检查死锁
-      stall_count["$tid"]=$((${stall_count["$tid"]:-0} + 1))
-      if [ ${stall_count["$tid"]} -ge 10 ]; then
-        echo "[$(date '+%Y-%m-%d %H:%M')] [cockpit] ⚠ stall detected: $tid $current_state→$agent (${stall_count["$tid"]} cycles)" >> "$HEALTH"
+      cnt=$(get_stall_count "$tid")
+      cnt=$((cnt + 1))
+      set_stall_count "$tid" "$cnt"
+      if [ "$cnt" -ge 10 ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M')] [cockpit] ⚠ stall detected: $tid $current_state→$agent ($cnt cycles)" >> "$HEALTH"
       fi
       continue
     fi
 
     # 重置停滞计数
-    stall_count["$tid"]=0
+    set_stall_count "$tid" 0
 
     # state=review: 先跑 review-hook
     if [ "$current_state" = "review" ]; then
@@ -143,11 +158,22 @@ NEXTEOF
     # 聚合 agent queue
     task_type=$("$PARSE" "$tid" type 2>/dev/null || echo "feature")
     task_priority=$("$PARSE" "$tid" priority 2>/dev/null || echo "normal")
-    if [ -z "${agent_next[$agent]:-}" ]; then
-      agent_next[$agent]="$tid ($task_type, priority=$task_priority)"
-    else
-      agent_queue[$agent]="${agent_queue[$agent]:-} $tid ($task_type, priority=$task_priority)"
-    fi
+    
+    item="$tid ($task_type, priority=$task_priority)"
+    case "$agent" in
+      planner)
+        if [ -z "$planner_next" ]; then planner_next="$item"; else planner_queue="$planner_queue $item"; fi
+        ;;
+      backend)
+        if [ -z "$backend_next" ]; then backend_next="$item"; else backend_queue="$backend_queue $item"; fi
+        ;;
+      frontend)
+        if [ -z "$frontend_next" ]; then frontend_next="$item"; else frontend_queue="$frontend_queue $item"; fi
+        ;;
+      reviewer)
+        if [ -z "$reviewer_next" ]; then reviewer_next="$item"; else reviewer_queue="$reviewer_queue $item"; fi
+        ;;
+    esac
   done <<< "$route_output"
 
   new_dispatch="${new_dispatch%,}}"
@@ -159,10 +185,12 @@ NEXTEOF
 NEXTEOF
 
   for agent in planner backend frontend reviewer; do
-    if [ -n "${agent_next[$agent]:-}" ]; then
+    eval "next_val=\$${agent}_next"
+    eval "queue_val=\$${agent}_queue"
+    if [ -n "$next_val" ]; then
       echo "### $agent" >> "$ROOT/shared/current/next-action.md"
-      echo "Next: ${agent_next[$agent]}" >> "$ROOT/shared/current/next-action.md"
-      [ -n "${agent_queue[$agent]:-}" ] && echo "Queue:${agent_queue[$agent]}" >> "$ROOT/shared/current/next-action.md"
+      echo "Next: $next_val" >> "$ROOT/shared/current/next-action.md"
+      [ -n "$queue_val" ] && echo "Queue:$queue_val" >> "$ROOT/shared/current/next-action.md"
       echo "" >> "$ROOT/shared/current/next-action.md"
     fi
   done
