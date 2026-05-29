@@ -1,0 +1,9 @@
+{
+  "task_id": "TASK-XXX",
+  "state": "TODO",
+  "current_owner": "planner",
+  "next_owner": null,
+  "updated_at": "",
+  "blockers": [],
+  "notes": ""
+}

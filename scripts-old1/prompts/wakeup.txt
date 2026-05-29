@@ -1,0 +1,11 @@
+你被调度台派活了。按以下顺序执行：
+1. 读 shared/current/next-action.md 确认本次角色
+2. 读 CLAUDE.md、agents/<角色>.md
+3. 读 shared/current/tasks.md、shared/current/status.md、shared/decisions/
+4. reviewer 额外读 shared/current/review.md
+5. 按角色职责执行
+
+状态变更必须用脚本，禁止手改 tasks.md：
+- 开始任务：bash scripts/start-task.sh <task_id>
+- 完成任务：bash scripts/submit-task.sh <task_id>
+- 遇到阻塞：bash scripts/block-task.sh <task_id> <原因>
