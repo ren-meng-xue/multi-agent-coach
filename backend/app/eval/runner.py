@@ -18,6 +18,7 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 from app.core.logging import get_logger
 from app.eval.dimensions import TargetType
 from app.eval.judge import BaseJudge
+from app.eval.schemas import PASS_THRESHOLD
 from app.eval.storage import EvalStorage
 
 SystemCall = Callable[[TargetType, dict[str, Any]], Awaitable[dict[str, Any]]]
@@ -104,47 +105,51 @@ class EvalRunner:
                             "judge_reasoning": getattr(judge_result, "reasoning", ""),
                             "overall_score": getattr(judge_result, "overall", None),
                             "binary_pass": (
-                                (judge_result.overall >= 7.0)
+                                (judge_result.overall >= PASS_THRESHOLD)
                                 if hasattr(judge_result, "overall") and judge_result.overall is not None
                                 else None
                             ),
                             "latency_ms": latency,
+                            "judge_model": self.judge.config.model,
                         })
+                        await storage.increment_completed_cases(run_id)
                     except Exception as e:
                         log.error(
                             "eval_case_failed",
                             case_key=case.case_key,
                             error=str(e),
                         )
-                    finally:
-                        try:
-                            await storage.increment_completed_cases(run_id)
-                        except Exception as exc:
-                            log.warning(
-                                "eval_progress_update_failed",
-                                case_key=case.case_key,
-                                error=str(exc),
-                            )
 
-        await asyncio.gather(*(_run_one(c) for c in cases))
+        gather_results = await asyncio.gather(
+            *(_run_one(c) for c in cases), return_exceptions=True
+        )
+        for i, r in enumerate(gather_results):
+            if isinstance(r, Exception):
+                log.error(
+                    "eval_case_unhandled_error",
+                    case_key=cases[i].case_key,
+                    error=str(r),
+                )
 
         # 收尾：用自己的 session 聚合结果 + 标记完成
         async with self.session_factory() as session:
             storage = EvalStorage(session)
             results = await storage.get_results(run_id)
             stats: dict[str, dict[str, float]] = {}
-            for r in results:
-                t = r.target_type
+            for result in results:
+                t = result.target_type
                 if t not in stats:
-                    stats[t] = {"sum": 0.0, "pass": 0.0, "count": 0.0}
-                stats[t]["sum"] += float(r.overall_score or 0.0)
-                if r.binary_pass:
+                    stats[t] = {"sum": 0.0, "pass": 0.0, "count": 0.0, "scored_count": 0.0}
+                if result.overall_score is not None:
+                    stats[t]["sum"] += float(result.overall_score)
+                    stats[t]["scored_count"] += 1.0
+                if result.binary_pass:
                     stats[t]["pass"] += 1.0
                 stats[t]["count"] += 1.0
 
             by_target_type = {
                 t: {
-                    "avg": v["sum"] / v["count"] if v["count"] > 0 else 0.0,
+                    "avg": v["sum"] / v["scored_count"] if v["scored_count"] > 0 else 0.0,
                     "pass_rate": v["pass"] / v["count"] if v["count"] > 0 else 0.0,
                     "count": int(v["count"]),
                 }

@@ -9,6 +9,7 @@ from app.eval.schemas import (
     ComparativeScore,
     JudgeConfig,
     RubricDimensionScore,
+    RubricJudgeScore,
 )
 
 
@@ -122,9 +123,35 @@ def test_binary_score_confidence_range():
     assert score.confidence == 0.5
 
 
+def test_rubric_judge_score_passed():
+    """RubricJudgeScore 必须有 passed 属性，基于 overall >= 7.0 判定。"""
+    above = RubricJudgeScore(
+        target_type="question",
+        dimensions=[],
+        overall=7.5,
+        reasoning="ok",
+    )
+    assert above.passed is True
+
+    below = RubricJudgeScore(
+        target_type="question",
+        dimensions=[],
+        overall=6.5,
+        reasoning="ok",
+    )
+    assert below.passed is False
+
+    edge = RubricJudgeScore(
+        target_type="question",
+        dimensions=[],
+        overall=7.0,
+        reasoning="ok",
+    )
+    assert edge.passed is True
+
+
 def test_judge_config_defaults():
     config = JudgeConfig()
     assert config.model == "gpt-4o"
     assert config.mode == JudgeMode.RUBRIC
     assert config.temperature == 0.0
-    assert config.max_retries == 3

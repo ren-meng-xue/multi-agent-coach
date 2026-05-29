@@ -3,6 +3,8 @@ from uuid import UUID
 
 from app.eval.storage import EvalStorage
 
+SIGNIFICANCE_DELTA = 0.5
+
 
 class RegressionTester:
     def __init__(self, storage: EvalStorage):
@@ -31,9 +33,9 @@ class RegressionTester:
             score_b = map_b[key].overall_score or 0.0
             
             diff = score_b - score_a
-            if diff > 0.5:
+            if diff > SIGNIFICANCE_DELTA:
                 comparison["improved"].append(key)
-            elif diff < -0.5:
+            elif diff < -SIGNIFICANCE_DELTA:
                 comparison["degraded"].append(key)
             else:
                 comparison["stable"].append(key)
@@ -56,16 +58,16 @@ class RegressionTester:
 
         avg_a = _avg_by_type(results_a)
         avg_b = _avg_by_type(results_b)
-        all_types = set(avg_a) | set(avg_b)
+        common_types = set(avg_a) & set(avg_b)
 
-        for target_type in sorted(all_types):
-            score_a = avg_a.get(target_type, 0.0)
-            score_b = avg_b.get(target_type, 0.0)
+        for target_type in sorted(common_types):
+            score_a = avg_a[target_type]
+            score_b = avg_b[target_type]
             delta = score_b - score_a
-            significant = abs(delta) > 0.5
-            if delta > 0.5:
+            significant = abs(delta) > SIGNIFICANCE_DELTA
+            if delta > SIGNIFICANCE_DELTA:
                 winner = "b"
-            elif delta < -0.5:
+            elif delta < -SIGNIFICANCE_DELTA:
                 winner = "a"
             else:
                 winner = "tie"

@@ -61,12 +61,12 @@ async def trigger_eval(
 
     judge_config = JudgeConfig(
         model=request.judge_model or "gpt-4o",
-        mode=JudgeMode(request.judge_mode)
+        mode=request.judge_mode,
     )
     judge: BaseJudge
-    if request.judge_mode == "rubric":
+    if request.judge_mode == JudgeMode.RUBRIC:
         judge = RubricJudge(judge_config)
-    elif request.judge_mode == "comparative":
+    elif request.judge_mode == JudgeMode.COMPARATIVE:
         judge = ComparativeJudge(judge_config)
     else:
         judge = BinaryJudge(judge_config)
@@ -74,7 +74,7 @@ async def trigger_eval(
     run = await storage.create_run(
         suite_id=suite.id,
         name=f"API Run {request.suite}",
-        judge_mode=request.judge_mode,
+        judge_mode=request.judge_mode.value,
         judge_model=judge_config.model,
         total_cases=len(cases),
         system_version=request.system_version
@@ -86,13 +86,29 @@ async def trigger_eval(
     for c in cases:
         db.expunge(c)
 
-    runner = EvalRunner(async_session_factory, judge, dispatch_system_call)
-    background_tasks.add_task(runner.run, run_id, cases)
+    settings = get_settings()
+    runner = EvalRunner(
+        async_session_factory, judge, dispatch_system_call,
+        max_concurrency=settings.eval_max_concurrency,
+    )
+
+    async def _safe_run():
+        try:
+            await runner.run(run_id, cases)
+        except Exception:
+            import structlog
+            _log = structlog.get_logger("app.eval.api")
+            _log.error("eval_run_crashed", run_id=str(run_id))
+            async with async_session_factory() as fail_db:
+                fail_storage = EvalStorage(fail_db)
+                await fail_storage.update_run(run_id, status="failed")
+
+    background_tasks.add_task(_safe_run)
 
     return run_id
 
 
-@router.get("/runs", response_model=list[EvalRunResponse])
+@router.get("/runs", response_model=list[EvalRunResponse], dependencies=[Depends(verify_eval_auth)])
 async def list_runs(
     suite_name: str | None = None,
     status: str | None = None,
@@ -124,7 +140,7 @@ async def list_runs(
     return results
 
 
-@router.get("/runs/{run_id}", response_model=EvalRunSummary)
+@router.get("/runs/{run_id}", response_model=EvalRunSummary, dependencies=[Depends(verify_eval_auth)])
 async def get_run_detail(run_id: UUID, db: AsyncSession = Depends(get_db)):
     storage = EvalStorage(db)
     run = await storage.get_run(run_id)
@@ -159,14 +175,14 @@ async def get_run_detail(run_id: UUID, db: AsyncSession = Depends(get_db)):
     return resp
 
 
-@router.post("/compare")
+@router.post("/compare", dependencies=[Depends(verify_eval_auth)])
 async def compare_runs(request: CompareRequest, db: AsyncSession = Depends(get_db)):
     storage = EvalStorage(db)
     tester = RegressionTester(storage)
     return await tester.compare_runs(request.run_a_id, request.run_b_id)
 
 
-@router.get("/trend", response_model=TrendResponse)
+@router.get("/trend", response_model=TrendResponse, dependencies=[Depends(verify_eval_auth)])
 async def get_trend(
     suite_name: str,
     metric: str = "overall",
@@ -189,7 +205,7 @@ async def get_trend(
     }
 
 
-@router.get("/suites", response_model=list[EvalSuiteResponse])
+@router.get("/suites", response_model=list[EvalSuiteResponse], dependencies=[Depends(verify_eval_auth)])
 async def list_suites_api(db: AsyncSession = Depends(get_db)):
     storage = EvalStorage(db)
     return await storage.list_suites()

@@ -46,23 +46,27 @@ class EvalStorage:
             case_count=len(suite_data["cases"]),
         )
         self.db.add(suite)
-        await self.db.flush()
+        await self.db.flush()  # 获取 suite.id 用于 cases 外键，失败时事务回滚
 
-        for case_data in suite_data["cases"]:
-            case = EvalCase(
-                suite_id=suite.id,
-                case_key=case_data["id"],
-                target_type=case_data["target_type"],
-                difficulty=case_data.get("difficulty", "medium"),
-                tags=case_data.get("tags", []),
-                input_json=case_data["input_json"],
-                golden_json=case_data.get("golden"),
-            )
-            self.db.add(case)
-        
-        await self.db.commit()
-        await self.db.refresh(suite)
-        return suite
+        try:
+            for case_data in suite_data["cases"]:
+                case = EvalCase(
+                    suite_id=suite.id,
+                    case_key=case_data["id"],
+                    target_type=case_data["target_type"],
+                    difficulty=case_data.get("difficulty", "medium"),
+                    tags=case_data.get("tags", []),
+                    input_json=case_data["input_json"],
+                    golden_json=case_data.get("golden"),
+                )
+                self.db.add(case)
+
+            await self.db.commit()
+            await self.db.refresh(suite)
+            return suite
+        except Exception:
+            await self.db.rollback()
+            raise
 
     async def create_run(self, suite_id: UUID | None, name: str, judge_mode: str, judge_model: str, total_cases: int, system_version: str | None = None) -> EvalRun:
         run = EvalRun(

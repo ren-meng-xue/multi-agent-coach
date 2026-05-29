@@ -3,6 +3,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
+from app.eval.dimensions import JudgeMode
+
 
 class EvalRunResponse(BaseModel):
     id: UUID
@@ -41,7 +43,7 @@ class EvalResultResponse(BaseModel):
 class TriggerEvalRequest(BaseModel):
     suite: str
     judge_model: str | None = None
-    judge_mode: str = "rubric"
+    judge_mode: JudgeMode = JudgeMode.RUBRIC
     limit: int | None = None  # 限制 case 数量（快速冒烟）
     target_types: list[str] | None = None
     system_version: str | None = None

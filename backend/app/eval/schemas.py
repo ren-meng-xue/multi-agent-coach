@@ -4,6 +4,8 @@ from pydantic import BaseModel, Field, model_validator
 
 from app.eval.dimensions import JudgeMode, TargetType
 
+PASS_THRESHOLD = 7.0
+
 
 class RubricDimensionScore(BaseModel):
     dimension_name: str
@@ -16,6 +18,10 @@ class RubricJudgeScore(BaseModel):
     dimensions: list[RubricDimensionScore]
     overall: float
     reasoning: str
+
+    @property
+    def passed(self) -> bool:
+        return self.overall >= PASS_THRESHOLD
 
 
 class ComparativeScore(BaseModel):
@@ -70,4 +76,3 @@ class JudgeConfig(BaseModel):
     model: str = "gpt-4o"
     mode: JudgeMode = JudgeMode.RUBRIC
     temperature: float = 0.0
-    max_retries: int = 3

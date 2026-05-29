@@ -54,7 +54,7 @@ class BaseJudge(ABC):
             api_key=self.settings.openai_api_key,
             temperature=self.config.temperature,
             streaming=streaming,
-            timeout=30,
+            timeout=self.settings.llm_timeout_seconds,
         )
 
 
@@ -77,8 +77,8 @@ class RubricJudge(BaseJudge):
         }
 
         try:
-            await self._reasoning_stream(context)
-            score = await self._rubric_score(context)
+            reasoning = await self._reasoning_stream(context)
+            score = await self._rubric_score(context, reasoning)
             return score
         except Exception as exc:
             log.error("rubric_judge_failed", error=str(exc), target_type=target_type)
@@ -95,16 +95,19 @@ class RubricJudge(BaseJudge):
             )
 
     @_retry_llm
-    async def _reasoning_stream(self, context: dict) -> None:
+    async def _reasoning_stream(self, context: dict) -> str:
         model = self._chat_model(streaming=True).with_config(tags=["eval_judge_reasoning"])
         prompt = self._build_reasoning_prompt(context)
-        async for _ in model.astream([SystemMessage(content=prompt)]):
-            pass
+        reasoning = ""
+        async for chunk in model.astream([SystemMessage(content=prompt)]):
+            if hasattr(chunk, "content") and chunk.content:
+                reasoning += str(chunk.content)
+        return reasoning
 
     @_retry_llm
-    async def _rubric_score(self, context: dict) -> RubricJudgeScore:
+    async def _rubric_score(self, context: dict, reasoning: str = "") -> RubricJudgeScore:
         model = self._chat_model().with_structured_output(RubricJudgeScore)
-        prompt = self._build_rubric_prompt(context)
+        prompt = self._build_rubric_prompt(context, reasoning)
         out = await model.ainvoke([SystemMessage(content=prompt)])
         if isinstance(out, RubricJudgeScore):
             return out
@@ -124,12 +127,18 @@ class RubricJudge(BaseJudge):
 
 请先输出你的推理过程（Chain of Thought）。"""
 
-    def _build_rubric_prompt(self, context: dict) -> str:
+    def _build_rubric_prompt(self, context: dict, reasoning: str = "") -> str:
+        reasoning_section = ""
+        if reasoning:
+            reasoning_section = f"""
+
+【前置推理分析】:
+{reasoning}"""
         return f"""根据之前的推理分析，请为以下 AI 输出进行打分。
 
 【评测目标类型】: {context['target_type']}
-【维度标准】: 
-{json.dumps(context['dimensions'], ensure_ascii=False, indent=2)}
+【维度标准】:
+{json.dumps(context['dimensions'], ensure_ascii=False, indent=2)}{reasoning_section}
 
 请严格按照 RubricJudgeScore 格式输出 JSON。
 每个维度分数范围 0-10。总体分数 (overall) 应该是各维度的加权或综合体现。"""
