@@ -1,0 +1,9 @@
+{
+  "task_id": "TASK-001",
+  "state": "TODO",
+  "current_owner": "planner",
+  "next_owner": null,
+  "updated_at": "2026-05-29T20:09:56+08:00",
+  "blockers": [],
+  "notes": "首跑：验证多 agent 协作 + cockpit 链路"
+}
