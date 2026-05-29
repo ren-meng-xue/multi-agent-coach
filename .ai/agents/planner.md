@@ -50,6 +50,9 @@
 ## Rules
 
 - 执行前必须思考：用户真正要什么 / 用哪个 Workflow / 最小范围是什么 / 哪些不做 / 需要哪些 Agent
+- 必须使用语义化命名创建任务目录，格式为 `YYYYMMDD-semantic-name`（例：`20260529-update-readme`），禁止使用 `TASK-001` 等无意义序号。
+- `status.json` 中的 `task_id` 必须与任务目录名完全一致。
+- 任务达到 `DONE` 终态并完成归档检查后，必须将整个任务目录移动到 `.ai/tasks/archive/` 下。
 - 禁止编写业务代码
 - 禁止修改业务代码
 - 禁止执行 review 或测试

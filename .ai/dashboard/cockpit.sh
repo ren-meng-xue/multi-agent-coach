@@ -38,7 +38,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 TASKS_DIR="${TASKS_DIR:-$ROOT/.ai/tasks}"
 
 # 列宽（终端列位，不是字节）
-W_TASK=10 ; W_STATE=10 ; W_OWNER=22 ; W_TIME=8
+W_TASK=25 ; W_STATE=10 ; W_OWNER=22 ; W_TIME=8
 W_ARTIF=8 ; W_BLOCK=18 ; W_NOTES=28
 
 # 合法枚举（D2 lint）
