@@ -1,0 +1,9 @@
+你被调度台派活了。请按以下顺序执行：
+1. 读 shared/current/next-action.md 看你这次扮演的角色
+2. 读 CLAUDE.md、agents/<你的角色>.md
+3. 读 shared/current/tasks.md、shared/current/status.md、shared/decisions/
+4. 如果你是 reviewer，额外读 shared/current/review.md
+5. 按你角色文件里的职责执行
+6. 完成后更新 status.md 和 tasks.md 的 state
+   —— 例外：reviewer 写 Decision: changes-requested 时不改 state；
+      owner 收到 changes-requested 改完后直接把 state 改回 review（不退到 in-progress）
