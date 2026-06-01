@@ -18,7 +18,7 @@ claude
 
 ```bash
 cd /Users/xuebao/learn/AI项目/multi-agent-coach
-scripts-old/claude-mcp-local.sh
+scripts-old1-old/claude-mcp-local.sh
 ```
 
 进入 Claude 后明确指定本地 MCP：
@@ -49,7 +49,7 @@ PROD_REDIS_URL='redis://只读用户名:只读密码@生产Redis地址:端口/0'
 
 ```bash
 cd /Users/xuebao/learn/AI项目/multi-agent-coach
-scripts-old/claude-mcp-prod.sh
+scripts-old1-old/claude-mcp-prod.sh
 ```
 
 脚本会 `source .env.claude-mcp-prod.local`，把 `PROD_DATABASE_URL` 和 `PROD_REDIS_URL` 注入当前 Claude Code 进程，然后在执行 `claude` 前显示生产连接警告。必须输入 `prod` 才会继续。普通新终端直接执行 `claude` 不会自动拥有生产连接。
@@ -59,7 +59,7 @@ scripts-old/claude-mcp-prod.sh
 如果是在明确受控的自动化场景，可以用环境变量跳过交互确认：
 
 ```bash
-ALLOW_PROD_MCP=1 scripts-old/claude-mcp-prod.sh
+ALLOW_PROD_MCP=1 scripts-old1-old/claude-mcp-prod.sh
 ```
 
 进入 Claude 后明确指定生产 MCP：

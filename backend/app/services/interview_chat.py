@@ -25,7 +25,7 @@ from app.schemas.interview import ChatMessage
 log = get_logger("app.services.interview_chat")
 _client: AsyncOpenAI | None = None
 
-# 面试官 system prompt：一次只问一个问题，专业克制，不替候选人作答
+# 面试官 system prompts：一次只问一个问题，专业克制，不替候选人作答
 INTERVIEWER_SYSTEM_PROMPT = (
     "你是一位资深技术面试官，正在对候选人进行中文模拟面试。"
     "请根据候选人最新的回答，提出有针对性的面试问题或追问，一次只问一个问题，"

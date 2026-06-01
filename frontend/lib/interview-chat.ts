@@ -27,6 +27,7 @@ export type InterviewTurnTracePayload = {
   summaryScore?: number;
   turnIndex: number;
   isOpening?: boolean;
+  error?: string;
 };
 
 export type InterviewPrepareTraceMessage = {
@@ -59,6 +60,63 @@ export function isTurnTraceMessage(m: InterviewChatMessage): m is InterviewTurnT
   return m.role === "trace" && m.kind === "turn";
 }
 
+export const INTERVIEW_NODE_TITLES: Record<string, string> = {
+  master: "分析表现，规划下一步",
+  evaluator: "多维深度评估",
+  followup: "生成追问逻辑",
+  ask_question: "抽取下一道题",
+};
+
+export const INTERVIEW_NODE_LABELS: Record<string, string> = {
+  master: "调度",
+  evaluator: "评估官",
+  followup: "面试官",
+  ask_question: "出题官",
+};
+
+export const PREPARE_NODE_TITLES: Record<string, string> = {
+  master: "识别方向，启动准备",
+  memory_search: "读取你的历史表现",
+  jd_analysis: "构建考点地图",
+  question_gen: "定制专属题目",
+};
+
+/** 格式化 Trace 节点的 tokens，过滤 JSON 并美化输出。 */
+export function formatTraceTokens(id: string, tokens: string): string {
+  if (!tokens) return "(无详细信息)";
+
+  // 出题节点特殊处理：提取 JSON 中的 question 字段
+  if (id === "question_gen" || id === "ask_question") {
+    const robustPattern = /["']?question["']?\s* : \s*["']((?:[^"'\\]|\\?[\s\S])*?)(?:["']|$)/gi;
+    // 注意：上面的正则空格是为了匹配，实际代码中可能更紧凑
+    const matches = Array.from(tokens.matchAll(/["']?question["']?\s*:\s*["']((?:[^"'\\]|\\?[\s\S])*?)(?:["']|$)/gi));
+    const questions = matches
+      .map((m) => m[1].replace(/\\"/g, '"').replace(/\\n/g, " ").trim())
+      .filter((q) => q.length > 2);
+
+    if (questions.length > 0) {
+      return questions.map((q) => `→ ${q}`).join("\n    ");
+    }
+  }
+
+  // 其他节点：过滤 JSON 标记，保留普通文本
+  return tokens
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => {
+      return (
+        line &&
+        !line.startsWith("[") &&
+        !line.startsWith("{") &&
+        !line.includes('": "') &&
+        !line.startsWith("}") &&
+        !line.startsWith("]")
+      );
+    })
+    .map((line) => line.replace(/^[•\-]\s*/, "→ "))
+    .join("\n    ");
+}
+
 export type InterviewProgressState = {
   stage: "opening" | "interview" | "closing";
   question_count: number;
@@ -78,12 +136,13 @@ export interface InterviewReport {
 export type UserContextResponse = {
   is_returning: boolean;
   target_role: string | null;
-  work_years: string | null;
   target_company: string | null;
   user_background: string | null;
   session_count: number;
   last_session_id: string | null;
+  resume_filename: string | null;
 };
+
 
 export type InterviewHistoryItem = {
   id: string;
@@ -170,6 +229,8 @@ type StreamInterviewChatOptions = {
   message: string;
   preparedQuestions?: PreparedQuestion[];
   jdContext?: JDContext | null;
+  targetRole?: string;
+  useQABank?: boolean;
   signal?: AbortSignal;
   onDelta: (text: string) => void;
   onState?: (state: InterviewProgressState) => void;
@@ -185,6 +246,8 @@ export async function streamInterviewChat({
   message,
   preparedQuestions,
   jdContext,
+  targetRole,
+  useQABank,
   signal,
   onDelta,
   onState,
@@ -206,6 +269,8 @@ export async function streamInterviewChat({
       message,
       prepared_questions: preparedQuestions,
       jd_context: jdContext,
+      target_role: targetRole,
+      use_qa_bank: useQABank ?? false,
     }),
     signal,
   });
@@ -442,10 +507,11 @@ type AppRouter = {
 };
 
 export type EnterInterviewRoomContext = {
-  target_role: string;
+  target_role?: string;
   user_background?: string;
   jd_text?: string;
   jd_url?: string;
+  use_qa_bank?: boolean;
 };
 
 /** 统一封装从任意入口进入 /interview 的流程：写 sessionStorage + reset 后台 session + push。
@@ -476,4 +542,3 @@ export async function enterInterviewRoom({
 
   router.push("/interview");
 }
-

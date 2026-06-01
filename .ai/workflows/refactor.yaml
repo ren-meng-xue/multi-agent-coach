@@ -1,0 +1,9 @@
+id: refactor
+version: 2
+name: Refactor Flow
+description: 重构流程。完全继承 feature，仅 implementation 改为 single 模式。
+extends: feature
+
+steps:
+  implementation:
+    mode: single

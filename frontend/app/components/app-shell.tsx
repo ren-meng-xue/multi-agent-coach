@@ -23,7 +23,7 @@ export function AppShell({
   return (
     <div className="mac-app">
       <header className="mac-header">
-        <Link className="mac-logo-area" href="/login" aria-label="Multi Agent Coach 首页">
+        <Link className="mac-logo-area" href={isLoggedIn ? "/coach" : "/login"} aria-label="Multi Agent Coach 首页">
           <div className="mac-logo-mark">
             <Image src="/vite.svg" alt="" width={24} height={24} priority />
           </div>

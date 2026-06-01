@@ -52,7 +52,7 @@ InterviewStage = Literal["opening", "interview", "closing"]
 
 
 class InterviewState(TypedDict, total=False):
-    """Graph state shared by interviewer nodes."""
+    """Graph state shared-1 by interviewer nodes."""
 
     session_id: str
     user_id: str
@@ -92,7 +92,7 @@ REPORT_SYSTEM_PROMPT = (
 - [ ] **Step 3: typecheck**
 
 ```bash
-cd backend && .venv/bin/python -m mypy app/agents/interviewer/state.py app/agents/interviewer/prompts.py
+cd backend && .venv/bin/python -m mypy app/agents-1/interviewer/state.py app/agents-1/interviewer/prompts.py
 ```
 
 Expected: `Success: no issues found in 2 source files`
@@ -100,7 +100,7 @@ Expected: `Success: no issues found in 2 source files`
 - [ ] **Step 4: commit**
 
 ```bash
-git add backend/app/agents/interviewer/state.py backend/app/agents/interviewer/prompts.py
+git add backend/app/agents-1/interviewer/state.py backend/app/agents-1/interviewer/prompts.py
 git commit -m "feat(interview): 新增 InterviewState.report 字段与 REPORT_SYSTEM_PROMPT"
 ```
 
@@ -132,7 +132,7 @@ async def test_report_node_returns_structured_report(monkeypatch):
             improvements=["缺少量化数据", "可补充失败案例"],
         )
 
-    monkeypatch.setattr("app.agents.interviewer.nodes.generate_report_output", fake_generate_report)
+    monkeypatch.setattr("app.agents-1.interviewer.nodes.generate_report_output", fake_generate_report)
 
     state = {
         "session_id": "s1",
@@ -161,7 +161,7 @@ async def test_report_node_returns_empty_dict_on_unexpected_output(monkeypatch):
     async def fake_generate_report(state):
         return None
 
-    monkeypatch.setattr("app.agents.interviewer.nodes.generate_report_output", fake_generate_report)
+    monkeypatch.setattr("app.agents-1.interviewer.nodes.generate_report_output", fake_generate_report)
 
     state = {
         "session_id": "s2",
@@ -256,7 +256,7 @@ Expected: all pass
 - [ ] **Step 6: commit**
 
 ```bash
-git add backend/app/agents/interviewer/nodes.py backend/tests/unit/test_interviewer_graph.py
+git add backend/app/agents-1/interviewer/nodes.py backend/tests/unit/test_interviewer_graph.py
 git commit -m "feat(interview): 新增 report_node 生成结构化面试评分，补 TDD 单元测试"
 ```
 
@@ -291,8 +291,8 @@ async def test_closing_turn_returns_report_in_state(monkeypatch):
             improvements=["可补充更多细节"],
         )
 
-    monkeypatch.setattr("app.agents.interviewer.nodes.generate_closing_reply", fake_closing)
-    monkeypatch.setattr("app.agents.interviewer.nodes.generate_report_output", fake_generate_report)
+    monkeypatch.setattr("app.agents-1.interviewer.nodes.generate_closing_reply", fake_closing)
+    monkeypatch.setattr("app.agents-1.interviewer.nodes.generate_report_output", fake_generate_report)
 
     out = await run_interviewer_turn(
         {
@@ -393,7 +393,7 @@ Expected: all pass
 - [ ] **Step 6: commit**
 
 ```bash
-git add backend/app/agents/interviewer/graph.py backend/tests/unit/test_interviewer_graph.py
+git add backend/app/agents-1/interviewer/graph.py backend/tests/unit/test_interviewer_graph.py
 git commit -m "feat(interview): graph 接线 report 节点，closing → report → END"
 ```
 

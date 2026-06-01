@@ -96,11 +96,11 @@ def test_rubric_dimension_score_range():
 
 def test_comparative_score_validation():
     # ComparativeScore has no custom validator in my skeleton yet, 
-    # but the prompt says: "验证 ComparativeScore 三个 bool 不能同时为 True"
+    # but the prompts says: "验证 ComparativeScore 三个 bool 不能同时为 True"
     # I should add a model_validator to ComparativeScore in schemas.py later.
     # For now, let's see if it fails as expected if I add the test.
     
-    # Actually, the prompt says "验证", so I should probably implement the validation in schemas.py too.
+    # Actually, the prompts says "验证", so I should probably implement the validation in schemas.py too.
     # But for TDD, I'll write the test that expects validation.
     
     with pytest.raises(ValidationError):

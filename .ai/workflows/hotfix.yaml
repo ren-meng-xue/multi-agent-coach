@@ -1,0 +1,61 @@
+id: hotfix
+version: 2
+name: Hotfix Flow
+description: 紧急修复流程。默认 quick 深度，先修复后审查，加速上线。
+
+entry: plan
+terminal: done
+
+steps:
+  plan:
+    owner: planner
+    min_depth: quick
+    outputs:
+      - task.md
+      - plan.md
+    checkpoint: true
+    next: implementation
+
+  implementation:
+    owners:
+      - backend
+      - frontend
+    mode: single
+    dynamic_owners: true
+    min_depth: quick
+    next: testing
+    on_blocked: blocked
+
+  blocked:
+    owner: current_agent
+    min_depth: quick
+    resume_to: implementation
+
+  testing:
+    owner: tester
+    min_depth: quick
+    next: restored
+    transitions:
+      passed: restored
+      failed: implementation
+
+  restored:
+    owner: planner
+    min_depth: standard
+    next: review
+
+  review:
+    owner: reviewer
+    min_depth: standard
+    outputs:
+      - review.md
+    next: done
+    transitions:
+      approved: done
+      changes_requested: implementation
+
+  done:
+    owner: planner
+    min_depth: quick
+    outputs:
+      - handoff.md

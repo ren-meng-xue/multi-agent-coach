@@ -523,7 +523,7 @@ git add docs/superpowers/qa-reports/phase4-parallel-eval-qa-report.md
 ```bash
 # 在项目根目录
 codex exec \
-  --prompt "读 docs/superpowers/plans/2026-05-28-phase4-parallel-eval-codex-handoff.md 并完整执行 Step S2 到 S5。S6 之前必须停下等我 ACK。严格遵守 plan 中的 R1-R10 全局规则。" \
+  --prompts "读 docs/superpowers/plans/2026-05-28-phase4-parallel-eval-codex-handoff.md 并完整执行 Step S2 到 S5。S6 之前必须停下等我 ACK。严格遵守 plan 中的 R1-R10 全局规则。" \
   --sandbox workspace-write
 ```
 

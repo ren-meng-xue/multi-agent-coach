@@ -61,7 +61,7 @@ async def test_scoring_adapter_converts_messages_and_returns_latest_evaluation()
             TargetType.SCORING,
             {
                 "messages": [
-                    {"role": "ai", "content": "讲讲你的项目"},
+                    {"role": ".ai", "content": "讲讲你的项目"},
                     {"role": "user", "content": "我做了 A/B 测试，CTR 提升 12%"},
                 ],
                 "target_role": "AI 工程师",

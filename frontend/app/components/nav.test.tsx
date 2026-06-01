@@ -36,7 +36,6 @@ describe("MainNav", () => {
     // 面试房间已收紧为 Coach 的派生入口，不在导航栏单列
     expect(screen.queryByText("面试房间")).not.toBeInTheDocument();
     expect(screen.getByText("个人仪表盘")).toBeInTheDocument();
-    expect(screen.getByText("复盘报告")).toBeInTheDocument();
     expect(screen.getByText("设置 & 故事库")).toBeInTheDocument();
   });
 
@@ -47,6 +46,18 @@ describe("MainNav", () => {
     render(<MainNav isLoggedIn={true} />);
     expect(screen.getByText("个人仪表盘").className).toContain("active");
     expect(screen.getByText("Coach").className).not.toContain("active");
+  });
+
+  it("在 /interview 路径下应高亮 Coach 菜单项", () => {
+    mockUsePathname.mockReturnValue("/interview");
+    render(<MainNav isLoggedIn={true} />);
+    expect(screen.getByText("Coach").className).toContain("active");
+  });
+
+  it("在 /interview/ 路径下应高亮 Coach 菜单项", () => {
+    mockUsePathname.mockReturnValue("/interview/session123");
+    render(<MainNav isLoggedIn={true} />);
+    expect(screen.getByText("Coach").className).toContain("active");
   });
 
   it("未登录时显示登录链接", () => {

@@ -63,8 +63,11 @@ async def upsert_candidate_memory(
         # a. 更新基本信息
         if latest_level:
             mem.latest_level = latest_level
-        mem.last_session_id = session_id
-        mem.total_sessions += 1
+        
+        # 只有当 session_id 发生变化时才增加总场次计数
+        if session_id and mem.last_session_id != session_id:
+            mem.total_sessions += 1
+            mem.last_session_id = session_id
         
         # b. 合并信号 (去重保序)
         new_signals = list(mem.cumulative_signals)

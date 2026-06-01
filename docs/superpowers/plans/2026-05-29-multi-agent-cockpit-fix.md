@@ -135,13 +135,13 @@ fi
 - [ ] **Step 2: 验证脚本可执行**
 
 ```bash
-chmod +x scripts/utils/parse-task.sh
+chmod +x scripts-old1/utils/parse-task.sh
 ```
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add scripts/utils/parse-task.sh
+git add scripts-old1/utils/parse-task.sh
 git commit -m "feat: add parse-task.sh — task field parser for multi-task tasks.md
 
 Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
@@ -179,14 +179,14 @@ cancelled_reason: ...                 # 可选
 - [ ] **Step 2: 验证 parse-task.sh 对新格式返回正确错误**
 
 ```bash
-bash scripts/utils/parse-task.sh Task-001 2>&1
+bash scripts-old1/utils/parse-task.sh Task-001 2>&1
 # Expected: exit 1, "Task-001 not found"
 ```
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add shared/current/tasks.md
+git add shared-1/current/tasks.md
 git commit -m "feat: update tasks.md to multi-task list format
 
 Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
@@ -212,7 +212,7 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 - [ ] **Step 2: Commit**
 
 ```bash
-git add shared/current/status.md
+git add shared-1/current/status.md
 git commit -m "feat: update status.md to append-only timeline format
 
 Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
@@ -238,7 +238,7 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 - [ ] **Step 2: Commit**
 
 ```bash
-git add shared/current/review.md
+git add shared-1/current/review.md
 git commit -m "feat: update review.md to per-task section format
 
 Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
@@ -268,7 +268,7 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 - [ ] **Step 2: Commit**
 
 ```bash
-git add shared/current/next-action.md
+git add shared-1/current/next-action.md
 git commit -m "feat: update next-action.md to multi-task section format
 
 Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
@@ -378,20 +378,20 @@ done
 - [ ] **Step 2: 验证脚本可执行**
 
 ```bash
-chmod +x scripts/utils/route.sh
+chmod +x scripts-old1/utils/route.sh
 ```
 
 - [ ] **Step 3: 无任务时运行不报错**
 
 ```bash
-bash scripts/utils/route.sh
+bash scripts-old1/utils/route.sh
 # Expected: no output, exit 0
 ```
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add scripts/utils/route.sh
+git add scripts-old1/utils/route.sh
 git commit -m "feat: add route.sh — task router with dependency check and review sub-routing
 
 Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
@@ -455,13 +455,13 @@ echo "failed=$failed added=$added"
 - [ ] **Step 2: 验证脚本可执行**
 
 ```bash
-chmod +x scripts/utils/run-tests.sh
+chmod +x scripts-old1/utils/run-tests.sh
 ```
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add scripts/utils/run-tests.sh
+git add scripts-old1/utils/run-tests.sh
 git commit -m "feat: add run-tests.sh — test runner with failed/added counters
 
 Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
@@ -565,7 +565,7 @@ exit 0
 - [ ] **Step 3: Commit**
 
 ```bash
-git add scripts/hooks/review-hook.sh
+git add scripts-old1/hooks/review-hook.sh
 git commit -m "fix: rewrite review-hook.sh to only run tests, not write review or change state
 
 Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
@@ -670,13 +670,13 @@ echo "[archive-hook] Archived $TASK_ID → $ARCHIVE_DIR"
 - [ ] **Step 2: 验证脚本可执行**
 
 ```bash
-chmod +x scripts/hooks/archive-hook.sh
+chmod +x scripts-old1/hooks/archive-hook.sh
 ```
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add scripts/hooks/archive-hook.sh
+git add scripts-old1/hooks/archive-hook.sh
 git commit -m "fix: rewrite archive-hook.sh for atomic archive, planner-invoked only
 
 Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
@@ -726,7 +726,7 @@ if ! tmux list-windows -t multi-agent 2>/dev/null | grep -q "$AGENT"; then
   exit 1
 fi
 
-# 检查 agent 是否 idle（末行是否为 prompt 符号）
+# 检查 agent 是否 idle（末行是否为 prompts 符号）
 last_line=$(tmux capture-pane -p -t "$WINDOW" 2>/dev/null | tail -1 || echo "")
 if echo "$last_line" | grep -qE '[>❯$#]'; then
   # idle，发送唤醒指令
@@ -741,7 +741,7 @@ fi
 - [ ] **Step 2: 创建唤醒 prompt 模板目录**
 
 ```bash
-mkdir -p scripts/prompts
+mkdir -p scripts-old1/prompts
 ```
 
 - [ ] **Step 3: 创建通用唤醒 prompt 模板 `scripts/prompts/wakeup.txt`**
@@ -771,20 +771,20 @@ mkdir -p scripts/prompts
 
 ```bash
 for role in backend frontend reviewer; do
-  sed "s/planner/$role/g" scripts/prompts/bootstrap-planner.txt > "scripts/prompts/bootstrap-${role}.txt"
+  sed "s/planner/$role/g" scripts-old1/prompts/bootstrap-planner.txt > "scripts/prompts/bootstrap-${role}.txt"
 done
 ```
 
 - [ ] **Step 6: 验证脚本可执行**
 
 ```bash
-chmod +x scripts/send-to-agent.sh
+chmod +x scripts-old1/send-to-agent.sh
 ```
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add scripts/send-to-agent.sh scripts/prompts/
+git add scripts-old1/send-to-agent.sh scripts-old1/prompts/
 git commit -m "feat: add send-to-agent.sh with tmux send-keys and bootstrap prompts
 
 Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
@@ -987,13 +987,13 @@ done
 - [ ] **Step 2: 验证脚本可执行**
 
 ```bash
-chmod +x scripts/control-plane.sh
+chmod +x scripts-old1/control-plane.sh
 ```
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add scripts/control-plane.sh
+git add scripts-old1/control-plane.sh
 git commit -m "feat: rewrite control-plane.sh as daemon with route+dispatch loop
 
 Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
@@ -1083,13 +1083,13 @@ fi
 - [ ] **Step 2: 验证脚本可执行**
 
 ```bash
-chmod +x scripts/utils/dashboard.sh
+chmod +x scripts-old1/utils/dashboard.sh
 ```
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add scripts/utils/dashboard.sh
+git add scripts-old1/utils/dashboard.sh
 git commit -m "feat: add dashboard.sh — cockpit segmented status display
 
 Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
@@ -1112,8 +1112,8 @@ windows:
   - cockpit:
       layout: main-horizontal
       panes:
-        - watch -n 2 'bash scripts/utils/dashboard.sh'
-        - until bash scripts/control-plane.sh; do sleep 5; done
+        - watch -n 2 'bash scripts-old1/utils/dashboard.sh'
+        - until bash scripts-old1/control-plane.sh; do sleep 5; done
   - planner:
       panes:
         - claude code
@@ -1213,7 +1213,7 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 - [ ] **Step 2: Commit**
 
 ```bash
-git add agents/planner.md
+git add agents-1/planner.md
 git commit -m "feat: add wakeup protocol, blocked handling, and entry rules to planner.md
 
 Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
@@ -1329,7 +1329,7 @@ reviewer 写 changes-requested 时 state 保持 review。你收到唤醒后：
 - [ ] **Step 2: Commit**
 
 ```bash
-git add agents/backend.md
+git add agents-1/backend.md
 git commit -m "feat: add wakeup protocol, type differences, and blocked self-marking to backend.md
 
 Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
@@ -1349,7 +1349,7 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 - [ ] **Step 2: Commit**
 
 ```bash
-git add agents/frontend.md
+git add agents-1/frontend.md
 git commit -m "feat: add wakeup protocol, type differences, and blocked self-marking to frontend.md
 
 Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
@@ -1450,7 +1450,7 @@ Decision 值 ∈ {approved, changes-requested, needs-discussion}：
 - [ ] **Step 2: Commit**
 
 ```bash
-git add agents/reviewer.md
+git add agents-1/reviewer.md
 git commit -m "feat: add wakeup protocol, type checkpoints, and decision boundaries to reviewer.md
 
 Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
@@ -1467,13 +1467,13 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 - [ ] **Step 1: 删除 scripts-old/**
 
 ```bash
-git rm -r scripts-old/
+git rm -r scripts-old1-old/
 ```
 
 - [ ] **Step 2: 删除废弃脚本**
 
 ```bash
-git rm scripts/dispatcher.sh scripts/status-watch.sh
+git rm scripts-old1/dispatcher.sh scripts-old1/status-watch.sh
 ```
 
 - [ ] **Step 3: Commit**

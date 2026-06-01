@@ -1583,7 +1583,6 @@
     <button class="nav-item" data-tab="coach">Coach</button>
     <button class="nav-item" data-tab="interview">面试房间</button>
     <button class="nav-item" data-tab="dashboard">个人仪表盘</button>
-    <button class="nav-item" data-tab="reports">复盘报告</button>
     <button class="nav-item" data-tab="settings">设置 &amp; 故事库</button>
   </nav>
   <div class="user-chip" id="userChip" style="display:none">
@@ -1765,12 +1764,6 @@
     </div>
   </div>
 
-  <!-- ===== TAB 4: Reports (v2 · 反复弱点驱动) ===== -->
-  <!-- 6 大模块顺序：narrative → recurring → verdict-twin → quote-evidence → next-actions → history -->
-  <div class="page" id="tab-reports" style="height: 100%; overflow: hidden; padding: 0; background: var(--bg-root); border-radius: var(--radius-lg); border: 1px solid var(--border-light); box-shadow: var(--shadow-sm);">
-    <iframe class="reports-frame" id="reportsFrame" src="reports.html" title="复盘报告" style="width: 100%; height: 100%; border: none; display: block; border-radius: var(--radius-lg);"></iframe>
-  </div>
-
   <!-- ===== TAB 5: Settings & Stories ===== -->
   <div class="page" id="tab-settings">
     <div class="settings-duo">
@@ -1902,15 +1895,15 @@
   var coachSwitchBtn = document.getElementById('coachSwitchTopic');
   if (coachSwitchBtn) coachSwitchBtn.addEventListener('click', goToInterview);
 
-  // 历史 chip 点击：跳到复盘报告页查看对应场次
+  // 历史 chip 点击：跳到个人仪表盘页
   document.querySelectorAll('#tab-coach .coach-history-chip').forEach(function(chip) {
     chip.addEventListener('click', function() {
       navItems.forEach(function(n) { n.classList.remove('active'); });
-      var reportsNav = document.querySelector('[data-tab="reports"]');
-      if (reportsNav) reportsNav.classList.add('active');
+      var dashboardNav = document.querySelector('[data-tab="dashboard"]');
+      if (dashboardNav) dashboardNav.classList.add('active');
       pages.forEach(function(p) { p.classList.remove('active'); });
-      var reportsPage = document.getElementById('tab-reports');
-      if (reportsPage) reportsPage.classList.add('active');
+      var dashboardPage = document.getElementById('tab-dashboard');
+      if (dashboardPage) dashboardPage.classList.add('active');
     });
   });
 
@@ -2490,11 +2483,11 @@
     var action = e.target && e.target.getAttribute('data-action');
     if (action === 'open-report') {
       navItems.forEach(function(n) { n.classList.remove('active'); });
-      var reportsNav = document.querySelector('[data-tab="reports"]');
-      if (reportsNav) reportsNav.classList.add('active');
+      var dashboardNav = document.querySelector('[data-tab="dashboard"]');
+      if (dashboardNav) dashboardNav.classList.add('active');
       pages.forEach(function(p) { p.classList.remove('active'); });
-      var reportsPage = document.getElementById('tab-reports');
-      if (reportsPage) reportsPage.classList.add('active');
+      var dashboardPage = document.getElementById('tab-dashboard');
+      if (dashboardPage) dashboardPage.classList.add('active');
     }
     if (action === 'back-setup') {
       var room = document.getElementById('interviewRoom');

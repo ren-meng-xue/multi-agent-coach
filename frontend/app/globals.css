@@ -263,8 +263,8 @@ body::before {
 
 .mac-nav-item.active {
   background: #ffffff;
-  box-shadow: var(--mac-shadow-xs);
-  color: var(--mac-text-primary);
+  box-shadow: var(--mac-shadow-xs), 0 0 0 1px rgba(79, 70, 229, 0.08);
+  color: var(--mac-accent-indigo);
   font-weight: 600;
 }
 

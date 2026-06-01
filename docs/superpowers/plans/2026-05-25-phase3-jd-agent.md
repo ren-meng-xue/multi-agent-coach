@@ -267,14 +267,14 @@ git commit -m "feat(prepare): JD text extractor — text/file/url/image → str"
 - [ ] **Step 2.1: 创建 __init__.py**
 
 ```bash
-mkdir -p backend/app/agents/prepare
-touch backend/app/agents/prepare/__init__.py
+mkdir -p backend/app/agents-1/prepare
+touch backend/app/agents-1/prepare/__init__.py
 ```
 
 - [ ] **Step 2.2: 写 state.py**
 
 ```python
-# backend/app/agents/prepare/state.py
+# backend/app/agents-1/prepare/state.py
 """LangGraph state for the prepare pipeline."""
 from typing import Any, Literal, TypedDict
 
@@ -321,7 +321,7 @@ class PrepareState(TypedDict, total=False):
 - [ ] **Step 2.3: Commit**
 
 ```bash
-git add backend/app/agents/prepare/
+git add backend/app/agents-1/prepare/
 git commit -m "feat(prepare): PrepareState + JDContext + PreparedQuestion types"
 ```
 
@@ -366,8 +366,8 @@ async def test_memory_search_returns_weak_areas_from_history():
 
     state: PrepareState = {"user_id": "user_123", "user_direction": "AI Agent 工程师"}
 
-    with patch("app.agents.prepare.nodes._get_recent_sessions", new_callable=AsyncMock, return_value=mock_sessions), \
-         patch("app.agents.prepare.nodes._get_user_stories", new_callable=AsyncMock, return_value=mock_stories):
+    with patch("app.agents-1.prepare.nodes._get_recent_sessions", new_callable=AsyncMock, return_value=mock_sessions), \
+         patch("app.agents-1.prepare.nodes._get_user_stories", new_callable=AsyncMock, return_value=mock_stories):
         result = await memory_search_node(state)
 
     assert len(result["weak_areas"]) > 0
@@ -382,8 +382,8 @@ async def test_memory_search_empty_when_no_history():
 
     state: PrepareState = {"user_id": "new_user"}
 
-    with patch("app.agents.prepare.nodes._get_recent_sessions", new_callable=AsyncMock, return_value=[]), \
-         patch("app.agents.prepare.nodes._get_user_stories", new_callable=AsyncMock, return_value=[]):
+    with patch("app.agents-1.prepare.nodes._get_recent_sessions", new_callable=AsyncMock, return_value=[]), \
+         patch("app.agents-1.prepare.nodes._get_user_stories", new_callable=AsyncMock, return_value=[]):
         result = await memory_search_node(state)
 
     assert result["weak_areas"] == []
@@ -401,7 +401,7 @@ cd backend && .venv/bin/python -m pytest tests/unit/test_prepare_nodes.py::test_
 创建 `backend/app/agents/prepare/nodes.py`：
 
 ```python
-# backend/app/agents/prepare/nodes.py
+# backend/app/agents-1/prepare/nodes.py
 """Node functions for the prepare pipeline."""
 from __future__ import annotations
 
@@ -421,7 +421,7 @@ from app.agents.prepare.prompts import (
 from app.core.config import get_settings
 from app.core.logging import get_logger
 
-log = get_logger("app.agents.prepare.nodes")
+log = get_logger("app.agents-1.prepare.nodes")
 
 
 def _llm(streaming: bool = False, timeout: int = 30) -> ChatOpenAI:
@@ -525,7 +525,7 @@ cd backend && .venv/bin/python -m pytest tests/unit/test_prepare_nodes.py::test_
 - [ ] **Step 3.5: Commit**
 
 ```bash
-git add backend/app/agents/prepare/nodes.py backend/tests/unit/test_prepare_nodes.py
+git add backend/app/agents-1/prepare/nodes.py backend/tests/unit/test_prepare_nodes.py
 git commit -m "feat(prepare): memory_search_node — 历史薄弱点 + 故事库检索"
 ```
 
@@ -558,7 +558,7 @@ async def test_jd_analysis_returns_jd_context():
     mock_output.focus_areas = ["系统设计", "高并发"]
     mock_output.difficulty = "hard"
 
-    with patch("app.agents.prepare.nodes._llm") as mock_llm:
+    with patch("app.agents-1.prepare.nodes._llm") as mock_llm:
         mock_llm.return_value.with_structured_output.return_value.ainvoke = AsyncMock(return_value=mock_output)
         result = await jd_analysis_node(state)
 
@@ -579,7 +579,7 @@ async def test_jd_analysis_skips_when_no_jd():
 - [ ] **Step 4.2: 创建 prompts.py**
 
 ```python
-# backend/app/agents/prepare/prompts.py
+# backend/app/agents-1/prepare/prompts.py
 """Prompt constants for prepare pipeline nodes."""
 
 MASTER_REASONING_PROMPT = """你是面试准备 Master Orchestrator。
@@ -628,7 +628,7 @@ QUESTION_GEN_SYSTEM_PROMPT = """你是专业面试出题官。根据以下信息
 - [ ] **Step 4.3: 实现 jd_analysis_node（追加到 nodes.py）**
 
 ```python
-# 追加到 backend/app/agents/prepare/nodes.py
+# 追加到 backend/app/agents-1/prepare/nodes.py
 
 
 class _JDContextModel(BaseModel):
@@ -669,7 +669,7 @@ cd backend && .venv/bin/python -m pytest tests/unit/test_prepare_nodes.py -k "jd
 - [ ] **Step 4.5: Commit**
 
 ```bash
-git add backend/app/agents/prepare/prompts.py backend/app/agents/prepare/nodes.py backend/tests/unit/test_prepare_nodes.py
+git add backend/app/agents-1/prepare/prompts.py backend/app/agents-1/prepare/nodes.py backend/tests/unit/test_prepare_nodes.py
 git commit -m "feat(prepare): jd_analysis_node — JD文本结构化提取"
 ```
 
@@ -698,7 +698,7 @@ async def test_question_gen_returns_5_questions():
 
     mock_content = '[{"id":1,"question":"Q1","category":"technical","focus_area":"RAG","priority":1},{"id":2,"question":"Q2","category":"behavioral","focus_area":"量化","priority":1},{"id":3,"question":"Q3","category":"technical","focus_area":"Agent","priority":2},{"id":4,"question":"Q4","category":"system_design","focus_area":"架构","priority":3},{"id":5,"question":"Q5","category":"technical","focus_area":"LangGraph","priority":3}]'
 
-    with patch("app.agents.prepare.nodes._llm") as mock_llm:
+    with patch("app.agents-1.prepare.nodes._llm") as mock_llm:
         mock_chunk = MagicMock()
         mock_chunk.content = mock_content
         mock_llm.return_value.with_config.return_value.astream = AsyncMock(
@@ -726,7 +726,7 @@ async def test_question_gen_weak_areas_first():
 
     mock_content = '[{"id":1,"question":"量化题","category":"behavioral","focus_area":"量化","priority":1},{"id":2,"question":"系统设计题","category":"system_design","focus_area":"设计","priority":1},{"id":3,"question":"Q3","category":"technical","focus_area":"Python","priority":3},{"id":4,"question":"Q4","category":"technical","focus_area":"DB","priority":3},{"id":5,"question":"Q5","category":"behavioral","focus_area":"团队","priority":4}]'
 
-    with patch("app.agents.prepare.nodes._llm") as mock_llm:
+    with patch("app.agents-1.prepare.nodes._llm") as mock_llm:
         mock_chunk = MagicMock()
         mock_chunk.content = mock_content
         mock_llm.return_value.with_config.return_value.astream = AsyncMock(
@@ -750,7 +750,7 @@ async def aiter(items):
 - [ ] **Step 5.2: 实现 question_gen_node**
 
 ```python
-# 追加到 backend/app/agents/prepare/nodes.py
+# 追加到 backend/app/agents-1/prepare/nodes.py
 import json
 import re
 
@@ -825,7 +825,7 @@ cd backend && .venv/bin/python -m pytest tests/unit/test_prepare_nodes.py -k "qu
 - [ ] **Step 5.4: Commit**
 
 ```bash
-git add backend/app/agents/prepare/nodes.py backend/tests/unit/test_prepare_nodes.py
+git add backend/app/agents-1/prepare/nodes.py backend/tests/unit/test_prepare_nodes.py
 git commit -m "feat(prepare): question_gen_node — 结合薄弱点+故事库出5道定制题"
 ```
 
@@ -856,7 +856,7 @@ async def test_master_detects_direction_from_user_input():
     mock_decision.chain = ["question_gen"]
     mock_decision.need_direction = False
 
-    with patch("app.agents.prepare.nodes._llm") as mock_llm:
+    with patch("app.agents-1.prepare.nodes._llm") as mock_llm:
         # reasoning stream
         mock_stream = MagicMock()
         mock_stream.content = "• 找到方向"
@@ -891,7 +891,7 @@ async def test_master_sets_need_direction_when_no_input():
     mock_decision.chain = ["question_gen"]
     mock_decision.need_direction = True
 
-    with patch("app.agents.prepare.nodes._llm") as mock_llm:
+    with patch("app.agents-1.prepare.nodes._llm") as mock_llm:
         mock_stream = MagicMock()
         mock_stream.content = "• 未找到方向"
         mock_llm.return_value.with_config.return_value.astream = AsyncMock(
@@ -922,7 +922,7 @@ async def test_master_includes_memory_search_when_has_history():
     mock_decision.chain = ["memory_search", "question_gen"]
     mock_decision.need_direction = False
 
-    with patch("app.agents.prepare.nodes._llm") as mock_llm:
+    with patch("app.agents-1.prepare.nodes._llm") as mock_llm:
         mock_stream = MagicMock()
         mock_stream.content = "• 发现历史记录"
         mock_llm.return_value.with_config.return_value.astream = AsyncMock(
@@ -939,7 +939,7 @@ async def test_master_includes_memory_search_when_has_history():
 - [ ] **Step 6.2: 实现 master_node**
 
 ```python
-# 追加到 backend/app/agents/prepare/nodes.py
+# 追加到 backend/app/agents-1/prepare/nodes.py
 
 
 class _MasterDecision(BaseModel):
@@ -1002,7 +1002,7 @@ cd backend && .venv/bin/python -m pytest tests/unit/test_prepare_nodes.py -k "ma
 - [ ] **Step 6.4: Commit**
 
 ```bash
-git add backend/app/agents/prepare/nodes.py backend/tests/unit/test_prepare_nodes.py
+git add backend/app/agents-1/prepare/nodes.py backend/tests/unit/test_prepare_nodes.py
 git commit -m "feat(prepare): master_node — 流式推理 + 结构化路由决策"
 ```
 
@@ -1060,7 +1060,7 @@ async def test_route_after_master_need_direction_returns_wait():
 - [ ] **Step 7.2: 实现 graph.py**
 
 ```python
-# backend/app/agents/prepare/graph.py
+# backend/app/agents-1/prepare/graph.py
 """LangGraph definition and SSE streaming for the prepare pipeline."""
 from __future__ import annotations
 
@@ -1073,7 +1073,7 @@ from app.agents.prepare import nodes
 from app.agents.prepare.state import PrepareState
 from app.core.logging import get_logger
 
-log = get_logger("app.agents.prepare.graph")
+log = get_logger("app.agents-1.prepare.graph")
 
 _NODE_MAP = {
     "memory_search": nodes.memory_search_node,
@@ -1226,7 +1226,7 @@ cd backend && .venv/bin/python -m pytest tests/unit/test_prepare_graph.py -v
 - [ ] **Step 7.4: Commit**
 
 ```bash
-git add backend/app/agents/prepare/graph.py backend/tests/unit/test_prepare_graph.py
+git add backend/app/agents-1/prepare/graph.py backend/tests/unit/test_prepare_graph.py
 git commit -m "feat(prepare): prepare graph + SSE stream_prepare_events"
 ```
 
@@ -1384,8 +1384,8 @@ cd backend && .venv/bin/python -m pytest tests/ -v --timeout=30
 - [ ] **Step 8.5: Lint + typecheck**
 
 ```bash
-cd backend && .venv/bin/python -m ruff check app/agents/prepare/ app/api/v1/prepare.py app/services/jd_extractor.py
-cd backend && .venv/bin/python -m mypy app/agents/prepare/ app/api/v1/prepare.py
+cd backend && .venv/bin/python -m ruff check app/agents-1/prepare/ app/api/v1/prepare.py app/services/jd_extractor.py
+cd backend && .venv/bin/python -m mypy app/agents-1/prepare/ app/api/v1/prepare.py
 ```
 
 - [ ] **Step 8.6: Commit**
@@ -1481,7 +1481,7 @@ async def ask_question_node(state: InterviewState) -> InterviewState:
             "question_count": state.get("question_count", 0) + 1,
         }
         # 生成面试官包装文案（仍然走 LLM，但 topic 固定）
-        # 原有的 _generate_text 可复用，把 question_text 传入 prompt
+        # 原有的 _generate_text 可复用，把 question_text 传入 prompts
         return new_state
     # 原有逻辑（随机出题）
     ...
@@ -1499,7 +1499,7 @@ cd backend && .venv/bin/python -m pytest tests/ -v --timeout=30
 - [ ] **Step 9.6: Commit**
 
 ```bash
-git add backend/app/agents/interviewer/state.py backend/app/agents/interviewer/nodes.py backend/app/agents/interviewer/graph.py
+git add backend/app/agents-1/interviewer/state.py backend/app/agents-1/interviewer/nodes.py backend/app/agents-1/interviewer/graph.py
 git commit -m "feat(interview): InterviewState 加 prepared_questions，有题直接出题跳过 opening"
 ```
 

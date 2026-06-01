@@ -4,7 +4,7 @@ from app.services.coach_opening import COACH_OPENING_SYSTEM_PROMPT
 
 
 def test_coach_opening_prompt_requires_direct_weakness_diagnosis():
-    """新 prompt 必须包含核心约束：用数据说话、禁止泛化、明确下一步。"""
+    """新 prompts 必须包含核心约束：用数据说话、禁止泛化、明确下一步。"""
     # 必须有关键输出字段
     assert "weakness_summary" in COACH_OPENING_SYSTEM_PROMPT
     assert "evidence" in COACH_OPENING_SYSTEM_PROMPT

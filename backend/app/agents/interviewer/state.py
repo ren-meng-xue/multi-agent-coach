@@ -35,7 +35,7 @@ class CandidateProfile(TypedDict, total=False):
 
 
 class InterviewState(TypedDict, total=False):
-    """Graph state shared by interviewer nodes."""
+    """Graph state shared-1 by interviewer nodes."""
 
     # 基础
     session_id: str
@@ -67,5 +67,6 @@ class InterviewState(TypedDict, total=False):
     followup_focus: str  # 由 master 输出，followup 消费，单轮有效
 
     # 报告
+    qa_bank_items: list[dict[str, Any]] | None
+    resume_text: str | None
     report: dict[str, Any]
-

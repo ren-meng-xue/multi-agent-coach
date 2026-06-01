@@ -25,16 +25,16 @@ SystemCall = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
 
 
 def _messages_from_input(raw: list[dict[str, Any]] | None) -> list[BaseMessage]:
-    """把 eval benchmark 用的 [{"role": "ai|user", "content": "..."}] 序列
+    """把 eval benchmark 用的 [{"role": ".ai|user", "content": "..."}] 序列
     转成 LangChain 的 BaseMessage 列表。
 
-    role 大小写不敏感；"ai" / "assistant" 视为 AI，其余按用户处理。
+    role 大小写不敏感；".ai" / "assistant" 视为 AI，其余按用户处理。
     """
     msgs: list[BaseMessage] = []
     for m in raw or []:
         role = str(m.get("role") or "").lower()
         content = str(m.get("content", ""))
-        if role in ("ai", "assistant"):
+        if role in (".ai", "assistant"):
             msgs.append(AIMessage(content=content))
         else:
             msgs.append(HumanMessage(content=content))

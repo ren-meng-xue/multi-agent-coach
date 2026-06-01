@@ -34,4 +34,18 @@ describe("TurnTraceCard", () => {
     expect(screen.getByText(/多 Agent · 分析完成 · 第 1 轮/)).toBeInTheDocument();
     expect(screen.getByText(/7\.4/)).toBeInTheDocument();
   });
+
+  it("renders error state when error is passed", () => {
+    render(
+      <TurnTraceCard
+        status="done"
+        nodes={[
+          { id: "master", label: "MASTER", status: "done", tokens: "分析完成", elapsedMs: 120 },
+        ]}
+        turnIndex={2}
+        error="AI 暂时无法响应，请稍后重试"
+      />,
+    );
+    expect(screen.getByText("AI 暂时无法响应，请稍后重试")).toBeInTheDocument();
+  });
 });

@@ -53,7 +53,7 @@ describe("streamInterviewChat", () => {
           Authorization: "Bearer test-token",
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ message: "练后端" }),
+        body: JSON.stringify({ message: "练后端", use_qa_bank: false }),
       }),
     );
   });
@@ -415,4 +415,3 @@ describe("enterInterviewRoom", () => {
     expect(push).toHaveBeenCalledWith("/interview");
   });
 });
-

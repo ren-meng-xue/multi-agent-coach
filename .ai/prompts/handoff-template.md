@@ -1,23 +1,24 @@
 # Handoff Log
 
 > 每个 agent 完成自己阶段后，**追加**一段到本文件末尾。不要覆盖前一段。
+> **注意：如果某个小节（如 Pending, Risks, Blockers）没有内容，请直接省略该小节，不要写“无”或“None”。**
 
 ---
 
-## <Agent Name> @ <ISO8601 with timezone, e.g. 2026-05-29T12:00:00+08:00>
+## <Role> @ <ISO8601>
 
 ### Completed
 - ...
 
-### Pending
+### Pending (如果有才写)
 - ...
 
-### Risks
+### Risks (如果有才写)
 - ...
 
-### Blockers
+### Blockers (如果有才写)
 - ...
 
 ### Next Step
-- 下一负责人：<planner|backend|frontend|reviewer|tester>
+- 下一负责人：<role>
 - 下一动作：...

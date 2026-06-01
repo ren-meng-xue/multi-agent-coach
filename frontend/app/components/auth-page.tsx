@@ -65,7 +65,7 @@ export function AuthPage({ mode }: Readonly<{ mode: AuthMode }>) {
     <AppShell>
       <section className="auth-split" aria-label="登录 Multi Agent Coach">
         <div className="auth-hero">
-          <div className="auth-overline">AI-Powered Interview Coach</div>
+          <div className="auth-overline">AI 驱动的面试教练</div>
           <h1>
             你的 <b>AI 面试陪练</b>
             <br />
@@ -102,7 +102,7 @@ export function AuthPage({ mode }: Readonly<{ mode: AuthMode }>) {
                     path="/login"
                     routing="path"
                     signUpUrl="/sign-up"
-                    fallbackRedirectUrl="/interview"
+                    fallbackRedirectUrl="/coach"
                   />
                 ) : (
                   <SignUp
@@ -110,7 +110,7 @@ export function AuthPage({ mode }: Readonly<{ mode: AuthMode }>) {
                     path="/sign-up"
                     routing="path"
                     signInUrl="/login"
-                    fallbackRedirectUrl="/interview"
+                    fallbackRedirectUrl="/coach"
                   />
                 )}
               </AuthCardRouter>

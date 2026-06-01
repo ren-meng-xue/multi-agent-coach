@@ -33,7 +33,6 @@ vi.mock("@/lib/coach", () => ({
 }));
 
 vi.mock("@/lib/user", () => ({
-  updateUserProfile: vi.fn().mockResolvedValue({}),
   fetchUserProfile: vi.fn().mockResolvedValue({}),
   fetchUserStories: vi.fn().mockResolvedValue([]),
 }));
@@ -91,11 +90,11 @@ describe("CoachDashboard", () => {
     mockFetch.mockResolvedValue({
       is_returning: true,
       target_role: "后端",
-      work_years: null,
       target_company: null,
       user_background: null,
       session_count: 7,
-      last_session_id: "sid-123"
+      last_session_id: "sid-123",
+      resume_filename: "resume.pdf",
     });
 
     render(<CoachDashboard />);
@@ -105,22 +104,42 @@ describe("CoachDashboard", () => {
     });
   });
 
-  it("当 stage 为 interview 时显示进行中提示", async () => {
-    mockFetchUserStage.mockResolvedValue("interview");
+  it("已有简历解析出的岗位时不再显示首场面试设置卡", async () => {
     mockFetch.mockResolvedValue({
-      is_returning: true,
-      target_role: "后端",
-      work_years: null,
+      is_returning: false,
+      target_role: "WEB前端工程师",
       target_company: null,
       user_background: null,
-      session_count: 5,
-      last_session_id: "sid-456"
+      session_count: 0,
+      last_session_id: null,
+      resume_filename: "resume.pdf",
     });
 
     render(<CoachDashboard />);
 
     await waitFor(() => {
-      expect(screen.getByText("面试正在进行中")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "直接开始面试" })).toBeInTheDocument();
+    });
+    expect(screen.queryByText("开启你的第一场面试")).not.toBeInTheDocument();
+    expect(screen.queryByText("你想练习的岗位")).not.toBeInTheDocument();
+  });
+
+  it("当 stage 为 interview 时显示进行中提示", async () => {
+    mockFetchUserStage.mockResolvedValue("interview");
+    mockFetch.mockResolvedValue({
+      is_returning: true,
+      target_role: "后端",
+      target_company: null,
+      user_background: null,
+      session_count: 5,
+      last_session_id: "sid-456",
+      resume_filename: "resume.pdf",
+    });
+
+    render(<CoachDashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/后端 面试正在进行中/)).toBeInTheDocument();
     });
     expect(screen.getByRole("button", { name: "立即返回面试间" })).toBeInTheDocument();
   });
@@ -130,11 +149,11 @@ describe("CoachDashboard", () => {
     mockFetch.mockResolvedValue({
       is_returning: true,
       target_role: "后端",
-      work_years: null,
       target_company: null,
       user_background: null,
       session_count: 5,
-      last_session_id: "session-123"
+      last_session_id: "session-123",
+      resume_filename: "resume.pdf",
     });
     
     // Mock 全局 fetch 用于 SSE
@@ -172,11 +191,11 @@ describe("CoachDashboard", () => {
       mockFetch.mockResolvedValue({
         is_returning: true,
         target_role: "后端",
-        work_years: null,
         target_company: null,
         user_background: null,
         session_count: 7,
-        last_session_id: null
+        last_session_id: null,
+        resume_filename: "resume.pdf",
       });
     });
 

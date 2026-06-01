@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
+import { zhCN } from "@clerk/localizations";
 import { DM_Sans, DM_Serif_Display } from "next/font/google";
 import "./globals.css";
 
@@ -23,6 +24,16 @@ export const metadata: Metadata = {
   description: "Multi Agent Coach 登录入口",
 };
 
+/** 扩展中文包，补全漏掉的错误提示。 */
+const customLocalization = {
+  ...zhCN,
+  errors: {
+    ...zhCN.errors,
+    form_identifier_exists: "该电子邮件地址已被占用。请尝试另一个。",
+    form_password_pwned: "这个密码在数据泄露中被发现，不能使用，请换一个密码试试。",
+  }
+};
+
 /** 从 Clerk publishable key 解析出 Frontend API 域，用于 preconnect。 */
 function deriveClerkFapiOrigin(): string | null {
   const key = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "";
@@ -36,7 +47,7 @@ function deriveClerkFapiOrigin(): string | null {
   }
 }
 
-/** 渲染应用根布局，字体通过 next/font 在构建期打包，不依赖 Google CDN。 */
+/** 渲染应用根布局。 */
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -49,6 +60,7 @@ export default function RootLayout({
       signInUrl="/login"
       signUpUrl="/sign-up"
       afterSignOutUrl="/login"
+      localization={customLocalization}
       telemetry={false}
     >
       <html

@@ -411,8 +411,8 @@ windows:
   - cockpit:
       layout: main-horizontal
       panes:
-        - watch -n 2 'cat shared/current/next-action.md; echo "---"; cat shared/current/tasks.md; echo "---"; cat shared/current/status.md; echo "---"; cat shared/current/review.md'
-        - ./scripts/control-plane.sh
+        - watch -n 2 'cat shared-1/current/next-action.md; echo "---"; cat shared-1/current/tasks.md; echo "---"; cat shared-1/current/status.md; echo "---"; cat shared-1/current/review.md'
+        - ./scripts-old1/control-plane.sh
   - planner:
       panes:
         - claude code

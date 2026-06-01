@@ -33,7 +33,7 @@ export function TraceNode({
 
   return (
     <div data-testid={`trace-node-${id}`} className="group flex gap-4 py-3">
-      <div className="relative flex flex-col items-center pt-0.5 w-6 flex-shrink-0">
+      <div className="relative flex flex-col items-center pt-0.5 w-6 flex-shrink-0 self-stretch">
         {/* 垂直 Timeline 连接线：绝对定位并根据图标位置微调起始点 */}
         {!isLast && (
           <div 
@@ -219,39 +219,39 @@ export function TraceNode({
 function getBadgeClass(id: string) {
   // 1. 核心调度 (Master) - 幽静紫
   if (id === "master") {
-    return "bg-[#EEEDFE] text-[#3C3489] dark:bg-[#26215C]/40 dark:text-[#CECBF6]";
+    return "border border-[#E2E0FF] bg-[#EEEDFE] text-[#3C3489] dark:border-[#3C3489] dark:bg-[#26215C] dark:text-[#CECBF6]";
   }
   
-  // 2. 出题专家 (Question Gen / Ask Question) - 靛青蓝
+  // 2. 出题专家 (Question Gen / Ask Question) - 天空蓝
   if (id === "question_gen" || id === "ask_question") {
-    return "bg-[#F0F2FF] text-[#4338CA] dark:bg-[#21265C]/40 dark:text-[#A5B4FC]";
+    return "border border-[#D2E9FF] bg-[#EBF5FF] text-[#1E3A8A] dark:border-[#1E3A8A] dark:bg-[#1E293B] dark:text-[#93C5FD]";
   }
 
   // 3. 评估专家 (Evaluator) - 薄荷绿
   if (id === "evaluator") {
-    return "bg-[#E1F5F2] text-[#0D6B5E] dark:bg-[#0A3D36]/40 dark:text-[#A1E6D9]";
+    return "border border-[#C2F0E7] bg-[#E1F5F2] text-[#0D6B5E] dark:border-[#0D6B5E] dark:bg-[#0A3D36] dark:text-[#A1E6D9]";
   }
 
   // 4. 面试专家/追问 (Followup) - 蔷薇粉
   if (id === "followup") {
-    return "bg-[#FDF2F8] text-[#9D174D] dark:bg-[#500724]/40 dark:text-[#F9A8D4]";
+    return "border border-[#FCE7F3] bg-[#FDF2F8] text-[#9D174D] dark:border-[#9D174D] dark:bg-[#500724] dark:text-[#F9A8D4]";
   }
 
   // 5. 记忆检索 (Memory Search) - 翡翠绿
   if (id === "memory_search") {
-    return "bg-[#E1F5EE] text-[#085041] dark:bg-[#04342C]/40 dark:text-[#9FE1CB]";
+    return "border border-[#BDEAD9] bg-[#E1F5EE] text-[#085041] dark:border-[#0B5B4D] dark:bg-[#04342C] dark:text-[#9FE1CB]";
   }
 
   // 6. JD分析 (JD Analysis) - 琥珀橙
   if (id === "jd_analysis") {
-    return "bg-[#FAEEDA] text-[#633806] dark:bg-[#412402]/40 dark:text-[#FAC775]";
+    return "border border-[#F4D4A1] bg-[#FAEEDA] text-[#633806] dark:border-[#7A4708] dark:bg-[#412402] dark:text-[#FAC775]";
   }
 
   // 7. 流程收尾 (Closing) - 中性灰
   if (id === "closing") {
-    return "bg-black/5 text-black/60 dark:bg-white/5 dark:text-white/60";
+    return "border border-black/10 bg-black/5 text-black/60 dark:border-white/10 dark:bg-white/5 dark:text-white/60";
   }
 
   // 兜底样式
-  return "bg-black/[0.03] text-black/55 dark:bg-white/[0.03] dark:text-white/55";
+  return "border border-black/10 bg-black/[0.03] text-black/55 dark:border-white/10 dark:bg-white/[0.04] dark:text-white/55";
 }

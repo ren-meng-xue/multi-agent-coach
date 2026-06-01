@@ -64,6 +64,37 @@ async def test_first_turn_with_prepared_questions_forces_ask_question(monkeypatc
 
 
 @pytest.mark.asyncio
+async def test_ask_question_with_prepared_question_does_not_call_llm(monkeypatch):
+    """已有准备题时，首题直接使用准备题，避免额外 LLM 失败导致启动失败。"""
+    from app.agents.interviewer.nodes import ask_question_node
+
+    async def fail_generate(*args, **kwargs):
+        raise RuntimeError("llm should not be called")
+
+    monkeypatch.setattr("app.agents.interviewer.nodes._generate_text", fail_generate)
+
+    result = await ask_question_node({
+        "target_role": "前端工程师",
+        "prepared_questions": [
+            {
+                "id": 1,
+                "question": "请描述一次你和 UI/UX 设计师协作的经历。",
+                "category": "behavioral",
+                "focus_area": "协作",
+                "priority": 1,
+            }
+        ],
+        "question_count": 0,
+        "current_question_index": 0,
+    })
+
+    assert result["stage"] == "interview"
+    assert result["question_count"] == 1
+    assert "前端工程师" in result["assistant_message"]
+    assert "UI/UX 设计师协作" in result["assistant_message"]
+
+
+@pytest.mark.asyncio
 async def test_end_to_end_one_turn_emits_full_event_sequence(monkeypatch, db):
     """模拟一次完整 turn：master + evaluator + followup 节点都跑。"""
     from uuid import uuid4
@@ -182,4 +213,3 @@ async def test_chain_closing_triggers_report_event(monkeypatch, db):
     async for ev in stream_interview_turn(message="结束吧", user_id=test_user_id, db=db):
         events.append(ev["event"])
     assert "report" in events
-

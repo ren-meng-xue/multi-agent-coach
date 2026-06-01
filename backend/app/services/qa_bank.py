@@ -11,6 +11,7 @@ SECTION_MAP = {
     "技术题": "technical",
     "HR题": "hr",
     "项目讲解": "project",
+    "项目经验": "project",
 }
 
 

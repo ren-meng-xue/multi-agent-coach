@@ -31,6 +31,8 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True)
     target_role: Mapped[str | None] = mapped_column(String(255))
     work_years: Mapped[str | None] = mapped_column(String(64))
+    resume_text: Mapped[str | None] = mapped_column(Text)
+    resume_filename: Mapped[str | None] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

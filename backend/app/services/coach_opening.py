@@ -12,7 +12,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
-from app.models.core import InterviewSession
+from app.models.core import InterviewSession, User
 from app.schemas.interview import CoachOpeningMessageResponse
 
 log = get_logger("app.services.coach_opening")
@@ -35,21 +35,25 @@ COACH_OPENING_SYSTEM_PROMPT = """
 - common_issues：跨场次反复出现的问题标签及次数
 - pass_rate：通过率（0.0-1.0）
 - trend：分数趋势（improving/flat/declining）
+- resume_text：用户的个人简历内容（如果已上传）
 
 【生成规则】
 greeting（1句）：
 - 提到用户练了什么岗位、几场，语气简短直接，不说废话
+- 如果是新用户（is_new=true）且有 resume_text，可以根据简历内容打招呼，如："我看过你的简历了，你在 [某项目/某公司] 的经历很亮眼，想聊聊吗？"
 - 例："你练了 2 场 AI Agent 工程师，通过率 50%，继续。"
 - 禁止："欢迎回来！今天我们继续关注你的面试表现，帮助你进一步提升技能。"
 
 weakness_summary（1-2句）：
 - 必须点出最突出的短板维度（找 recent_sessions 里分数最低的维度）
 - 用具体分数说话，例："你的量化成果维度平均 2.1 分，是四个维度里最低的。"
+- 新用户且有简历时，可以根据简历内容预估一个可能的挑战点，如："作为 [某岗位]，面试中经常会被问到 [某技术]，这是个不小的挑战。"
 - 禁止使用：提升空间、规律、改进机会、加强能力、建议关注
 
 evidence（1-2句）：
 - 直接引用 recent_sessions 里的 improvements 原话或 common_issues 中的高频问题
 - 说清楚是哪场出了什么问题，或哪个问题在几场里反复出现
+- 如果是新用户，可以引用简历中的一段关键词作为引子
 - 禁止编造输入中没有的数据，禁止重复 weakness_summary 的内容
 
 focus_today（1句）：
@@ -60,7 +64,7 @@ focus_today（1句）：
 【其他约束】
 - 前端逐段渲染，每个字段必须是完整自然的中文句子，不要有多余标点或 Markdown
 - 必须返回结构化 JSON，不要输出 JSON 以外的任何内容
-- 新用户（is_new=true）：weakness_summary 和 evidence 返回 null，greeting 推荐岗位，focus_today 说明从哪里开始
+- 新用户（is_new=true）且无简历：weakness_summary 和 evidence 返回 null，greeting 推荐岗位，focus_today 说明从哪里开始
 
 返回格式：
 {
@@ -96,6 +100,7 @@ class CoachHistoryContext(BaseModel):
     common_issues: dict[str, int]
     trend: Literal["improving", "declining", "flat"]
     is_new: bool
+    resume_text: str | None = None
     practiced_roles: dict[str, int]
     recent_sessions: list[RecentSessionSummary]
 
@@ -147,6 +152,10 @@ async def build_coach_history_context(
     db: AsyncSession, *, user_id: str
 ) -> CoachHistoryContext:
     """从用户已完成的历史 session 汇总场次、分数、通过率、常见问题和趋势。"""
+    # 获取用户信息（含简历）
+    user_result = await db.execute(select(User).where(User.id == user_id))
+    user = user_result.scalar_one_or_none()
+
     result = await db.execute(
         select(InterviewSession)
         .where(
@@ -198,6 +207,7 @@ async def build_coach_history_context(
         common_issues=dict(issue_counter.most_common(5)),
         trend=_calculate_trend(recent_scores),
         is_new=len(sessions) == 0,
+        resume_text=user.resume_text if user else None,
         practiced_roles=dict(role_counter),
         recent_sessions=recent_sessions,
     )

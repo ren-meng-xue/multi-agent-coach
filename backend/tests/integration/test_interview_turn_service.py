@@ -116,6 +116,60 @@ async def test_stream_interview_turn_persists_user_and_assistant_messages(db, mo
 
 
 @pytest.mark.asyncio
+async def test_first_question_uses_prepared_questions_for_existing_user_session(db, monkeypatch):
+    """即使不是首次用户，首题启动也必须把准备阶段题目传入图状态。"""
+    user_id = f"user_turn_prepared_existing_{uuid4().hex}"
+    old_session, _ = await get_or_create_active_session(db, user_id=user_id)
+    old_session.status = "abandoned"
+    await db.commit()
+    await reset_interview_session(
+        db,
+        user_id=user_id,
+        target_role="前端工程师",
+        user_background="Vue 项目",
+    )
+
+    prepared_questions = [
+        {
+            "id": 1,
+            "question": "请描述一次你和 UI/UX 设计师协作的经历。",
+            "category": "behavioral",
+            "focus_area": "协作",
+            "priority": 1,
+        }
+    ]
+    captured_state = {}
+
+    async def fake_graph_events(state):
+        captured_state.update(state)
+        yield {
+            "event": "final",
+            "data": {
+                **state,
+                "stage": "interview",
+                "question_count": 1,
+                "assistant_message": "请描述一次你和 UI/UX 设计师协作的经历。",
+            },
+        }
+
+    monkeypatch.setattr("app.services.interview_turn.stream_interviewer_turn_events", fake_graph_events)
+
+    events = [
+        event
+        async for event in stream_interview_turn(
+            "__START__",
+            user_id=user_id,
+            db=db,
+            prepared_questions=prepared_questions,
+        )
+    ]
+
+    assert captured_state["prepared_questions"] == prepared_questions
+    assert "db" not in captured_state
+    assert any(event["event"] == "done" for event in events)
+
+
+@pytest.mark.asyncio
 async def test_stream_interview_turn_raises_on_empty_assistant_reply(db, monkeypatch):
     """图输出 assistant_message 为空白时，service 层应抛出 RuntimeError 而非静默失败。"""
 

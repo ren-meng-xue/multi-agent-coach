@@ -61,9 +61,9 @@ test("点击就绪切换展开", () => {
       onStart={() => {}}
     />
   );
-  const toggle = screen.getByRole("button", { name: /展开专家组详情/ });
+  const toggle = screen.getByRole("button", { name: /展开 AI 教练组详情/ });
   fireEvent.click(toggle);
-  expect(screen.getByRole("button", { name: /收起专家组详情/ })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /收起 AI 教练组详情/ })).toBeInTheDocument();
 });
 
 test("点击先看题目列表在卡片内内联展开题目，不弹窗", () => {

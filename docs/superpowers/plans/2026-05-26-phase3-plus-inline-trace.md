@@ -98,7 +98,7 @@ class TurnEvaluation(TypedDict, total=False):
 
 
 class InterviewState(TypedDict, total=False):
-    """Graph state shared by interviewer nodes."""
+    """Graph state shared-1 by interviewer nodes."""
 
     # 基础
     session_id: str
@@ -142,7 +142,7 @@ Expected: 多个 FAIL，因为引用了被删除的字段。后续 task 会清�
 - [ ] **Step 3: 跑 typecheck 预期它们失败**
 
 ```bash
-cd backend && .venv/bin/python -m mypy app/agents/interviewer
+cd backend && .venv/bin/python -m mypy app/agents-1/interviewer
 ```
 
 Expected: 多处错误指向被删字段。Task 3 / Task 4 会修复。
@@ -166,7 +166,7 @@ state 改动会让 nodes/graph 报错，等 Task 3、Task 4 一起完成后再�
 """Prompts for the multi-agent interviewer graph."""
 
 # ─────────────────────────────────────────────
-# 保留：原有出题/收尾/报告 prompt
+# 保留：原有出题/收尾/报告 prompts
 # ─────────────────────────────────────────────
 
 QUESTION_SYSTEM_PROMPT = (
@@ -330,7 +330,7 @@ from app.agents.interviewer.state import InterviewState, TurnEvaluation
 from app.core.config import get_settings
 from app.core.logging import get_logger
 
-log = get_logger("app.agents.interviewer.nodes")
+log = get_logger("app.agents-1.interviewer.nodes")
 
 
 # ─────────────────────────────────────────────
@@ -681,7 +681,7 @@ Expected: `ok`。
 - [ ] **Step 3: 跑 lint 看新文件没有 ruff 报错**
 
 ```bash
-cd backend && .venv/bin/python -m ruff check app/agents/interviewer/
+cd backend && .venv/bin/python -m ruff check app/agents-1/interviewer/
 ```
 
 Expected: 无错误。
@@ -756,7 +756,7 @@ Expected: 5 个测试全部 PASS。
 - [ ] **Step 4: 跑全量 lint + typecheck**
 
 ```bash
-cd backend && .venv/bin/python -m ruff check app/agents/interviewer/ && .venv/bin/python -m mypy app/agents/interviewer
+cd backend && .venv/bin/python -m ruff check app/agents-1/interviewer/ && .venv/bin/python -m mypy app/agents-1/interviewer
 ```
 
 Expected: 无错误。
@@ -764,7 +764,7 @@ Expected: 无错误。
 - [ ] **Step 5: Commit Batch A**
 
 ```bash
-git add backend/app/agents/interviewer/state.py backend/app/agents/interviewer/prompts.py backend/app/agents/interviewer/nodes.py backend/app/agents/interviewer/graph.py backend/tests/unit/test_interviewer_graph.py
+git add backend/app/agents-1/interviewer/state.py backend/app/agents-1/interviewer/prompts.py backend/app/agents-1/interviewer/nodes.py backend/app/agents-1/interviewer/graph.py backend/tests/unit/test_interviewer_graph.py
 git commit -m "refactor(interviewer): remove opening/briefing/decide_next, scaffold master chain routing"
 ```
 
@@ -831,8 +831,8 @@ async def test_master_first_turn_forces_ask_question():
     """question_count == 0：强制 chain = ['ask_question']，即使 LLM 输出别的。"""
     fake_decision = MagicMock(chain=["evaluator", "followup"], reason="LLM 的随意输出")
     state = {"question_count": 0, "messages": []}
-    with patch("app.agents.interviewer.nodes._master_phase1_stream", new=AsyncMock(return_value=None)), \
-         patch("app.agents.interviewer.nodes._master_phase2_decide", new=AsyncMock(return_value=fake_decision)):
+    with patch("app.agents-1.interviewer.nodes._master_phase1_stream", new=AsyncMock(return_value=None)), \
+         patch("app.agents-1.interviewer.nodes._master_phase2_decide", new=AsyncMock(return_value=fake_decision)):
         result = await master_node(state)
     assert result["chain"] == ["ask_question"]
 
@@ -848,8 +848,8 @@ async def test_master_exhausted_forces_closing():
         "max_followups": 2,
         "messages": [],
     }
-    with patch("app.agents.interviewer.nodes._master_phase1_stream", new=AsyncMock(return_value=None)), \
-         patch("app.agents.interviewer.nodes._master_phase2_decide", new=AsyncMock(return_value=fake_decision)):
+    with patch("app.agents-1.interviewer.nodes._master_phase1_stream", new=AsyncMock(return_value=None)), \
+         patch("app.agents-1.interviewer.nodes._master_phase2_decide", new=AsyncMock(return_value=fake_decision)):
         result = await master_node(state)
     assert result["chain"] == ["closing"]
 
@@ -865,8 +865,8 @@ async def test_master_normal_chain_passes_through():
         "max_followups": 2,
         "messages": [],
     }
-    with patch("app.agents.interviewer.nodes._master_phase1_stream", new=AsyncMock(return_value=None)), \
-         patch("app.agents.interviewer.nodes._master_phase2_decide", new=AsyncMock(return_value=fake_decision)):
+    with patch("app.agents-1.interviewer.nodes._master_phase1_stream", new=AsyncMock(return_value=None)), \
+         patch("app.agents-1.interviewer.nodes._master_phase2_decide", new=AsyncMock(return_value=fake_decision)):
         result = await master_node(state)
     assert result["chain"] == ["evaluator", "followup"]
 
@@ -882,8 +882,8 @@ async def test_master_strips_after_closing():
         "max_followups": 2,
         "messages": [],
     }
-    with patch("app.agents.interviewer.nodes._master_phase1_stream", new=AsyncMock(return_value=None)), \
-         patch("app.agents.interviewer.nodes._master_phase2_decide", new=AsyncMock(return_value=fake_decision)):
+    with patch("app.agents-1.interviewer.nodes._master_phase1_stream", new=AsyncMock(return_value=None)), \
+         patch("app.agents-1.interviewer.nodes._master_phase2_decide", new=AsyncMock(return_value=fake_decision)):
         result = await master_node(state)
     assert result["chain"] == ["closing"]
 
@@ -899,8 +899,8 @@ async def test_master_appends_followup_when_tail_is_evaluator():
         "max_followups": 2,
         "messages": [],
     }
-    with patch("app.agents.interviewer.nodes._master_phase1_stream", new=AsyncMock(return_value=None)), \
-         patch("app.agents.interviewer.nodes._master_phase2_decide", new=AsyncMock(return_value=fake_decision)):
+    with patch("app.agents-1.interviewer.nodes._master_phase1_stream", new=AsyncMock(return_value=None)), \
+         patch("app.agents-1.interviewer.nodes._master_phase2_decide", new=AsyncMock(return_value=fake_decision)):
         result = await master_node(state)
     assert result["chain"][-1] in {"followup", "ask_question", "closing"}
     assert result["chain"] == ["evaluator", "followup"]
@@ -916,8 +916,8 @@ async def test_master_phase2_failure_falls_back():
         "max_followups": 2,
         "messages": [],
     }
-    with patch("app.agents.interviewer.nodes._master_phase1_stream", new=AsyncMock(return_value=None)), \
-         patch("app.agents.interviewer.nodes._master_phase2_decide", new=AsyncMock(side_effect=RuntimeError("LLM down"))):
+    with patch("app.agents-1.interviewer.nodes._master_phase1_stream", new=AsyncMock(return_value=None)), \
+         patch("app.agents-1.interviewer.nodes._master_phase2_decide", new=AsyncMock(side_effect=RuntimeError("LLM down"))):
         result = await master_node(state)
     assert result["chain"] == ["evaluator", "followup"]
 
@@ -932,8 +932,8 @@ async def test_master_empty_chain_falls_back():
         "max_followups": 2,
         "messages": [],
     }
-    with patch("app.agents.interviewer.nodes._master_phase1_stream", new=AsyncMock(return_value=None)), \
-         patch("app.agents.interviewer.nodes._master_phase2_decide", new=AsyncMock(return_value=fake_decision)):
+    with patch("app.agents-1.interviewer.nodes._master_phase1_stream", new=AsyncMock(return_value=None)), \
+         patch("app.agents-1.interviewer.nodes._master_phase2_decide", new=AsyncMock(return_value=fake_decision)):
         result = await master_node(state)
     assert result["chain"] == ["evaluator", "followup"]
 ```
@@ -1115,7 +1115,7 @@ Expected: 7 个测试全 PASS。
 - [ ] **Step 4: Commit**
 
 ```bash
-git add backend/app/agents/interviewer/nodes.py backend/tests/unit/test_interviewer_master_node.py
+git add backend/app/agents-1/interviewer/nodes.py backend/tests/unit/test_interviewer_master_node.py
 git commit -m "feat(interviewer): implement master_node with chain decision and enforcement"
 ```
 
@@ -1156,8 +1156,8 @@ async def test_evaluator_writes_turn_evaluation_into_state():
         "turn_evaluations": [],
         "messages": [HumanMessage(content="我会用 CAP 解决"), AIMessage(content="...")],
     }
-    with patch("app.agents.interviewer.nodes._evaluator_reason_stream", new=AsyncMock(return_value=None)), \
-         patch("app.agents.interviewer.nodes._evaluator_score", new=AsyncMock(return_value=fake_scoring)):
+    with patch("app.agents-1.interviewer.nodes._evaluator_reason_stream", new=AsyncMock(return_value=None)), \
+         patch("app.agents-1.interviewer.nodes._evaluator_score", new=AsyncMock(return_value=fake_scoring)):
         result = await evaluator_node(state)
     evals = result["turn_evaluations"]
     assert len(evals) == 1
@@ -1177,8 +1177,8 @@ async def test_evaluator_failure_passthrough_without_writing():
         "turn_evaluations": [],
         "messages": [],
     }
-    with patch("app.agents.interviewer.nodes._evaluator_reason_stream", new=AsyncMock(return_value=None)), \
-         patch("app.agents.interviewer.nodes._evaluator_score", new=AsyncMock(side_effect=RuntimeError("down"))):
+    with patch("app.agents-1.interviewer.nodes._evaluator_reason_stream", new=AsyncMock(return_value=None)), \
+         patch("app.agents-1.interviewer.nodes._evaluator_score", new=AsyncMock(side_effect=RuntimeError("down"))):
         result = await evaluator_node(state)
     assert result["turn_evaluations"] == []
 
@@ -1201,8 +1201,8 @@ async def test_evaluator_appends_not_overwrites():
         "turn_evaluations": existing,
         "messages": [],
     }
-    with patch("app.agents.interviewer.nodes._evaluator_reason_stream", new=AsyncMock(return_value=None)), \
-         patch("app.agents.interviewer.nodes._evaluator_score", new=AsyncMock(return_value=fake_scoring)):
+    with patch("app.agents-1.interviewer.nodes._evaluator_reason_stream", new=AsyncMock(return_value=None)), \
+         patch("app.agents-1.interviewer.nodes._evaluator_score", new=AsyncMock(return_value=fake_scoring)):
         result = await evaluator_node(state)
     assert len(result["turn_evaluations"]) == 2
     assert result["turn_evaluations"][0]["summary_score"] == 7.0
@@ -1240,7 +1240,7 @@ def _build_evaluator_context(state: InterviewState) -> str:
     for m in reversed(state.get("messages", [])):
         if not last_user and getattr(m, "type", "") == "human":
             last_user = str(getattr(m, "content", ""))[:600]
-        elif not last_ai and getattr(m, "type", "") == "ai":
+        elif not last_ai and getattr(m, "type", "") == ".ai":
             last_ai = str(getattr(m, "content", ""))[:300]
         if last_user and last_ai:
             break
@@ -1308,7 +1308,7 @@ Expected: 3 个测试全 PASS。
 - [ ] **Step 5: Commit**
 
 ```bash
-git add backend/app/agents/interviewer/nodes.py backend/tests/unit/test_interviewer_evaluator_node.py
+git add backend/app/agents-1/interviewer/nodes.py backend/tests/unit/test_interviewer_evaluator_node.py
 git commit -m "feat(interviewer): implement evaluator_node with 4-dimension scoring"
 ```
 
@@ -1353,7 +1353,7 @@ async def test_report_averages_turn_evaluations():
         highlights=["亮点1"], improvements=["改进1"],
         key_concepts=["CAP"], common_mistakes=["缺指标"],
     )
-    with patch("app.agents.interviewer.nodes._report_aggregate_text", new=AsyncMock(return_value=fake_text)):
+    with patch("app.agents-1.interviewer.nodes._report_aggregate_text", new=AsyncMock(return_value=fake_text)):
         result = await report_node(state)
     report = result["report"]
     assert report["technical_depth"] == pytest.approx(7.0)
@@ -1375,7 +1375,7 @@ async def test_report_empty_evaluations_uses_fallback():
         key_concepts=["k"], common_mistakes=["m"],
     )
     state = {"messages": [], "turn_evaluations": []}
-    with patch("app.agents.interviewer.nodes._report_fallback_full_eval", new=AsyncMock(return_value=fake_fallback)):
+    with patch("app.agents-1.interviewer.nodes._report_fallback_full_eval", new=AsyncMock(return_value=fake_fallback)):
         result = await report_node(state)
     report = result["report"]
     assert report["overall_score"] == 6.5
@@ -1392,7 +1392,7 @@ async def test_report_text_failure_returns_empty_report():
             "failure_tradeoffs": 5.0, "structure": 5.0, "summary_score": 5.0,
         }],
     }
-    with patch("app.agents.interviewer.nodes._report_aggregate_text", new=AsyncMock(side_effect=RuntimeError("LLM"))):
+    with patch("app.agents-1.interviewer.nodes._report_aggregate_text", new=AsyncMock(side_effect=RuntimeError("LLM"))):
         result = await report_node(state)
     assert result["report"] == {}
 ```
@@ -1513,7 +1513,7 @@ Expected: 3 个全 PASS。
 - [ ] **Step 5: Commit**
 
 ```bash
-git add backend/app/agents/interviewer/nodes.py backend/tests/unit/test_interviewer_report_aggregate.py
+git add backend/app/agents-1/interviewer/nodes.py backend/tests/unit/test_interviewer_report_aggregate.py
 git commit -m "feat(interviewer): aggregate turn_evaluations in report_node"
 ```
 
@@ -1551,11 +1551,11 @@ async def test_chain_evaluator_then_followup():
         "max_followups": 2,
     }
 
-    with patch("app.agents.interviewer.nodes.master_node",
+    with patch("app.agents-1.interviewer.nodes.master_node",
                new=AsyncMock(return_value={**state, "chain": ["evaluator", "followup"]})), \
-         patch("app.agents.interviewer.nodes.evaluator_node",
+         patch("app.agents-1.interviewer.nodes.evaluator_node",
                new=AsyncMock(return_value={"turn_evaluations": [{"summary_score": 7.0}]})), \
-         patch("app.agents.interviewer.nodes.followup_node",
+         patch("app.agents-1.interviewer.nodes.followup_node",
                new=AsyncMock(return_value={"assistant_message": "追问内容"})):
         out = await g.ainvoke(state)
     assert out.get("assistant_message") == "追问内容"
@@ -1575,10 +1575,10 @@ async def test_chain_just_followup_skips_evaluator():
     }
 
     eval_mock = AsyncMock(return_value={"turn_evaluations": []})
-    with patch("app.agents.interviewer.nodes.master_node",
+    with patch("app.agents-1.interviewer.nodes.master_node",
                new=AsyncMock(return_value={**state, "chain": ["followup"]})), \
-         patch("app.agents.interviewer.nodes.evaluator_node", new=eval_mock), \
-         patch("app.agents.interviewer.nodes.followup_node",
+         patch("app.agents-1.interviewer.nodes.evaluator_node", new=eval_mock), \
+         patch("app.agents-1.interviewer.nodes.followup_node",
                new=AsyncMock(return_value={"assistant_message": "拉回主题"})):
         out = await g.ainvoke(state)
     eval_mock.assert_not_called()
@@ -1598,11 +1598,11 @@ async def test_chain_closing_triggers_report():
         "max_followups": 2,
     }
 
-    with patch("app.agents.interviewer.nodes.master_node",
+    with patch("app.agents-1.interviewer.nodes.master_node",
                new=AsyncMock(return_value={**state, "chain": ["closing"]})), \
-         patch("app.agents.interviewer.nodes.closing_node",
+         patch("app.agents-1.interviewer.nodes.closing_node",
                new=AsyncMock(return_value={"assistant_message": "结束语", "stage": "closing"})), \
-         patch("app.agents.interviewer.nodes.report_node",
+         patch("app.agents-1.interviewer.nodes.report_node",
                new=AsyncMock(return_value={"report": {"overall_score": 7.4}})):
         out = await g.ainvoke(state)
     assert out["report"]["overall_score"] == 7.4
@@ -1622,11 +1622,11 @@ async def test_chain_evaluator_then_ask_question():
         "max_followups": 2,
     }
 
-    with patch("app.agents.interviewer.nodes.master_node",
+    with patch("app.agents-1.interviewer.nodes.master_node",
                new=AsyncMock(return_value={**state, "chain": ["evaluator", "ask_question"]})), \
-         patch("app.agents.interviewer.nodes.evaluator_node",
+         patch("app.agents-1.interviewer.nodes.evaluator_node",
                new=AsyncMock(return_value={"turn_evaluations": [{"summary_score": 8.5}]})), \
-         patch("app.agents.interviewer.nodes.ask_question_node",
+         patch("app.agents-1.interviewer.nodes.ask_question_node",
                new=AsyncMock(return_value={"assistant_message": "第2题..."})):
         out = await g.ainvoke(state)
     assert out["assistant_message"] == "第2题..."
@@ -1762,7 +1762,7 @@ async def stream_interviewer_turn_events(state: InterviewState) -> AsyncIterator
 - [ ] **Step 2: 跑 lint / typecheck**
 
 ```bash
-cd backend && .venv/bin/python -m ruff check app/agents/interviewer/graph.py && .venv/bin/python -m mypy app/agents/interviewer/graph.py
+cd backend && .venv/bin/python -m ruff check app/agents-1/interviewer/graph.py && .venv/bin/python -m mypy app/agents-1/interviewer/graph.py
 ```
 
 Expected: 无错误。
@@ -1778,7 +1778,7 @@ Expected: 4 个测试仍 PASS。
 - [ ] **Step 4: Commit**
 
 ```bash
-git add backend/app/agents/interviewer/graph.py
+git add backend/app/agents-1/interviewer/graph.py
 git commit -m "feat(interviewer): emit node_start/node_token/node_done SSE events"
 ```
 

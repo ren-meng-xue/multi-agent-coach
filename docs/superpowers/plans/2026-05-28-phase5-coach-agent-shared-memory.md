@@ -151,7 +151,7 @@ async def test_report_node_writes_candidate_memory(monkeypatch):
     async def fake_upsert(db, user_id, **kwargs):
         called.update(kwargs); called["user_id"] = user_id
         return MagicMock()
-    monkeypatch.setattr("app.agents.interviewer.nodes.upsert_candidate_memory", fake_upsert)
+    monkeypatch.setattr("app.agents-1.interviewer.nodes.upsert_candidate_memory", fake_upsert)
     state = {
         "user_id": "user_abc",
         "session_id": "...",
@@ -258,7 +258,7 @@ async def test_load_memory_reads_candidate_memory(monkeypatch, db, user, memory)
 @pytest.mark.asyncio
 async def test_review_node_streams_and_produces_text():
     from app.agents.coach.nodes import review_node
-    with patch("app.agents.coach.nodes._coach_review_stream", new=AsyncMock(return_value="复盘文本")):
+    with patch("app.agents-1.coach.nodes._coach_review_stream", new=AsyncMock(return_value="复盘文本")):
         result = await review_node({"candidate_memory": {...}, "last_session": {...}})
     assert result["review_text"] == "复盘文本"
 
@@ -267,7 +267,7 @@ async def test_plan_node_structured_output():
     from app.agents.coach.nodes import plan_node, CoachPlanSchema
     fake = MagicMock(spec=CoachPlanSchema, summary="x", strengths=[], weaknesses=[],
                     next_focus_areas=["arch"], recommended_role=None, recommended_question_types=[])
-    with patch("app.agents.coach.nodes._coach_plan_decide", new=AsyncMock(return_value=fake)):
+    with patch("app.agents-1.coach.nodes._coach_plan_decide", new=AsyncMock(return_value=fake)):
         result = await plan_node({"review_text": "...", "candidate_memory": {...}})
     assert result["plan_json"]["next_focus_areas"] == ["arch"]
 

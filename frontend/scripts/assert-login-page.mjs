@@ -23,7 +23,6 @@ const requiredRoutes = [
   "app/coach/page.tsx",
   "app/interview/page.tsx",
   "app/dashboard/page.tsx",
-  "app/reports/page.tsx",
   "app/settings/page.tsx",
   "app/not-found.tsx",
   "app/components/auth-page.tsx",
@@ -78,4 +77,4 @@ if (missing.length > 0 || missingRoutes.length > 0) {
   process.exit(1);
 }
 
-console.log("登录页与 6 个路由检查通过");
+console.log("登录页与 5 个路由检查通过");

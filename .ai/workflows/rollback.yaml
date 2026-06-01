@@ -1,0 +1,46 @@
+id: rollback
+version: 2
+name: Rollback Flow
+description: 回滚流程。plan → rollback → verification，最简路径。
+
+entry: plan
+terminal: done
+
+steps:
+  plan:
+    owner: planner
+    min_depth: quick
+    outputs:
+      - task.md
+      - plan.md
+    checkpoint: true
+    next: rollback
+
+  rollback:
+    owners:
+      - backend
+      - frontend
+    mode: single
+    dynamic_owners: true
+    min_depth: quick
+    next: verification
+    on_blocked: blocked
+
+  blocked:
+    owner: current_agent
+    min_depth: quick
+    resume_to: rollback
+
+  verification:
+    owner: tester
+    min_depth: quick
+    next: done
+    transitions:
+      passed: done
+      failed: rollback
+
+  done:
+    owner: planner
+    min_depth: quick
+    outputs:
+      - handoff.md

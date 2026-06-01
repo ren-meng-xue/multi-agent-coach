@@ -43,6 +43,20 @@ def test_parse_happy_path():
     assert items[2].category == "project"
 
 
+def test_new_project_label():
+    content = """\
+## 项目经验
+
+### 题目 1
+**问题：** 介绍你的项目经验
+**参考答案：** 我的项目经验包括...
+"""
+    items, skipped = parse_qa_markdown(content)
+    assert len(items) == 1
+    assert items[0].category == "project"
+    assert items[0].question == "介绍你的项目经验"
+
+
 def test_skip_item_missing_answer():
     content = """\
 ## 技术题
