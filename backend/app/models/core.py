@@ -142,6 +142,11 @@ class InterviewSession(Base):
     pass_fail: Mapped[str | None] = mapped_column(String(20))
     key_issues: Mapped[list[str] | None] = mapped_column(JSON)
     report_json: Mapped[dict | None] = mapped_column(JSON)
+    use_qa_bank: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default="false",
+    )
 
     user: Mapped[User] = relationship(back_populates="interview_sessions")
     messages: Mapped[list["InterviewMessage"]] = relationship(
