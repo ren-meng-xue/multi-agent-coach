@@ -8,6 +8,7 @@ import {
   resetInterviewSession,
   fetchActiveInterviewSession,
   startPrepareStreamFetch,
+  startPrepareAndLaunchStreamFetch,
   resumePrepareStreamFetch,
   isPrepareTraceMessage,
   isTextMessage,
@@ -108,12 +109,15 @@ export function InterviewChat() {
   // 注意：在单测环境（process.env.NODE_ENV === "test"）中，为满足同步测试断言，允许直接同步从已加载的 ref 初始化状态。
   const [messages, setMessages] = useState<InterviewChatMessage[]>(() => {
     const isTest = typeof process !== "undefined" && process.env.NODE_ENV === "test";
-    if (isTest && initialContextRef.current) {
-      const ctx = initialContextRef.current;
+    const ctx = initialContextRef.current;
+    if (ctx) {
+      // 如果携带了目标岗位/JD，初始就返回空消息列表，避免欢迎卡片一闪而过
       if (ctx.target_role || ctx.jd_text || ctx.jd_url) {
         return [];
       }
-      return [{ role: "assistant", content: buildOpeningMessage(ctx) }];
+      if (isTest) {
+        return [{ role: "assistant", content: buildOpeningMessage(ctx) }];
+      }
     }
     return [{ role: "assistant", content: buildOpeningMessage(null) }];
   });
@@ -165,8 +169,11 @@ export function InterviewChat() {
   const abortRef = useRef<AbortController | null>(null);
   const prepAbortRef = useRef<AbortController | null>(null);
   const assistantIndexRef = useRef<number | null>(null);
+  const currentTurnIdRef = useRef<string | null>(null);
   const deltaBufferRef = useRef("");
+  const traceBufferRef = useRef<{ turnId: string; ev: InterviewTraceNodeEvent }[]>([]);
   const frameRef = useRef<number | null>(null);
+  const traceFrameRef = useRef<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const hasResetRef = useRef(false);
   // 防止 reset 完成前用户提前发消息重用旧 session
@@ -176,7 +183,8 @@ export function InterviewChat() {
   // sessionStorage 防抖：Clerk 握手期间的多次 307 重定向会导致组件反复挂载，
   // 每次挂载都触发同步流程，30s 内只允许一次实际请求防抖。
   useEffect(() => {
-    if (!isLoaded || (!isSignedIn && !isDevAuthBypassEnabled) || hasResetRef.current) return;
+    const shouldProceed = isDevAuthBypassEnabled || (isLoaded && isSignedIn);
+    if (!shouldProceed || hasResetRef.current) return;
 
     const isTest = typeof process !== "undefined" && process.env.NODE_ENV === "test";
     const isRoutingGuardTest = isTest && typeof window !== "undefined" && sessionStorage.getItem("test_routing_guard") === "true";
@@ -215,7 +223,8 @@ export function InterviewChat() {
             return [{ role: "trace", kind: "prepare", payload: createPrepareTracePayload() }, ...prev];
           });
           // 无论是全新 reset 还是二次挂载恢复，都必须正常跑 runPrepare 建立 SSE 监听，保证新挂载组件实例的正常状态推进！
-          runPrepare(initialContextRef.current);
+          // 初始入口走 /prepare/launch：prepare 完成后由后端 phase_change 自动接续面试开场。
+          runPrepare(initialContextRef.current, { autoLaunch: true });
         } else {
           // 2. 否则（页面刷新，或切离后点导航栏切回），先尝试拉取后端目前正在进行中 (in_progress) 的会话
           try {
@@ -223,11 +232,18 @@ export function InterviewChat() {
             if (activeSession.session_id) {
               // 成功拉取到活动会话，恢复历史消息、进度和评估报告
               if (activeSession.messages && activeSession.messages.length > 0) {
-                const restoredMessages: InterviewChatMessage[] = activeSession.messages.map((m) => ({
-                  role: m.role as "user" | "assistant",
-                  content: m.content,
-                }));
-                setMessages(restoredMessages);
+                const restoredMessages: InterviewChatMessage[] = activeSession.messages
+                  .filter((m) => m.content !== "__START__") // 隐藏内部协议 Token
+                  .map((m) => ({
+                    role: m.role as "user" | "assistant",
+                    content: m.content,
+                  }));
+                
+                if (restoredMessages.length > 0) {
+                  setMessages(restoredMessages);
+                } else {
+                  setMessages([{ role: "assistant", content: buildOpeningMessage(null) }]);
+                }
               } else {
                 setMessages([{ role: "assistant", content: buildOpeningMessage(null) }]);
               }
@@ -259,14 +275,18 @@ export function InterviewChat() {
       });
   }, [isLoaded, isSignedIn, getToken]);
 
-  async function runPrepare(ctx: { target_role?: string; user_background?: string; jd_text?: string; jd_url?: string }) {
+  async function runPrepare(
+    ctx: { target_role?: string; user_background?: string; jd_text?: string; jd_url?: string },
+    { autoLaunch = false }: { autoLaunch?: boolean } = {},
+  ) {
     prepAbortRef.current?.abort();
     const abortController = new AbortController();
     prepAbortRef.current = abortController;
 
     try {
       const token = isDevAuthBypassEnabled ? DEV_AUTH_BYPASS_TOKEN : (await getToken() ?? "");
-      for await (const ev of startPrepareStreamFetch({
+      const streamFn = autoLaunch ? startPrepareAndLaunchStreamFetch : startPrepareStreamFetch;
+      for await (const ev of streamFn({
         token,
         userDirection: ctx.target_role,
         userBackground: ctx.user_background,
@@ -288,6 +308,24 @@ export function InterviewChat() {
     const { event, data } = ev;
 
     if (event === "error") {
+      // 错误若发生在 turn 阶段（currentTurnIdRef 非空），不能走 prepare-only 的 fallback——
+      // 那会清掉 prepare trace 但留下半截 user/assistant/turn 消息形成僵尸 UI。
+      if (currentTurnIdRef.current) {
+        const turnId = currentTurnIdRef.current;
+        const assistantIdx = assistantIndexRef.current;
+        const errMsg = data.message ?? "AI 暂时无法响应，请稍后重试";
+        discardBufferedDelta();
+        setMessages((prev) =>
+          prev.map((m, i) =>
+            i === assistantIdx && isTextMessage(m) ? { ...m, content: errMsg } : m,
+          ),
+        );
+        finishTurnTrace(turnId);
+        setIsStreaming(false);
+        assistantIndexRef.current = null;
+        currentTurnIdRef.current = null;
+        return;
+      }
       fallbackFromPrepareFailure(initialContextRef.current);
       return;
     }
@@ -355,6 +393,98 @@ export function InterviewChat() {
         jdContext: data.jd_context,
       }));
     }
+
+    // ── Phase-change：后端信号接续面试开场 ──────────────────────────
+    if (event === "phase_change") {
+      const turnId = data.turn_id ?? crypto.randomUUID();
+      currentTurnIdRef.current = turnId;
+      const turnIndex = 1;
+
+      setPrepStatus(null);
+      setIsStreaming(true);
+
+      // updater 外捕获 assistantIndex 后再写入 ref，规避 StrictMode 下 functional
+      // updater 被双调用对 ref 产生 race；之后到达的 turn_delta 走 scheduleDeltaFlush
+      // 在下一帧 flush，此时 ref 已写好，时序安全。
+      let newAssistantIndex = -1;
+      setMessages((prev) => {
+        newAssistantIndex = prev.length + 1;
+        return [
+          ...prev,
+          { role: "user" as const, content: "开始本轮面试" },
+          { role: "assistant" as const, content: "" },
+          {
+            role: "trace" as const,
+            kind: "turn" as const,
+            id: turnId,
+            payload: {
+              status: "running" as const,
+              nodes: [],
+              turnIndex,
+              isOpening: true,
+            },
+          },
+        ];
+      });
+      assistantIndexRef.current = newAssistantIndex;
+    }
+
+    // ── turn_node_* → 更新 turn trace ────────────────────────────────
+    if (event === "turn_node_start" || event === "turn_node_token" || event === "turn_node_done") {
+      const turnId = currentTurnIdRef.current;
+      if (!turnId) return;
+
+      const phase =
+        event === "turn_node_start" ? "start"
+        : event === "turn_node_token" ? "token"
+        : "done";
+
+      updateTurnTrace(turnId, {
+        phase,
+        node: data.node ?? "",
+        label: data.label,
+        text: data.text,
+        elapsedMs: data.elapsed_ms,
+      });
+    }
+
+    // ── turn_delta → 缓冲区追加文字 ──────────────────────────────────
+    if (event === "turn_delta") {
+      deltaBufferRef.current += data.text ?? "";
+      scheduleDeltaFlush();
+    }
+
+    // ── turn_state → 更新进度 ─────────────────────────────────────────
+    if (event === "turn_state") {
+      setProgress({
+        stage: (data.stage as "opening" | "interview" | "closing") ?? "interview",
+        question_count: data.question_count ?? 0,
+        total_questions: data.total_questions ?? 5,
+      });
+    }
+
+    // ── turn_report → 设置评估报告（service 在 closing 阶段会发） ─────
+    if (event === "turn_report") {
+      setReport({
+        overall_score: data.overall_score ?? 0,
+        technical_depth: data.technical_depth ?? 0,
+        quantified_results: data.quantified_results ?? 0,
+        failure_tradeoffs: data.failure_tradeoffs ?? 0,
+        structure: data.structure ?? 0,
+        highlights: data.highlights ?? [],
+        improvements: data.improvements ?? [],
+      });
+    }
+
+    // ── turn_done → 收尾 ─────────────────────────────────────────────
+    if (event === "turn_done") {
+      const turnId = currentTurnIdRef.current;
+      flushBufferedDelta();
+      if (turnId) finishTurnTrace(turnId);
+      setIsStreaming(false);
+      assistantIndexRef.current = null;
+      currentTurnIdRef.current = null;
+    }
   }
 
   function updatePrepareTraceMessage(
@@ -380,31 +510,47 @@ export function InterviewChat() {
   }
 
   function updateTurnTrace(turnId: string, ev: InterviewTraceNodeEvent) {
-    setMessages((prev) =>
-      prev.map((m) => {
-        if (!isTurnTraceMessage(m) || m.id !== turnId) return m;
+    traceBufferRef.current.push({ turnId, ev });
+    scheduleTraceFlush();
+  }
+
+  function scheduleTraceFlush() {
+    if (traceFrameRef.current !== null) return;
+    traceFrameRef.current = window.requestAnimationFrame(() => {
+      traceFrameRef.current = null;
+      flushTraceBuffer();
+    });
+  }
+
+  function flushTraceBuffer() {
+    const events = traceBufferRef.current;
+    if (events.length === 0) return;
+    traceBufferRef.current = [];
+
+    setMessages((prev) => {
+      const next = [...prev];
+      for (const { turnId, ev } of events) {
+        const idx = next.findIndex((m) => isTurnTraceMessage(m) && m.id === turnId);
+        if (idx === -1) continue;
+
+        const m = next[idx] as InterviewTurnTraceMessage;
         const nodes = [...m.payload.nodes];
-        const idx = nodes.findIndex((n) => n.id === ev.node);
+        const nIdx = nodes.findIndex((n) => n.id === ev.node);
 
         if (ev.phase === "start") {
-          if (idx === -1) {
-            nodes.push({
-              id: ev.node,
-              label: ev.label ?? ev.node,
-              status: "running" as const,
-              tokens: "",
-            });
+          if (nIdx === -1) {
+            nodes.push({ id: ev.node, label: ev.label ?? ev.node, status: "running" as const, tokens: "" });
           } else {
-            nodes[idx] = { ...nodes[idx], status: "running" as const };
+            nodes[nIdx] = { ...nodes[nIdx], status: "running" as const };
           }
         } else if (ev.phase === "token") {
-          if (idx !== -1) {
-            nodes[idx] = { ...nodes[idx], tokens: nodes[idx].tokens + (ev.text ?? "") };
+          if (nIdx !== -1) {
+            nodes[nIdx] = { ...nodes[nIdx], tokens: nodes[nIdx].tokens + (ev.text ?? "") };
           }
         } else if (ev.phase === "done") {
-          if (idx !== -1) {
-            nodes[idx] = {
-              ...nodes[idx],
+          if (nIdx !== -1) {
+            nodes[nIdx] = {
+              ...nodes[nIdx],
               status: "done" as const,
               elapsedMs: ev.elapsedMs,
               candidateLevel: ev.candidateLevel,
@@ -415,18 +561,18 @@ export function InterviewChat() {
           }
         }
 
-        const summaryScore =
-          ev.phase === "done" && ev.node === "evaluator"
-            ? ev.summaryScore ?? m.payload.summaryScore
-            : m.payload.summaryScore;
+        const summaryScore = ev.phase === "done" && ev.node === "evaluator"
+          ? ev.summaryScore ?? m.payload.summaryScore
+          : m.payload.summaryScore;
         const chain = ev.phase === "done" && ev.node === "master" ? ev.chain : m.payload.chain;
 
-        return {
+        next[idx] = {
           ...m,
           payload: { ...m.payload, nodes, summaryScore, chain },
         };
-      })
-    );
+      }
+      return next;
+    });
   }
 
   function finishTurnTrace(turnId: string) {
@@ -514,12 +660,47 @@ export function InterviewChat() {
     }
   }
 
+  // 始终指向最新版 handleStartFirstQuestion，供 setTimeout 回调安全调用
+  const handleStartFirstQuestionRef = useRef(handleStartFirstQuestion);
+  handleStartFirstQuestionRef.current = handleStartFirstQuestion;
+
+  // 准备完成后自动加"进入面试"节点并触发开场。
+  // /prepare/launch 路径下后端会发 phase_change 接管开场，此 effect 应跳过；
+  // /prepare/resume 路径（need_direction 后的方向追问）后端不会接管，此 effect 兜底进入面试。
+  useEffect(() => {
+    if (prepStatus !== "done") return;
+    if (currentTurnIdRef.current) return;
+
+    updatePrepareTraceMessage((payload) => ({
+      ...payload,
+      nodes: [
+        ...payload.nodes,
+        { id: "launch", label: "进入面试", status: "running" as const, tokens: "" },
+      ],
+    }));
+
+    const t = setTimeout(() => {
+      updatePrepareTraceMessage((payload) => ({
+        ...payload,
+        nodes: payload.nodes.map((n) =>
+          n.id === "launch" ? { ...n, status: "done" as const } : n
+        ),
+      }));
+      handleStartFirstQuestionRef.current();
+    }, 600);
+
+    return () => clearTimeout(t);
+  }, [prepStatus]);
+
   useEffect(() => {
     return () => {
       abortRef.current?.abort();
       prepAbortRef.current?.abort();
       if (frameRef.current !== null) {
         window.cancelAnimationFrame(frameRef.current);
+      }
+      if (traceFrameRef.current !== null) {
+        window.cancelAnimationFrame(traceFrameRef.current);
       }
     };
   }, []);
@@ -597,6 +778,7 @@ export function InterviewChat() {
       console.error("Failed to copy chat: ", err);
     }
   }
+
   async function handleSend(content: string) {
     const isTest = typeof process !== "undefined" && process.env.NODE_ENV === "test";
     if (!content || isStreaming || (isResettingRef.current && !isTest)) return;
@@ -797,12 +979,7 @@ export function InterviewChat() {
                   key={`prepare-${index}`}
                   status={message.payload.status}
                   nodes={message.payload.nodes}
-                  questions={message.payload.questions}
-                  summary={message.payload.summary}
                   direction={message.payload.direction}
-                  jdContext={message.payload.jdContext}
-                  onStart={handleStartFirstQuestion}
-                  started={progress.stage !== "opening"}
                 />
               );
             }
