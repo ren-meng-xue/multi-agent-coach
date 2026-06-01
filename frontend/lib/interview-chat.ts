@@ -79,6 +79,7 @@ export const PREPARE_NODE_TITLES: Record<string, string> = {
   memory_search: "读取你的历史表现",
   jd_analysis: "构建考点地图",
   question_gen: "定制专属题目",
+  launch: "进入面试",
 };
 
 /** 格式化 Trace 节点的 tokens，过滤 JSON 并美化输出。 */
@@ -431,6 +432,36 @@ export async function* startPrepareStreamFetch(params: {
   if (params.jdFile) form.append("jd_file", params.jdFile);
 
   const resp = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/prepare/start`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${params.token}` },
+    body: form,
+    signal: params.signal,
+  });
+
+  yield* _readPrepareStream(resp);
+}
+
+/** 启动 prepare + 面试开场一体化流（POST /prepare/launch）。
+ *  与 startPrepareStreamFetch 的区别：在 prepare done 后后端会自动接续 turn_* 事件，
+ *  前端无需再触发 __START__ 调用，直接由 phase_change → turn_* 驱动 UI。 */
+export async function* startPrepareAndLaunchStreamFetch(params: {
+  token: string;
+  userDirection?: string;
+  userBackground?: string;
+  jdText?: string;
+  jdUrl?: string;
+  jdFile?: File;
+  signal?: AbortSignal;
+}): AsyncGenerator<import("./prepare-types").PrepareSSEEvent, void, unknown> {
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
+  const form = new FormData();
+  if (params.userDirection) form.append("user_direction", params.userDirection);
+  if (params.userBackground) form.append("user_background", params.userBackground);
+  if (params.jdText) form.append("jd_text", params.jdText);
+  if (params.jdUrl) form.append("jd_url", params.jdUrl);
+  if (params.jdFile) form.append("jd_file", params.jdFile);
+
+  const resp = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/prepare/launch`, {
     method: "POST",
     headers: { Authorization: `Bearer ${params.token}` },
     body: form,

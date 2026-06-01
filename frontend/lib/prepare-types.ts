@@ -15,7 +15,11 @@ export interface PreparedQuestion {
 }
 
 export interface PrepareSSEEvent {
-  event: "node_start" | "node_token" | "node_done" | "done" | "error";
+  event:
+    | "node_start" | "node_token" | "node_done" | "done" | "error"
+    | "phase_change"
+    | "turn_node_start" | "turn_node_token" | "turn_node_done"
+    | "turn_delta" | "turn_state" | "turn_report" | "turn_done";
   data: {
     node?: string;
     label?: string;
@@ -29,6 +33,17 @@ export interface PrepareSSEEvent {
     direction?: string;
     message?: string;
     code?: string;
+    turn_id?: string;
+    stage?: "opening" | "interview" | "closing";
+    question_count?: number;
+    total_questions?: number;
+    overall_score?: number;
+    technical_depth?: number;
+    quantified_results?: number;
+    failure_tradeoffs?: number;
+    structure?: number;
+    highlights?: string[];
+    improvements?: string[];
   };
 }
 
