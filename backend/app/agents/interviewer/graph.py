@@ -127,7 +127,7 @@ async def run_interviewer_turn(state: InterviewState) -> InterviewState:
 
 
 NODE_LABELS = {
-    "master": "MASTER",
+    "master": "调度",
     "evaluator": "评估",
     "followup": "面试官 · 追问",
     "ask_question": "面试官 · 出题",
@@ -184,7 +184,12 @@ async def stream_interviewer_turn_events(state: InterviewState) -> AsyncIterator
             }
             # F9: 首轮启动静态文案流式体验模拟
             if ev_node == "master" and state.get("question_count", 0) == 0:
-                static_text = "• 面试正式开始，正在为您生成第一道题目。"
+                has_prepared_questions = bool(state.get("prepared_questions"))
+                static_text = (
+                    "• 从准备阶段题目池中抽取第一道题。"
+                    if has_prepared_questions
+                    else "• 面试正式开始，进入首题出题。"
+                )
                 for char in static_text:
                     yield {"event": "node_token", "data": {"node": "master", "text": char}}
                     await asyncio.sleep(0.02)
@@ -233,6 +238,12 @@ async def stream_interviewer_turn_events(state: InterviewState) -> AsyncIterator
                     payload["candidate_level"] = last.get("candidate_level")
                     payload["latent_signals"] = last.get("latent_signals", [])
                     payload["missing_dimensions"] = last.get("missing_dimensions", [])
+            # 对于 ask_question/followup/closing 节点，将 assistant_message 附在 node_done
+            # 里，供前端在没有 LLM token 流时（如有备题路径）填充 trace 面板内容
+            if ev_node in ("ask_question", "followup", "closing") and isinstance(node_dict, dict):
+                am = node_dict.get("assistant_message", "")
+                if am:
+                    payload["assistant_message"] = am
             yield {"event": "node_done", "data": payload}
 
         # 全图结束

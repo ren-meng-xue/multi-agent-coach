@@ -131,4 +131,5 @@ class ActiveSessionResponse(BaseModel):
     total_questions: int = 5
     followup_count: int = 0
     messages: list[ActiveMessageItem] = []
+    prepare_trace: dict[str, Any] | None = None
     report: dict[str, Any] | None = None

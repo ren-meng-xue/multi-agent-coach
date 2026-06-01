@@ -199,7 +199,11 @@ def _enforce_chain(chain: list[str], state: InterviewState) -> list[str]:
         if getattr(m, "type", "") == "human":
             last_user_msg = str(getattr(m, "content", ""))
             break
-    termination_keywords = ["结束吧", "结束面试", "不面了", "再见", "退出面试"]
+    termination_keywords = [
+        "结束", "结束吧", "结束面试", "结束了", "到此为止",
+        "不面了", "不想面了", "不想继续", "我说完了", "我答完了",
+        "够了", "算了", "停止", "退出", "退出面试", "再见", "拜拜",
+    ]
     # 如果用户消息很短且包含关键词，强制进入 closing
     if any(kw in last_user_msg for kw in termination_keywords) and len(last_user_msg) < 15:
         log.info("master_chain_forced_by_termination_keyword", msg=last_user_msg)

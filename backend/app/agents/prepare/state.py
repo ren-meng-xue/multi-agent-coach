@@ -34,7 +34,6 @@ class PrepareState(TypedDict, total=False):
 
     # 子 Agent 结果
     weak_areas: list[str]        # 来自历史面试表现
-    star_stories: list[dict[str, Any]]  # 来自 UserStory 表
     jd_context: JDContext | None
     prepared_questions: list[PreparedQuestion]
     # 第五步「教练 Agent + 共享记忆层」预留：长期记忆/爱好记忆注入槽。本次不实现填充。

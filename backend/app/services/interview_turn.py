@@ -17,6 +17,7 @@ from app.services.coach_opening import invalidate_coach_opening_cache
 
 log = get_logger("app.services.interview_turn")
 ABANDON_AFTER = timedelta(hours=24)
+PREPARE_TRACE_MESSAGE_PREFIX = "__PREPARE_TRACE__"
 
 
 def _placeholder_email(user_id: str) -> str:
@@ -97,8 +98,29 @@ def _to_langchain_message(message: InterviewMessage) -> BaseMessage | None:
     if message.role == "assistant":
         return AIMessage(content=message.content)
     if message.role == "system":
+        if message.content.startswith(PREPARE_TRACE_MESSAGE_PREFIX):
+            return None
         return SystemMessage(content=message.content)
     return None
+
+
+def encode_prepare_trace_message(payload: dict[str, Any]) -> str:
+    import json
+
+    return f"{PREPARE_TRACE_MESSAGE_PREFIX}{json.dumps(payload, ensure_ascii=False)}"
+
+
+def decode_prepare_trace_message(content: str) -> dict[str, Any] | None:
+    if not content.startswith(PREPARE_TRACE_MESSAGE_PREFIX):
+        return None
+
+    import json
+
+    try:
+        decoded = json.loads(content.removeprefix(PREPARE_TRACE_MESSAGE_PREFIX))
+    except json.JSONDecodeError:
+        return None
+    return decoded if isinstance(decoded, dict) else None
 
 
 async def _load_session_messages(
@@ -164,21 +186,22 @@ async def get_user_interview_context(db: AsyncSession, *, user_id: str) -> dict:
         "target_company": None,
         "user_background": None,
         "session_count": completed_count,
+        "resume_filename": user.resume_filename,
     }
 
     # 如果 User 表没设岗位，尝试从最近 session 捞
-    if not ctx["target_role"]:
-        latest_result = await db.execute(
-            select(InterviewSession)
-            .where(
-                InterviewSession.user_id == user_id,
-                InterviewSession.target_role.is_not(None),
-            )
-            .order_by(InterviewSession.started_at.desc())
-            .limit(1)
-        )
-        latest = latest_result.scalar_one_or_none()
-        if latest:
+    latest_stmt = (
+        select(InterviewSession)
+        .where(InterviewSession.user_id == user_id)
+        .order_by(InterviewSession.started_at.desc())
+        .limit(1)
+    )
+    latest_res = await db.execute(latest_stmt)
+    latest = latest_res.scalar_one_or_none()
+    
+    if latest:
+        ctx["last_session_id"] = str(latest.id)
+        if not ctx["target_role"]:
             ctx["target_role"] = latest.target_role
             ctx["target_company"] = latest.target_company
             ctx["user_background"] = latest.user_background
@@ -263,8 +286,14 @@ async def get_active_interview_session(
         stored_messages = msg_result.scalars().all()
 
         messages = []
+        prepare_trace: dict[str, Any] | None = None
         for m in stored_messages:
-            # 过滤只加载 user 和 assistant 的对话，避免把 system 或 trace 垃圾消息带入前端
+            if m.role == "system":
+                decoded_trace = decode_prepare_trace_message(m.content)
+                if decoded_trace is not None:
+                    prepare_trace = decoded_trace
+                continue
+            # 过滤只加载 user 和 assistant 的对话，避免把 system 垃圾消息带入前端
             if m.role in ("user", "assistant"):
                 messages.append({
                     "role": m.role,
@@ -281,6 +310,7 @@ async def get_active_interview_session(
             "total_questions": active.total_questions,
             "followup_count": active.followup_count,
             "messages": messages,
+            "prepare_trace": prepare_trace,
             "report": active.report_json,
         }
 
@@ -294,6 +324,8 @@ async def stream_interview_turn(
     db: AsyncSession,
     prepared_questions: list[dict[str, Any]] | None = None,
     jd_context: dict[str, Any] | None = None,
+    target_role: str | None = None,
+    use_qa_bank: bool = False,
 ) -> AsyncIterator[dict[str, Any]]:
     """处理统一入口的一轮对话，流式返回 SSE 事件数据。
 
@@ -301,17 +333,30 @@ async def stream_interview_turn(
     """
     session, is_first_time = await get_or_create_active_session(db, user_id=user_id)
     history = await _load_session_messages(db, session_id=session.id, current_message=message)
+
+    # history 仅含当前消息说明 DB 中尚无历史记录，即用户第一次真正发消息；
+    # 此时刷新 started_at，确保时长统计从实际交互开始算，而非 /reset 创建 session 时。
+    if len(history) == 1:
+        session.started_at = datetime.now(UTC)
+
+    # 允许在首轮或特定请求中动态覆盖岗位
+    if target_role and not session.target_role:
+        session.target_role = target_role
+        
     state = _build_state(
         session=session,
         user_id=user_id,
         is_first_time=is_first_time,
         messages=history,
     )
-    if is_first_time:
-        if prepared_questions:
-            state["prepared_questions"] = prepared_questions
-        if jd_context:
-            state["jd_context"] = jd_context
+    if prepared_questions:
+        state["prepared_questions"] = prepared_questions
+    if jd_context:
+        state["jd_context"] = jd_context
+    
+    # 将题库模式注入 state
+    if use_qa_bank:
+        state["use_qa_bank"] = True
 
     assistant_chunks: list[str] = []
     output: InterviewState | None = None
@@ -378,22 +423,25 @@ async def stream_interview_turn(
     if not assistant_chunks:
         yield {"event": "delta", "data": {"text": assistant_content}}
 
-    db.add_all(
-        [
+    messages_to_persist = [
+        InterviewMessage(
+            session_id=session.id,
+            role="assistant",
+            content=assistant_content,
+            question_number=session.question_count or None,
+        )
+    ]
+    if message != "__START__":
+        messages_to_persist.insert(
+            0,
             InterviewMessage(
                 session_id=session.id,
                 role="user",
                 content=message,
                 question_number=session.question_count or None,
             ),
-            InterviewMessage(
-                session_id=session.id,
-                role="assistant",
-                content=assistant_content,
-                question_number=session.question_count or None,
-            ),
-        ]
-    )
+        )
+    db.add_all(messages_to_persist)
     await db.commit()
 
     if session.stage == "closing" and report_data:

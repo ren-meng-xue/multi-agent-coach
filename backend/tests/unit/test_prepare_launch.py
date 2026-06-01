@@ -16,7 +16,6 @@ def _make_state(need_direction: bool = False) -> PrepareState:
         "user_background": None,
         "jd_raw": None,
         "weak_areas": [],
-        "star_stories": [],
     }
 
 
@@ -84,6 +83,7 @@ async def test_happy_path_event_sequence():
     with (
         patch("app.api.v1.prepare.stream_prepare_events", side_effect=mock_prepare_stream),
         patch("app.api.v1.prepare.stream_interview_turn", side_effect=mock_turn_stream),
+        patch("app.api.v1.prepare._persist_prepare_trace", new_callable=AsyncMock),
     ):
         events = await _collect(stream_prepare_and_launch(_make_state(), db=mock_db))
 
@@ -160,6 +160,7 @@ async def test_prepared_questions_passed_to_turn():
     with (
         patch("app.api.v1.prepare.stream_prepare_events", side_effect=mock_prepare_stream),
         patch("app.api.v1.prepare.stream_interview_turn", side_effect=mock_turn_stream),
+        patch("app.api.v1.prepare._persist_prepare_trace", new_callable=AsyncMock),
     ):
         await _collect(stream_prepare_and_launch(_make_state(), db=mock_db))
 
