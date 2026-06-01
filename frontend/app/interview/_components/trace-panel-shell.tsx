@@ -29,23 +29,21 @@ export function TracePanelShell({
 }: TracePanelShellProps) {
   return (
     <div className={`w-full bg-transparent transition-all duration-300 ${className}`}>
-      <div className="pb-1 mb-2.5">
+      <div className="mb-1">
         <button
           type="button"
           onClick={onToggle}
-          className={`inline-flex w-full items-center justify-between gap-3 rounded-lg px-1 py-1 text-[10px] font-bold transition-all hover:underline ${getButtonClass(tone)}`}
+          className={`inline-flex items-center gap-2 px-1 py-1 text-[10px] font-bold transition-all hover:text-[#534AB7] hover:underline dark:hover:text-[#CECBF6] ${getButtonClass(tone)}`}
         >
-          <span className="flex min-w-0 items-center gap-2">
-            <span className={`size-1.5 shrink-0 rounded-full ${getDotClass(tone)}`} />
-            <span className="truncate">{title}</span>
-            {meta}
-          </span>
-          <span className="shrink-0 text-[9px] opacity-60">{toggleText}</span>
+          <span className={`size-1.5 shrink-0 rounded-full ${getDotClass(tone)}`} />
+          <span className="tracking-tight">{title}</span>
+          {meta}
+          <span className="ml-1 text-[9px] font-medium opacity-40">({toggleText})</span>
         </button>
       </div>
 
       {expanded && (
-        <div className={`bg-transparent pt-1 pb-2 transition-all duration-300 ${expandedClassName}`}>
+        <div className={`bg-transparent pt-2 pb-1 transition-all duration-300 ${expandedClassName}`}>
           {children}
         </div>
       )}
@@ -55,10 +53,10 @@ export function TracePanelShell({
 
 function getButtonClass(tone: TracePanelTone) {
   if (tone === "error") {
-    return "text-rose-600 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-300";
+    return "text-rose-600 dark:text-rose-400";
   }
 
-  return "text-black/35 hover:text-[#534AB7] dark:text-white/35 dark:hover:text-[#CECBF6]";
+  return "text-black/35 dark:text-white/35";
 }
 
 function getDotClass(tone: TracePanelTone) {

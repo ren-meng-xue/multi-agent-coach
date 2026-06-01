@@ -32,17 +32,17 @@ export function TraceNode({
   const badgeClass = getBadgeClass(id);
 
   return (
-    <div data-testid={`trace-node-${id}`} className="group flex gap-4 py-3">
-      <div className="relative flex flex-col items-center pt-0.5 w-6 flex-shrink-0 self-stretch">
-        {/* 垂直 Timeline 连接线：绝对定位并根据图标位置微调起始点 */}
+    <div data-testid={`trace-node-${id}`} className="group flex gap-3.5 py-2.5">
+      <div className="relative flex flex-col items-center pt-0.5 w-5 flex-shrink-0 self-stretch">
+        {/* 垂直 Timeline 连接线 */}
         {!isLast && (
           <div 
-            className={`absolute left-1/2 top-[12.5px] w-[1.5px] -translate-x-1/2 bottom-0 transition-all duration-700 ${
+            className={`absolute left-1/2 top-[10px] w-[1px] -translate-x-1/2 bottom-0 transition-all duration-700 ${
               status === "running"
-                ? "bg-gradient-to-b from-[#534AB7] via-[#534AB7]/40 to-transparent animate-pulse"
+                ? "bg-gradient-to-b from-[#534AB7] to-transparent animate-pulse"
                 : status === "done"
-                ? "bg-emerald-500/40 dark:bg-emerald-500/25"
-                : "bg-black/[0.08] dark:bg-white/[0.08]"
+                ? "bg-emerald-500/30"
+                : "bg-black/[0.05] dark:bg-white/[0.05]"
             }`} 
           />
         )}
@@ -50,71 +50,33 @@ export function TraceNode({
         {/* 状态图标容器 */}
         <div className="relative z-10 flex items-center justify-center">
           {status === "pending" && (
-            <div
-              data-testid="trace-status-pending"
-              className="size-[21px] flex items-center justify-center rounded-full border-[1.5px] border-black/[0.08] dark:border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.02]"
-            >
-              <div className="size-1 rounded-full bg-black/10 dark:bg-white/10" />
+            <div className="size-[18px] flex items-center justify-center rounded-full border border-black/[0.05] bg-black/[0.02]">
+              <div className="size-1 rounded-full bg-black/10" />
             </div>
           )}
           {status === "running" && (
-            <div
-              data-testid="trace-status-running"
-              className="relative flex size-[21px] items-center justify-center rounded-full border-[1.5px] border-[#534AB7] bg-[#534AB7]/10 dark:bg-[#CECBF6]/10 animate-[traceNodeRunning_1.3s_infinite]"
-            >
-              <svg
-                className="size-2.5 text-[#534AB7] dark:text-[#CECBF6]"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={3}
-                  d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-                />
-              </svg>
+            <div className="size-[18px] flex items-center justify-center rounded-full border border-[#534AB7]/40 bg-[#534AB7]/5 animate-pulse">
+              <div className="size-1.5 rounded-full bg-[#534AB7]" />
             </div>
           )}
           {status === "done" && (
-            <div
-              data-testid="trace-status-done"
-              className="flex size-[21px] items-center justify-center rounded-full bg-emerald-500 text-white shadow-[0_2px_8px_-1px_rgba(16,185,129,0.45)] dark:bg-emerald-600 dark:shadow-none animate-in fade-in zoom-in-50 duration-500"
-            >
-              <svg
-                className="size-2.5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={4.5}
-                  d="M5 13l4 4L19 7"
-                />
+            <div className="flex size-[18px] items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600">
+              <svg className="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" />
               </svg>
             </div>
           )}
         </div>
       </div>
 
-      <div className="min-w-0 flex-1 pb-2">
-        <div className="flex flex-wrap items-center gap-2 h-[21px] mb-2">
-          <span className={`rounded px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-widest ${badgeClass}`}>
+      <div className="min-w-0 flex-1 pb-1">
+        <div className="flex flex-wrap items-center gap-2 h-[18px] mb-1.5">
+          <span className={`rounded-sm px-1 py-0.5 text-[8px] font-bold uppercase tracking-wider ${badgeClass}`}>
             {label}
           </span>
-          <span className="text-xs font-bold text-black/85 dark:text-white/85">{title}</span>
-          {status === "running" && (
-            <span className="flex gap-0.5 text-[8px] text-[#534AB7] dark:text-[#CECBF6] animate-pulse">
-              <span>●</span>
-              <span>●</span>
-              <span>●</span>
-            </span>
-          )}
+          <span className="text-[11px] font-bold text-black/75 dark:text-white/85">{title}</span>
           {elapsedMs !== undefined && (
-            <span className="ml-auto rounded-md border border-black/[0.04] bg-black/[0.02] px-1.5 py-0.5 font-mono text-[9px] text-black/30 dark:border-white/10 dark:bg-white/[0.03] dark:text-white/30">
+            <span className="ml-auto font-mono text-[8px] text-black/20">
               {elapsedMs}ms
             </span>
           )}

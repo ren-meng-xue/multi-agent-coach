@@ -10,9 +10,11 @@ import {
 import { ResumeCard } from "./_components/resume-card";
 import { Mail, Compass, Activity, Info, AlertCircle } from "lucide-react";
 
+const DEV_AUTH_BYPASS_TOKEN = "dev-auth-bypass-token";
+const isDevAuthBypassEnabled = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "1";
+
 export function SettingsView() {
   const searchParams = useSearchParams();
-  const showResumeAlert = searchParams.get("require_resume") === "1";
   
   const { isLoaded: authLoaded, isSignedIn, getToken } = useAuth();
   const { user: clerkUser } = useUser();
@@ -20,12 +22,16 @@ export function SettingsView() {
   const [authToken, setAuthToken] = useState("");
   const [profile, setProfile] = useState<UserProfile | null>(null);
 
+  // 只有当 URL 包含 require_resume=1 且用户尚未上传过简历时，才显示强提示
+  const showResumeAlert = searchParams.get("require_resume") === "1" && !profile?.resume_filename;
+  
   useEffect(() => {
-    if (!authLoaded || !isSignedIn) return;
+    const shouldProceed = isDevAuthBypassEnabled || (authLoaded && isSignedIn);
+    if (!shouldProceed) return;
 
     const loadData = async () => {
       try {
-        const token = await getToken();
+        const token = isDevAuthBypassEnabled ? DEV_AUTH_BYPASS_TOKEN : await getToken();
         if (!token) return;
         setAuthToken(token);
 

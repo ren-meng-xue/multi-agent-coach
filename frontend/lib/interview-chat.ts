@@ -48,15 +48,21 @@ export type InterviewChatMessage =
   | InterviewPrepareTraceMessage
   | InterviewTurnTraceMessage;
 
-export function isTextMessage(m: InterviewChatMessage): m is InterviewChatTextMessage {
+export function isTextMessage(
+  m: InterviewChatMessage,
+): m is InterviewChatTextMessage {
   return m.role === "user" || m.role === "assistant";
 }
 
-export function isPrepareTraceMessage(m: InterviewChatMessage): m is InterviewPrepareTraceMessage {
+export function isPrepareTraceMessage(
+  m: InterviewChatMessage,
+): m is InterviewPrepareTraceMessage {
   return m.role === "trace" && m.kind === "prepare";
 }
 
-export function isTurnTraceMessage(m: InterviewChatMessage): m is InterviewTurnTraceMessage {
+export function isTurnTraceMessage(
+  m: InterviewChatMessage,
+): m is InterviewTurnTraceMessage {
   return m.role === "trace" && m.kind === "turn";
 }
 
@@ -88,9 +94,14 @@ export function formatTraceTokens(id: string, tokens: string): string {
 
   // 出题节点特殊处理：提取 JSON 中的 question 字段
   if (id === "question_gen" || id === "ask_question") {
-    const robustPattern = /["']?question["']?\s* : \s*["']((?:[^"'\\]|\\?[\s\S])*?)(?:["']|$)/gi;
+    const robustPattern =
+      /["']?question["']?\s* : \s*["']((?:[^"'\\]|\\?[\s\S])*?)(?:["']|$)/gi;
     // 注意：上面的正则空格是为了匹配，实际代码中可能更紧凑
-    const matches = Array.from(tokens.matchAll(/["']?question["']?\s*:\s*["']((?:[^"'\\]|\\?[\s\S])*?)(?:["']|$)/gi));
+    const matches = Array.from(
+      tokens.matchAll(
+        /["']?question["']?\s*:\s*["']((?:[^"'\\]|\\?[\s\S])*?)(?:["']|$)/gi,
+      ),
+    );
     const questions = matches
       .map((m) => m[1].replace(/\\"/g, '"').replace(/\\n/g, " ").trim())
       .filter((q) => q.length > 2);
@@ -144,7 +155,6 @@ export type UserContextResponse = {
   resume_filename: string | null;
 };
 
-
 export type InterviewHistoryItem = {
   id: string;
   date: string;
@@ -171,9 +181,12 @@ export async function fetchInterviewHistory({
   const baseUrl = process.env.NEXT_PUBLIC_API_URL;
   if (!baseUrl) throw new Error("缺少后端接口配置");
 
-  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/interview/history?limit=${limit}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const response = await fetch(
+    `${baseUrl.replace(/\/$/, "")}/api/v1/interview/history?limit=${limit}`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
 
   if (!response.ok) throw new Error("获取面试历史失败");
   return response.json() as Promise<InterviewHistoryResponse>;
@@ -194,6 +207,7 @@ export type ActiveSessionResponse = {
   total_questions?: number;
   followup_count?: number;
   messages: ActiveMessageItem[];
+  prepare_trace?: InterviewPrepareTracePayload | null;
   report?: InterviewReport | null;
 };
 
@@ -206,9 +220,12 @@ export async function fetchActiveInterviewSession({
   const baseUrl = process.env.NEXT_PUBLIC_API_URL;
   if (!baseUrl) throw new Error("缺少后端接口配置");
 
-  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/interview/active`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const response = await fetch(
+    `${baseUrl.replace(/\/$/, "")}/api/v1/interview/active`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
 
   if (!response.ok) throw new Error("获取活动面试会话失败");
   return response.json() as Promise<ActiveSessionResponse>;
@@ -260,21 +277,24 @@ export async function streamInterviewChat({
     throw new Error("缺少后端接口配置");
   }
 
-  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/interview/turn`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
+  const response = await fetch(
+    `${baseUrl.replace(/\/$/, "")}/api/v1/interview/turn`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message,
+        prepared_questions: preparedQuestions,
+        jd_context: jdContext,
+        target_role: targetRole,
+        use_qa_bank: useQABank ?? false,
+      }),
+      signal,
     },
-    body: JSON.stringify({
-      message,
-      prepared_questions: preparedQuestions,
-      jd_context: jdContext,
-      target_role: targetRole,
-      use_qa_bank: useQABank ?? false,
-    }),
-    signal,
-  });
+  );
 
   if (!response.ok || !response.body) {
     throw new Error(DEFAULT_ERROR_MESSAGE);
@@ -282,7 +302,8 @@ export async function streamInterviewChat({
 
   await readSseStream({
     stream: response.body,
-    onEvent: (event) => handleSseEvent(event, onDelta, onState, onReport, onTraceNode),
+    onEvent: (event) =>
+      handleSseEvent(event, onDelta, onState, onReport, onTraceNode),
   });
 }
 
@@ -313,7 +334,11 @@ function handleSseEvent(
     return;
   }
 
-  if (event === "node_start" || event === "node_token" || event === "node_done") {
+  if (
+    event === "node_start" ||
+    event === "node_token" ||
+    event === "node_done"
+  ) {
     const payload = parseJsonPayload<{
       node: string;
       label?: string;
@@ -321,8 +346,18 @@ function handleSseEvent(
       elapsed_ms?: number;
       chain?: string[];
       summary_score?: number;
+      candidate_level?: "beginner" | "junior" | "mid" | "senior";
+      latent_signals?: string[];
+      missing_dimensions?: string[];
+      followup_focus?: string;
+      assistant_message?: string;
     }>(data);
-    const phase = event === "node_start" ? "start" : event === "node_token" ? "token" : "done";
+    const phase =
+      event === "node_start"
+        ? "start"
+        : event === "node_token"
+          ? "token"
+          : "done";
     onTraceNode?.({
       phase,
       node: payload.node,
@@ -331,6 +366,11 @@ function handleSseEvent(
       elapsedMs: payload.elapsed_ms,
       chain: payload.chain,
       summaryScore: payload.summary_score,
+      candidateLevel: payload.candidate_level,
+      latentSignals: payload.latent_signals,
+      missingDimensions: payload.missing_dimensions,
+      followupFocus: payload.followup_focus,
+      assistantMessage: payload.assistant_message,
     });
     return;
   }
@@ -350,9 +390,12 @@ export async function fetchInterviewContext({
   const baseUrl = process.env.NEXT_PUBLIC_API_URL;
   if (!baseUrl) throw new Error("缺少后端接口配置");
 
-  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/interview/context`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const response = await fetch(
+    `${baseUrl.replace(/\/$/, "")}/api/v1/interview/context`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
 
   if (!response.ok) throw new Error("获取用户信息失败");
   return response.json() as Promise<UserContextResponse>;
@@ -367,9 +410,12 @@ export async function fetchCoachOpeningMessage({
   const baseUrl = process.env.NEXT_PUBLIC_API_URL;
   if (!baseUrl) throw new Error("缺少后端接口配置");
 
-  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/api/coach/opening-message`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const response = await fetch(
+    `${baseUrl.replace(/\/$/, "")}/api/coach/opening-message`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
 
   if (!response.ok) throw new Error("获取 Coach 开场词失败");
   return response.json() as Promise<CoachOpeningMessageResponse>;
@@ -392,14 +438,17 @@ export async function resetInterviewSession({
   if (target_role) body.target_role = target_role;
   if (user_background) body.user_background = user_background;
 
-  const res = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/interview/reset`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
+  const res = await fetch(
+    `${baseUrl.replace(/\/$/, "")}/api/v1/interview/reset`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify(body),
-  });
+  );
   if (!res.ok) {
     throw new Error(`Reset failed with HTTP status: ${res.status}`);
   }
@@ -426,17 +475,21 @@ export async function* startPrepareStreamFetch(params: {
   const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
   const form = new FormData();
   if (params.userDirection) form.append("user_direction", params.userDirection);
-  if (params.userBackground) form.append("user_background", params.userBackground);
+  if (params.userBackground)
+    form.append("user_background", params.userBackground);
   if (params.jdText) form.append("jd_text", params.jdText);
   if (params.jdUrl) form.append("jd_url", params.jdUrl);
   if (params.jdFile) form.append("jd_file", params.jdFile);
 
-  const resp = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/prepare/start`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${params.token}` },
-    body: form,
-    signal: params.signal,
-  });
+  const resp = await fetch(
+    `${baseUrl.replace(/\/$/, "")}/api/v1/prepare/start`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${params.token}` },
+      body: form,
+      signal: params.signal,
+    },
+  );
 
   yield* _readPrepareStream(resp);
 }
@@ -456,17 +509,21 @@ export async function* startPrepareAndLaunchStreamFetch(params: {
   const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
   const form = new FormData();
   if (params.userDirection) form.append("user_direction", params.userDirection);
-  if (params.userBackground) form.append("user_background", params.userBackground);
+  if (params.userBackground)
+    form.append("user_background", params.userBackground);
   if (params.jdText) form.append("jd_text", params.jdText);
   if (params.jdUrl) form.append("jd_url", params.jdUrl);
   if (params.jdFile) form.append("jd_file", params.jdFile);
 
-  const resp = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/prepare/launch`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${params.token}` },
-    body: form,
-    signal: params.signal,
-  });
+  const resp = await fetch(
+    `${baseUrl.replace(/\/$/, "")}/api/v1/prepare/launch`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${params.token}` },
+      body: form,
+      signal: params.signal,
+    },
+  );
 
   yield* _readPrepareStream(resp);
 }
@@ -478,30 +535,32 @@ export async function* resumePrepareStreamFetch(params: {
   userBackground?: string;
   jdText?: string;
   weakAreas?: string;
-  starStories?: string;
   signal?: AbortSignal;
 }): AsyncGenerator<import("./prepare-types").PrepareSSEEvent, void, unknown> {
   const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
   const form = new FormData();
   form.append("direction", params.direction);
-  if (params.userBackground) form.append("user_background", params.userBackground);
+  if (params.userBackground)
+    form.append("user_background", params.userBackground);
   if (params.jdText) form.append("jd_text", params.jdText);
   if (params.weakAreas) form.append("weak_areas", params.weakAreas);
-  if (params.starStories) form.append("star_stories", params.starStories);
 
-  const resp = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/prepare/resume`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${params.token}` },
-    body: form,
-    signal: params.signal,
-  });
+  const resp = await fetch(
+    `${baseUrl.replace(/\/$/, "")}/api/v1/prepare/resume`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${params.token}` },
+      body: form,
+      signal: params.signal,
+    },
+  );
 
   yield* _readPrepareStream(resp);
 }
 
 /** 内部通用的 SSE 读取生成器 */
 async function* _readPrepareStream(
-  resp: Response
+  resp: Response,
 ): AsyncGenerator<import("./prepare-types").PrepareSSEEvent, void, unknown> {
   if (!resp.ok || !resp.body) throw new Error("Prepare stream failed");
 
@@ -520,7 +579,9 @@ async function* _readPrepareStream(
         const trimmedLine = line.trim();
         if (trimmedLine.startsWith("data: ")) {
           try {
-            yield JSON.parse(trimmedLine.slice(6)) as import("./prepare-types").PrepareSSEEvent;
+            yield JSON.parse(
+              trimmedLine.slice(6),
+            ) as import("./prepare-types").PrepareSSEEvent;
           } catch {
             // ignore parsing error
           }

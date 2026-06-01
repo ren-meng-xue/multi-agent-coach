@@ -23,8 +23,15 @@ export interface PrepareSSEEvent {
   data: {
     node?: string;
     label?: string;
+    title?: string;
     text?: string;
     elapsed_ms?: number;
+    summary_score?: number;
+    candidate_level?: "beginner" | "junior" | "mid" | "senior";
+    latent_signals?: string[];
+    missing_dimensions?: string[];
+    followup_focus?: string;
+    assistant_message?: string;
     chain?: string[];
     need_direction?: boolean;
     prepared_questions?: PreparedQuestion[];
@@ -74,4 +81,6 @@ export interface InterviewTraceNodeEvent {
   latentSignals?: string[];
   missingDimensions?: string[];
   followupFocus?: string;
+  /** 节点产出的 AI 回复（ask_question/followup/closing 用准备题库路径时无 LLM token 流，通过此字段补充） */
+  assistantMessage?: string;
 }
