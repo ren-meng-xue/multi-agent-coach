@@ -11,7 +11,7 @@ test("pending 状态显示灰色圆圈", () => {
       title="识别方向"
       status="pending"
       tokens=""
-    />
+    />,
   );
   expect(screen.getByTestId("trace-node-master")).toBeInTheDocument();
   expect(screen.getByTestId("trace-status-pending")).toBeInTheDocument();
@@ -25,7 +25,7 @@ test("running 状态显示动画圆圈", () => {
       title="识别方向"
       status="running"
       tokens="检查用户档案"
-    />
+    />,
   );
   expect(screen.getByTestId("trace-status-running")).toBeInTheDocument();
   expect(screen.getByText("检查用户档案")).toBeInTheDocument();
@@ -39,7 +39,7 @@ test("非 master 节点 running 时显示 token 内容", () => {
       title="读取历史"
       status="running"
       tokens="正在查询数据库"
-    />
+    />,
   );
   expect(screen.getByTestId("trace-status-running")).toBeInTheDocument();
   expect(screen.getByText("正在查询数据库")).toBeInTheDocument();
@@ -54,7 +54,7 @@ test("done 状态显示绿色勾 + 耗时", () => {
       status="done"
       tokens="检查完毕"
       elapsedMs={62}
-    />
+    />,
   );
   expect(screen.getByTestId("trace-status-done")).toBeInTheDocument();
   expect(screen.getByText("62ms")).toBeInTheDocument();
@@ -71,9 +71,9 @@ test("evaluator done 且带有候选人画像时渲染 chips", () => {
       candidateLevel="junior"
       latentSignals={["architecture", "scaling"]}
       missingDimensions={["quantification"]}
-    />
+    />,
   );
-  expect(screen.getByText("junior")).toBeInTheDocument();
+  expect(screen.getByText("初级")).toBeInTheDocument();
   expect(screen.getByText("architecture")).toBeInTheDocument();
   expect(screen.getByText("scaling")).toBeInTheDocument();
   expect(screen.getByText(/缺失：quantification/)).toBeInTheDocument();
@@ -87,7 +87,7 @@ test("evaluator 无画像数据时不渲染额外区域", () => {
       title="评估"
       status="done"
       tokens="已评分"
-    />
+    />,
   );
   expect(queryByText("缺失")).toBeNull();
 });
@@ -104,11 +104,11 @@ test("chief_think done 时渲染工具调用和画像 chips", () => {
       latentSignals={["量化意识"]}
       missingDimensions={["边界条件"]}
       chiefToolCalls={["evaluate_answer", "design_question"]}
-    />
+    />,
   );
   expect(screen.getByText("评估回答")).toBeInTheDocument();
   expect(screen.getByText("设计题目")).toBeInTheDocument();
-  expect(screen.getByText("mid")).toBeInTheDocument();
+  expect(screen.getByText("中级")).toBeInTheDocument();
   expect(screen.getByText("量化意识")).toBeInTheDocument();
   expect(screen.getByText(/缺失：边界条件/)).toBeInTheDocument();
 });

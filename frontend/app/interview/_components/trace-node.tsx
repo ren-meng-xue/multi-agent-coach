@@ -44,6 +44,7 @@ export function TraceNode({
         )}
         {/* 节点状态 Icon/Dot */}
         <div
+          data-testid={`trace-status-${status}`}
           className={`relative z-10 flex h-5 w-5 items-center justify-center rounded-full border-[1.5px] transition-all duration-500 shadow-sm ${
             status === "running"
               ? "animate-pulse border-[#534AB7] bg-white text-[#534AB7] ring-4 ring-[#534AB7]/15 dark:border-[#CECBF6] dark:bg-zinc-950"
