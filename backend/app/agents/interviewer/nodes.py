@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from langchain_core.messages import BaseMessage, SystemMessage
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from openai import APIConnectionError, APITimeoutError, InternalServerError, RateLimitError
 from pydantic import BaseModel
@@ -77,10 +77,31 @@ def _state_messages(state: InterviewState) -> list[BaseMessage]:
         context_parts.append(f"目标公司：{state['target_company']}")
     if state.get("user_background"):
         context_parts.append(f"项目背景/技术主题：{state['user_background']}")
+    if state.get("resume_text"):
+        context_parts.append(f"【候选人个人简历内容】：\n{state['resume_text']}")
     q_count = state.get("question_count", 0)
     q_total = state.get("total_questions", 5)
     if q_count > 0:
         context_parts.append(f"当前进度：第 {q_count} 题 / 共 {q_total} 题")
+    qa_bank_items = state.get("qa_bank_items")
+    if qa_bank_items:
+        sections: dict[str, list[str]] = {"technical": [], "hr": [], "project": []}
+        cat_labels = {"technical": "[技术题]", "hr": "[HR题]", "project": "[项目讲解]"}
+        for item in qa_bank_items:
+            cat = item.get("category", "technical")
+            if cat in sections:
+                sections[cat].append(
+                    f"Q: {item['question']} / A（参考）: {item['model_answer']}"
+                )
+        block_lines = [
+            "【用户已准备的题目库】",
+            "以下题目请优先从中选取，覆盖整场面试：",
+        ]
+        for cat, label in cat_labels.items():
+            if sections[cat]:
+                block_lines.append(label)
+                block_lines.extend(sections[cat])
+        context_parts.append("\n".join(block_lines))
     if not context_parts:
         return messages
     summary = "【当前已确定的面试背景信息】：\n" + "\n".join(context_parts)
@@ -171,6 +192,22 @@ def _enforce_chain(chain: list[str], state: InterviewState) -> list[str]:
     total_questions = state.get("total_questions", 5)
     followup_count = state.get("followup_count", 0)
     max_followups = state.get("max_followups", 2)
+
+    # 0. 增加：硬编码终止意图识别（作为 LLM 兜底）
+    last_user_msg = ""
+    for m in reversed(state.get("messages", [])):
+        if getattr(m, "type", "") == "human":
+            last_user_msg = str(getattr(m, "content", ""))
+            break
+    termination_keywords = [
+        "结束", "结束吧", "结束面试", "结束了", "到此为止",
+        "不面了", "不想面了", "不想继续", "我说完了", "我答完了",
+        "够了", "算了", "停止", "退出", "退出面试", "再见", "拜拜",
+    ]
+    # 如果用户消息很短且包含关键词，强制进入 closing
+    if any(kw in last_user_msg for kw in termination_keywords) and len(last_user_msg) < 15:
+        log.info("master_chain_forced_by_termination_keyword", msg=last_user_msg)
+        return ["closing"]
 
     # 1. 首轮强制 ask_question
     if question_count == 0:
@@ -263,7 +300,7 @@ def _build_evaluator_context(state: InterviewState) -> str:
     msgs = state.get("messages", [])[-MAX_TURNS:]
     transcript = []
     for m in msgs:
-        role = "面试官" if getattr(m, "type", "") == "ai" else "候选人"
+        role = "面试官" if getattr(m, "type", "") == ".ai" else "候选人"
         text = str(getattr(m, "content", ""))[:400]
         transcript.append(f"{role}：{text}")
 
@@ -337,6 +374,27 @@ async def evaluator_node(state: InterviewState) -> InterviewState:
         "last_updated_turn": state.get("question_count", 0),
     }
 
+    # Phase 5: 持久化候选人画像到长期记忆 (每轮评估后同步)
+    db = state.get("db")
+    user_id = state.get("user_id")
+    if user_id and hasattr(db, "execute"):
+        try:
+            from uuid import UUID
+            raw_sid = state.get("session_id")
+            session_id = UUID(str(raw_sid)) if raw_sid else None
+
+            await upsert_candidate_memory(
+                db,
+                user_id,
+                latest_level=scoring.candidate_level,
+                latent_signals=list(scoring.latent_signals),
+                weakness_tags=list(scoring.missing_dimensions),
+                session_id=session_id,
+            )
+            # log.debug("evaluator_node_memory_synced", user_id=user_id)
+        except Exception as exc:
+            log.warning("evaluator_node_memory_sync_failed", error=str(exc))
+
     log.info("evaluator_done", summary_score=scoring.summary_score)
     return {**state, "turn_evaluations": updated, "candidate_profile": new_profile}
 
@@ -362,14 +420,18 @@ async def _report_aggregate_text(state: InterviewState, dim_avg: dict[str, float
         f"失败处理 {dim_avg['failure_tradeoffs']:.1f}，"
         f"结构 {dim_avg['structure']:.1f}"
     )
-    context_msg = SystemMessage(
-        content=f"{REPORT_AGGREGATE_SYSTEM_PROMPT}\n\n"
-                f"【评分上下文】：\n{score_block}\n\n"
-                f"【每轮要点摘要】：\n{bullet_block}"
-    )
+
     model = _chat_model().with_structured_output(_ReportTextOutput)
     history = list(state.get("messages", []))
-    out = await model.ainvoke([*history, context_msg])
+
+    # 将系统提示词置于首位，数据上下文置于末尾（HumanMessage）
+    messages = [
+        SystemMessage(content=REPORT_AGGREGATE_SYSTEM_PROMPT),
+        *history,
+        HumanMessage(content=f"【评分上下文】：\n{score_block}\n\n【每轮要点摘要】：\n{bullet_block}")
+    ]
+
+    out = await model.ainvoke(messages)
     if isinstance(out, _ReportTextOutput):
         return out
     return _ReportTextOutput()
@@ -378,9 +440,12 @@ async def _report_aggregate_text(state: InterviewState, dim_avg: dict[str, float
 @_retry_llm
 async def _report_fallback_full_eval(state: InterviewState) -> ReportOutput:
     model = _chat_model().with_structured_output(ReportOutput)
-    out = await model.ainvoke(
-        [*_state_messages(state), SystemMessage(content=REPORT_FALLBACK_SYSTEM_PROMPT)]
-    )
+    messages = [
+        SystemMessage(content=REPORT_FALLBACK_SYSTEM_PROMPT),
+        *_state_messages(state),
+        HumanMessage(content="请基于以上面试对话，生成最终评估报告。")
+    ]
+    out = await model.ainvoke(messages)
     if isinstance(out, ReportOutput):
         return out
     return ReportOutput(
@@ -422,12 +487,9 @@ def _report_output_to_dict(out: Any) -> dict[str, Any]:
 
 
 async def generate_prepared_question_reply(question_text: str, state: InterviewState) -> str:
-    system_prompt = (
-        f"你是候选人的模拟面试官。请用温和、专业、自然的面试官口吻，向候选人提出以下指定的问题。"
-        f"可以有一句简短的过渡或开场词，然后直接、清晰地提出问题，不要有多余的废话或总结。"
-        f"指定提出的问题：{question_text}"
-    )
-    return await _generate_text(system_prompt, state)
+    target_role = state.get("target_role")
+    prefix = f"我们先从「{target_role}」相关的一道题开始。" if target_role else "我们先从第一道题开始。"
+    return f"{prefix}\n\n{question_text}"
 
 
 async def ask_question_node(state: InterviewState) -> InterviewState:
@@ -538,8 +600,9 @@ async def report_node(state: InterviewState) -> InterviewState:
     db = state.get("db")
     user_id = state.get("user_id")
     if user_id and hasattr(db, "execute"):  # 简单的 AsyncSession 运行时检查
-        from sqlalchemy.ext.asyncio import AsyncSession
         from uuid import UUID
+
+        from sqlalchemy.ext.asyncio import AsyncSession
 
         if isinstance(db, AsyncSession):
             try:

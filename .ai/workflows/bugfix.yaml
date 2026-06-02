@@ -1,0 +1,86 @@
+id: bugfix
+version: 2
+name: Bug Fix Flow
+description: Bug 修复流程。比 feature 多 investigation 步骤，少 spec 和 multi-review。
+
+entry: plan
+terminal: done
+
+steps:
+  # ── 需求阶段 ──
+  office-hours:
+    owner: planner
+    min_depth: thorough
+    next: plan
+
+  plan:
+    owner: planner
+    min_depth: quick
+    outputs:
+      - task.md
+      - plan.md
+    checkpoint: true
+    next: eng-review
+
+  eng-review:
+    owner: reviewer
+    min_depth: thorough
+    next: investigation
+
+  # ── 调查阶段 ──
+  investigation:
+    owners:
+      - backend
+      - frontend
+    dynamic_owners: true
+    min_depth: quick
+    next: implementation
+    on_blocked: blocked
+
+  blocked:
+    owner: current_agent
+    min_depth: quick
+    resume_to: investigation
+
+  # ── 实现阶段 ──
+  implementation:
+    owners:
+      - backend
+      - frontend
+    dynamic_owners: true
+    min_depth: quick
+    next: review
+
+  # ── 审查阶段 ──
+  review:
+    owner: reviewer
+    min_depth: quick
+    outputs:
+      - review.md
+    next: qa
+    transitions:
+      approved: qa
+      changes_requested: implementation
+
+  # ── 测试阶段 ──
+  qa:
+    owner: tester
+    min_depth: standard
+    next: ship
+    transitions:
+      passed: ship
+      failed: implementation
+
+  # ── 发布阶段 ──
+  ship:
+    owner: planner
+    min_depth: full
+    checkpoint: true
+    next: done
+
+  # ── 终止 ──
+  done:
+    owner: planner
+    min_depth: quick
+    outputs:
+      - handoff.md

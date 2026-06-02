@@ -33,9 +33,7 @@ vi.mock("@/lib/coach", () => ({
 }));
 
 vi.mock("@/lib/user", () => ({
-  updateUserProfile: vi.fn().mockResolvedValue({}),
   fetchUserProfile: vi.fn().mockResolvedValue({}),
-  fetchUserStories: vi.fn().mockResolvedValue([]),
 }));
 
 import {
@@ -68,9 +66,43 @@ describe("CoachDashboard", () => {
     mockFetchLatestCoachPlan.mockResolvedValue(null);
     mockFetchHistory.mockResolvedValue({
       sessions: [
-        { id: "1", date: "2026-05-20", topic: "分布式 · 高并发", target_role: "后端", score: 8.5, pass_fail: "pass", key_issues: [], report: { technical_depth: 4, quantified_results: 4, failure_tradeoffs: 4, structure: 4, key_concepts: ["缓存", "短链接"], highlights: [], improvements: [] } },
-        { id: "2", date: "2026-05-19", topic: "分布式 · 消息队列", target_role: "后端", score: 8.0, pass_fail: "pass", key_issues: [], report: { technical_depth: 4, quantified_results: 4, failure_tradeoffs: 4, structure: 4, key_concepts: ["Kafka", "幂等性"], highlights: [], improvements: [] } },
-      ]
+        {
+          id: "1",
+          date: "2026-05-20",
+          topic: "分布式 · 高并发",
+          target_role: "后端",
+          score: 8.5,
+          pass_fail: "pass",
+          key_issues: [],
+          report: {
+            technical_depth: 4,
+            quantified_results: 4,
+            failure_tradeoffs: 4,
+            structure: 4,
+            key_concepts: ["缓存", "短链接"],
+            highlights: [],
+            improvements: [],
+          },
+        },
+        {
+          id: "2",
+          date: "2026-05-19",
+          topic: "分布式 · 消息队列",
+          target_role: "后端",
+          score: 8.0,
+          pass_fail: "pass",
+          key_issues: [],
+          report: {
+            technical_depth: 4,
+            quantified_results: 4,
+            failure_tradeoffs: 4,
+            structure: 4,
+            key_concepts: ["Kafka", "幂等性"],
+            highlights: [],
+            improvements: [],
+          },
+        },
+      ],
     });
     mockFetchOpening.mockResolvedValue({
       greeting: "欢迎回来",
@@ -91,11 +123,11 @@ describe("CoachDashboard", () => {
     mockFetch.mockResolvedValue({
       is_returning: true,
       target_role: "后端",
-      work_years: null,
       target_company: null,
       user_background: null,
       session_count: 7,
-      last_session_id: "sid-123"
+      last_session_id: "sid-123",
+      resume_filename: "resume.pdf",
     });
 
     render(<CoachDashboard />);
@@ -105,24 +137,48 @@ describe("CoachDashboard", () => {
     });
   });
 
-  it("当 stage 为 interview 时显示进行中提示", async () => {
-    mockFetchUserStage.mockResolvedValue("interview");
+  it("已有简历解析出的岗位时不再显示首场面试设置卡", async () => {
     mockFetch.mockResolvedValue({
-      is_returning: true,
-      target_role: "后端",
-      work_years: null,
+      is_returning: false,
+      target_role: "WEB前端工程师",
       target_company: null,
       user_background: null,
-      session_count: 5,
-      last_session_id: "sid-456"
+      session_count: 0,
+      last_session_id: null,
+      resume_filename: "resume.pdf",
     });
 
     render(<CoachDashboard />);
 
     await waitFor(() => {
-      expect(screen.getByText("面试正在进行中")).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "直接开始面试" }),
+      ).toBeInTheDocument();
     });
-    expect(screen.getByRole("button", { name: "立即返回面试间" })).toBeInTheDocument();
+    expect(screen.queryByText("开启你的第一场面试")).not.toBeInTheDocument();
+    expect(screen.queryByText("你想练习的岗位")).not.toBeInTheDocument();
+  });
+
+  it("当 stage 为 interview 时显示进行中提示", async () => {
+    mockFetchUserStage.mockResolvedValue("interview");
+    mockFetch.mockResolvedValue({
+      is_returning: true,
+      target_role: "后端",
+      target_company: null,
+      user_background: null,
+      session_count: 5,
+      last_session_id: "sid-456",
+      resume_filename: "resume.pdf",
+    });
+
+    render(<CoachDashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/后端 面试正在进行中/)).toBeInTheDocument();
+    });
+    expect(
+      screen.getByRole("button", { name: "立即返回面试间" }),
+    ).toBeInTheDocument();
   });
 
   it("当 stage 为 coach 时显示开始复盘按钮，点击后触发 SSE", async () => {
@@ -130,21 +186,21 @@ describe("CoachDashboard", () => {
     mockFetch.mockResolvedValue({
       is_returning: true,
       target_role: "后端",
-      work_years: null,
       target_company: null,
       user_background: null,
       session_count: 5,
-      last_session_id: "session-123"
+      last_session_id: "session-123",
+      resume_filename: "resume.pdf",
     });
-    
+
     // Mock 全局 fetch 用于 SSE
     const mockResponse = {
       ok: true,
       body: {
         getReader: () => ({
-          read: vi.fn().mockResolvedValueOnce({ done: true })
-        })
-      }
+          read: vi.fn().mockResolvedValueOnce({ done: true }),
+        }),
+      },
     };
     global.fetch = vi.fn().mockResolvedValue(mockResponse as any);
 
@@ -163,7 +219,10 @@ describe("CoachDashboard", () => {
     await waitFor(() => {
       expect(screen.getByText(/正在深度复盘本次面试/)).toBeInTheDocument();
     });
-    expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining("/api/v1/coach/review?session_id=session-123"), expect.anything());
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/api/v1/coach/review?session_id=session-123"),
+      expect.anything(),
+    );
   });
 
   describe("from=interview 软提示", () => {
@@ -172,11 +231,11 @@ describe("CoachDashboard", () => {
       mockFetch.mockResolvedValue({
         is_returning: true,
         target_role: "后端",
-        work_years: null,
         target_company: null,
         user_background: null,
         session_count: 7,
-        last_session_id: null
+        last_session_id: null,
+        resume_filename: "resume.pdf",
       });
     });
 
@@ -187,7 +246,9 @@ describe("CoachDashboard", () => {
     it("URL 不带 from=interview 时不显示软提示", () => {
       mockSearchParams.mockReturnValue(new URLSearchParams(""));
       render(<CoachDashboard />);
-      expect(screen.queryByText(/先在这里告诉我练什么/)).not.toBeInTheDocument();
+      expect(
+        screen.queryByText(/先在这里告诉我练什么/),
+      ).not.toBeInTheDocument();
     });
   });
 });

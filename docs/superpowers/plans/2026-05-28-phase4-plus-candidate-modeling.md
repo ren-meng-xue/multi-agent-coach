@@ -96,7 +96,7 @@ async def test_evaluator_uses_last_n_messages_in_context():
     messages = []
     for i in range(20):
         messages.append(HumanMessage(content=f"user msg {i}"))
-        messages.append(AIMessage(content=f"ai msg {i}"))
+        messages.append(AIMessage(content=f".ai msg {i}"))
     state = {
         "question_count": 2,
         "messages": messages,
@@ -110,8 +110,8 @@ async def test_evaluator_uses_last_n_messages_in_context():
             failure_tradeoffs=5, structure=5, summary_score=5,
             candidate_level="junior", latent_signals=[], missing_dimensions=[],
         )
-    with patch("app.agents.interviewer.nodes._evaluator_reason_stream", new=AsyncMock()), \
-         patch("app.agents.interviewer.nodes._evaluator_score", new=AsyncMock(side_effect=fake_score)):
+    with patch("app.agents-1.interviewer.nodes._evaluator_reason_stream", new=AsyncMock()), \
+         patch("app.agents-1.interviewer.nodes._evaluator_score", new=AsyncMock(side_effect=fake_score)):
         await evaluator_node(state)
     # 最早的 user msg 0 不应该出现在 context 里
     assert "user msg 0" not in captured["context"]
@@ -134,8 +134,8 @@ async def test_evaluator_writes_candidate_profile():
         "turn_evaluations": [],
         "candidate_profile": {},
     }
-    with patch("app.agents.interviewer.nodes._evaluator_reason_stream", new=AsyncMock()), \
-         patch("app.agents.interviewer.nodes._evaluator_score", new=AsyncMock(return_value=fake_scoring)):
+    with patch("app.agents-1.interviewer.nodes._evaluator_reason_stream", new=AsyncMock()), \
+         patch("app.agents-1.interviewer.nodes._evaluator_score", new=AsyncMock(return_value=fake_scoring)):
         result = await evaluator_node(state)
     last = result["turn_evaluations"][-1]
     assert last["candidate_level"] == "junior"
@@ -162,8 +162,8 @@ async def test_evaluator_accumulates_signals_dedup_ordered():
         "turn_evaluations": [],
         "candidate_profile": {"latent_signals": ["a", "b"], "latest_level": "junior"},
     }
-    with patch("app.agents.interviewer.nodes._evaluator_reason_stream", new=AsyncMock()), \
-         patch("app.agents.interviewer.nodes._evaluator_score", new=AsyncMock(return_value=fake_scoring)):
+    with patch("app.agents-1.interviewer.nodes._evaluator_reason_stream", new=AsyncMock()), \
+         patch("app.agents-1.interviewer.nodes._evaluator_score", new=AsyncMock(return_value=fake_scoring)):
         result = await evaluator_node(state)
     assert result["candidate_profile"]["latent_signals"] == ["a", "b", "c"]
     assert result["candidate_profile"]["latest_level"] == "mid"  # 用最新值
@@ -214,8 +214,8 @@ async def test_master_writes_followup_focus_to_state():
         "messages": [HumanMessage(content="我用了 Redis 做缓存")],
         "candidate_profile": {"latest_level": "junior", "latent_signals": ["caching"]},
     }
-    with patch("app.agents.interviewer.nodes._master_phase1_stream", new=AsyncMock()), \
-         patch("app.agents.interviewer.nodes._master_phase2_decide", new=AsyncMock(return_value=fake_decision)):
+    with patch("app.agents-1.interviewer.nodes._master_phase1_stream", new=AsyncMock()), \
+         patch("app.agents-1.interviewer.nodes._master_phase2_decide", new=AsyncMock(return_value=fake_decision)):
         result = await master_node(state)
     assert result["followup_focus"] == "architecture"
     assert result["chain"] == ["evaluator", "followup"]
@@ -240,8 +240,8 @@ async def test_master_context_contains_candidate_profile():
             "latent_signals": ["workflow_orchestration"],
         },
     }
-    with patch("app.agents.interviewer.nodes._master_phase1_stream", new=AsyncMock()), \
-         patch("app.agents.interviewer.nodes._master_phase2_decide", new=AsyncMock(side_effect=fake_decide)):
+    with patch("app.agents-1.interviewer.nodes._master_phase1_stream", new=AsyncMock()), \
+         patch("app.agents-1.interviewer.nodes._master_phase2_decide", new=AsyncMock(side_effect=fake_decide)):
         await master_node(state)
     assert "beginner" in captured["context"]
     assert "workflow_orchestration" in captured["context"]
@@ -274,7 +274,7 @@ async def test_followup_injects_focus_and_signals_into_prompt():
     from app.agents.interviewer.nodes import followup_node
     captured = {}
     async def fake_generate(system_prompt: str, state):
-        captured["prompt"] = system_prompt
+        captured["prompts"] = system_prompt
         return "针对 event lifecycle 的追问"
     state = {
         "followup_count": 0,
@@ -287,11 +287,11 @@ async def test_followup_injects_focus_and_signals_into_prompt():
             }
         ],
     }
-    with patch("app.agents.interviewer.nodes._generate_text", new=AsyncMock(side_effect=fake_generate)):
+    with patch("app.agents-1.interviewer.nodes._generate_text", new=AsyncMock(side_effect=fake_generate)):
         result = await followup_node(state)
-    assert "workflow_orchestration" in captured["prompt"]
-    assert "architecture" in captured["prompt"]
-    assert "followup_focus" in captured["prompt"]
+    assert "workflow_orchestration" in captured["prompts"]
+    assert "architecture" in captured["prompts"]
+    assert "followup_focus" in captured["prompts"]
     assert result["assistant_message"] == "针对 event lifecycle 的追问"
     assert result["followup_count"] == 1
 
@@ -304,7 +304,7 @@ async def test_followup_works_without_focus_or_signals():
         "followup_count": 0,
         "messages": [HumanMessage(content="...")],
     }
-    with patch("app.agents.interviewer.nodes._generate_text", new=AsyncMock(return_value="ok")):
+    with patch("app.agents-1.interviewer.nodes._generate_text", new=AsyncMock(return_value="ok")):
         result = await followup_node(state)
     assert result["assistant_message"] == "ok"
     assert result["followup_count"] == 1

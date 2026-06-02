@@ -1,0 +1,226 @@
+{
+  "name": "coach_v0",
+  "judge_mode": "rubric",
+  "cases": [
+    {
+      "id": "r_001",
+      "target_type": "review",
+      "input_json": {
+        "candidate_memory": {
+          "latest_level": "mid",
+          "cumulative_signals": ["系统性思考", "沟通清晰"],
+          "weakness_tags": ["容量评估", "监控意识"],
+          "total_sessions": 3
+        },
+        "last_session_report": {
+          "session_id": "s-1001",
+          "highlights": ["方案拆解清晰"],
+          "lowlights": ["缺少指标验证"]
+        }
+      },
+      "golden": {
+        "review_key_points": [
+          "需要补齐容量评估方法与指标选择",
+          "建议强化监控体系和告警阈值设计"
+        ],
+        "overall": 6.8,
+        "_human_review_pending": true
+      }
+    },
+    {
+      "id": "r_002",
+      "target_type": "review",
+      "input_json": {
+        "candidate_memory": {
+          "latest_level": "senior",
+          "cumulative_signals": ["技术深度", "架构能力"],
+          "weakness_tags": ["沟通节奏"],
+          "total_sessions": 5
+        },
+        "last_session_report": {
+          "session_id": "s-1002",
+          "highlights": ["权衡思考完整"],
+          "lowlights": ["表达过于冗长"]
+        }
+      },
+      "golden": {
+        "review_key_points": [
+          "技术深度表现稳定，具备架构视角",
+          "需要优化沟通节奏，提升关键信息传达效率"
+        ],
+        "overall": 7.0,
+        "_human_review_pending": true
+      }
+    },
+    {
+      "id": "r_003",
+      "target_type": "review",
+      "input_json": {
+        "candidate_memory": {
+          "latest_level": "junior",
+          "cumulative_signals": ["执行力"],
+          "weakness_tags": ["原理理解", "权衡意识"],
+          "total_sessions": 2
+        },
+        "last_session_report": {
+          "session_id": "s-1003",
+          "highlights": ["落地细节丰富"],
+          "lowlights": ["缺乏原理解释"]
+        }
+      },
+      "golden": {
+        "review_key_points": [
+          "执行力强但需要补齐核心原理",
+          "建议增加对方案权衡的说明"
+        ],
+        "overall": 6.5,
+        "_human_review_pending": true
+      }
+    },
+    {
+      "id": "r_004",
+      "target_type": "review",
+      "input_json": {
+        "candidate_memory": {
+          "latest_level": "mid",
+          "cumulative_signals": ["业务理解"],
+          "weakness_tags": ["系统设计"],
+          "total_sessions": 4
+        },
+        "last_session_report": {
+          "session_id": "s-1004",
+          "highlights": ["业务场景理解到位"],
+          "lowlights": ["架构设计层次感不足"]
+        }
+      },
+      "golden": {
+        "review_key_points": [
+          "业务理解扎实，但系统设计需加强分层与边界划分",
+          "建议补充核心组件的伸缩性与容错设计"
+        ],
+        "overall": 6.7,
+        "_human_review_pending": true
+      }
+    },
+    {
+      "id": "r_005",
+      "target_type": "review",
+      "input_json": {
+        "candidate_memory": {
+          "latest_level": "senior",
+          "cumulative_signals": ["稳定性意识", "协作能力"],
+          "weakness_tags": ["成本优化"],
+          "total_sessions": 6
+        },
+        "last_session_report": {
+          "session_id": "s-1005",
+          "highlights": ["故障应对方案完善"],
+          "lowlights": ["成本优化缺少量化指标"]
+        }
+      },
+      "golden": {
+        "review_key_points": [
+          "稳定性意识强，具备完善的应急预案",
+          "成本优化需补充量化指标与目标值"
+        ],
+        "overall": 7.1,
+        "_human_review_pending": true
+      }
+    },
+    {
+      "id": "p_001",
+      "target_type": "plan",
+      "input_json": {
+        "review_text": "候选人容量评估方法薄弱，需要补齐指标体系。",
+        "candidate_memory": {
+          "latest_level": "mid",
+          "weakness_tags": ["容量评估", "监控意识"]
+        }
+      },
+      "golden": {
+        "plan_json": {
+          "priority_skills": ["容量评估", "指标监控"],
+          "weekly_plan": ["学习容量评估方法论", "实践压测与监控仪表盘搭建"]
+        },
+        "overall": 6.8,
+        "_human_review_pending": true
+      }
+    },
+    {
+      "id": "p_002",
+      "target_type": "plan",
+      "input_json": {
+        "review_text": "表达过于冗长，沟通节奏需要优化。",
+        "candidate_memory": {
+          "latest_level": "senior",
+          "weakness_tags": ["表达效率"]
+        }
+      },
+      "golden": {
+        "plan_json": {
+          "priority_skills": ["结构化表达"],
+          "weekly_plan": ["每周进行 2 次结构化复盘演练", "使用 STAR 模型做 5 分钟总结"]
+        },
+        "overall": 6.6,
+        "_human_review_pending": true
+      }
+    },
+    {
+      "id": "p_003",
+      "target_type": "plan",
+      "input_json": {
+        "review_text": "原理理解不足，缺少对核心机制的解释。",
+        "candidate_memory": {
+          "latest_level": "junior",
+          "weakness_tags": ["原理理解", "权衡意识"]
+        }
+      },
+      "golden": {
+        "plan_json": {
+          "priority_skills": ["基础原理", "权衡分析"],
+          "weekly_plan": ["补齐系统设计基础课程", "针对每个方案写权衡分析"]
+        },
+        "overall": 6.5,
+        "_human_review_pending": true
+      }
+    },
+    {
+      "id": "p_004",
+      "target_type": "plan",
+      "input_json": {
+        "review_text": "系统设计层次感不足，需要强化分层与边界。",
+        "candidate_memory": {
+          "latest_level": "mid",
+          "weakness_tags": ["系统设计"]
+        }
+      },
+      "golden": {
+        "plan_json": {
+          "priority_skills": ["分层设计", "边界划分"],
+          "weekly_plan": ["阅读经典架构案例", "完成 2 次分层方案设计练习"]
+        },
+        "overall": 6.7,
+        "_human_review_pending": true
+      }
+    },
+    {
+      "id": "p_005",
+      "target_type": "plan",
+      "input_json": {
+        "review_text": "成本优化缺少量化指标，需要建立成本意识。",
+        "candidate_memory": {
+          "latest_level": "senior",
+          "weakness_tags": ["成本优化"]
+        }
+      },
+      "golden": {
+        "plan_json": {
+          "priority_skills": ["成本度量", "优化策略"],
+          "weekly_plan": ["建立成本指标基线", "制定 2 个降本实验并复盘"]
+        },
+        "overall": 6.9,
+        "_human_review_pending": true
+      }
+    }
+  ]
+}

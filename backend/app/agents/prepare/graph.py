@@ -21,11 +21,58 @@ _NODE_MAP = {
 }
 
 _NODE_LABELS = {
-    "master": "MASTER",
+    "master": "调度",
     "memory_search": "记忆检索",
     "jd_analysis": "JD分析",
     "question_gen": "出题",
 }
+
+_NODE_TITLES = {
+    "master": "识别方向，启动准备",
+    "memory_search": "读取历史表现",
+    "jd_analysis": "构建岗位考点地图",
+    "question_gen": "定制专属题目",
+}
+
+
+def _format_memory_search_trace(state: dict[str, Any]) -> list[str]:
+    weak_areas = state.get("weak_areas") or []
+
+    lines = [
+        f"读取到历史薄弱点 {len(weak_areas)} 项。",
+    ]
+    if weak_areas:
+        lines.append(f"本轮优先覆盖：{'、'.join(str(item) for item in weak_areas[:3])}。")
+    else:
+        lines.append("这是新用户或历史薄弱点未查询。")
+    return lines
+
+
+def _format_jd_analysis_trace(state: dict[str, Any]) -> list[str]:
+    jd_context = state.get("jd_context")
+    if not jd_context:
+        return ["未提供具体的职位描述（JD）。"]
+
+    role = jd_context.get("role") or "未识别岗位"
+    company = jd_context.get("company") or "未识别公司"
+    skills = jd_context.get("key_skills") or []
+    focus_areas = jd_context.get("focus_areas") or []
+    difficulty = jd_context.get("difficulty") or "medium"
+
+    lines = [f"识别岗位：{role}。", f"识别公司：{company}。", f"岗位难度：{difficulty}。"]
+    if skills:
+        lines.append(f"关键技能：{'、'.join(str(item) for item in skills[:6])}。")
+    if focus_areas:
+        lines.append(f"重点考察：{'、'.join(str(item) for item in focus_areas[:6])}。")
+    return lines
+
+
+def _node_completion_trace(ev_node: str, state: dict[str, Any]) -> list[str]:
+    if ev_node == "memory_search":
+        return _format_memory_search_trace(state)
+    if ev_node == "jd_analysis":
+        return _format_jd_analysis_trace(state)
+    return []
 
 
 def route_after_master(state: PrepareState) -> str:
@@ -129,6 +176,7 @@ async def stream_prepare_events(state: PrepareState) -> AsyncIterator[dict[str, 
                 "data": {
                     "node": ev_node,
                     "label": _NODE_LABELS.get(ev_node, ev_node),
+                    "title": _NODE_TITLES.get(ev_node, ev_node),
                 },
             }
 
@@ -162,6 +210,10 @@ async def stream_prepare_events(state: PrepareState) -> AsyncIterator[dict[str, 
                     extra["chain"] = node_dict.get("chain", [])
                     extra["need_direction"] = node_dict.get("need_direction", False)
 
+            if isinstance(node_state, dict):
+                for line in _node_completion_trace(ev_node, node_state):
+                    yield {"event": "node_token", "data": {"node": ev_node, "text": f"• {line}\n"}}
+
             yield {"event": "node_done", "data": {"node": ev_node, **extra}}
 
         # 全图结束
@@ -169,7 +221,7 @@ async def stream_prepare_events(state: PrepareState) -> AsyncIterator[dict[str, 
             from typing import cast
             final = cast(PrepareState, event.get("data", {}).get("output") or {})
             
-            # 将最新的 weak_areas 和 star_stories 写入 Redis 缓存，防止二次重定向时状态丢失
+            # 将最新的 weak_areas 写入 Redis 缓存，防止二次重定向时状态丢失
             session_id = final.get("session_id")
             user_id = final.get("user_id")
             if session_id and user_id:
@@ -180,7 +232,6 @@ async def stream_prepare_events(state: PrepareState) -> AsyncIterator[dict[str, 
                     r = await get_coach_redis()
                     cache_data = {
                         "weak_areas": final.get("weak_areas", []),
-                        "star_stories": final.get("star_stories", []),
                     }
                     await r.setex(
                         f"prepare:state:{user_id}:{session_id}",

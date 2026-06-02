@@ -1,5 +1,6 @@
 import os
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -16,7 +17,7 @@ class Settings(BaseSettings):
     )
 
     # 应用基础
-    app_env: str = "dev"
+    app_env: Literal["dev", "prod"] = "dev"
     app_name: str = "multi-agent-coach"
     log_level: str = "INFO"
 
@@ -30,8 +31,14 @@ class Settings(BaseSettings):
     openai_model_chat_fast: str = "gpt-4o-mini"
     openai_model_coach: str = "gpt-4o-mini"
     openai_model_embedding: str = "text-embedding-3-small"
+    openai_model_judge: str = "gpt-4o"  # Judge 专用模型，与被评测模型分离
     # LLM 调用超时（秒），避免单次请求长时间挂起拖垮连接
     llm_timeout_seconds: int = 30
+
+    # Eval
+    eval_max_concurrency: int = 5       # 评测并发数
+    eval_max_retries: int = 3           # 单 case 最大重试次数
+    run_llm_eval_secret: SecretStr | None = None  # 触发 eval 的 secret
 
     # LangSmith / LangChain tracing：LangGraph 会直接读取这些环境变量上报轨迹
     langchain_tracing_v2: bool = False

@@ -27,6 +27,7 @@ export type InterviewTurnTracePayload = {
   summaryScore?: number;
   turnIndex: number;
   isOpening?: boolean;
+  error?: string;
 };
 
 export type InterviewPrepareTraceMessage = {
@@ -47,16 +48,85 @@ export type InterviewChatMessage =
   | InterviewPrepareTraceMessage
   | InterviewTurnTraceMessage;
 
-export function isTextMessage(m: InterviewChatMessage): m is InterviewChatTextMessage {
+export function isTextMessage(
+  m: InterviewChatMessage,
+): m is InterviewChatTextMessage {
   return m.role === "user" || m.role === "assistant";
 }
 
-export function isPrepareTraceMessage(m: InterviewChatMessage): m is InterviewPrepareTraceMessage {
+export function isPrepareTraceMessage(
+  m: InterviewChatMessage,
+): m is InterviewPrepareTraceMessage {
   return m.role === "trace" && m.kind === "prepare";
 }
 
-export function isTurnTraceMessage(m: InterviewChatMessage): m is InterviewTurnTraceMessage {
+export function isTurnTraceMessage(
+  m: InterviewChatMessage,
+): m is InterviewTurnTraceMessage {
   return m.role === "trace" && m.kind === "turn";
+}
+
+export const INTERVIEW_NODE_TITLES: Record<string, string> = {
+  master: "分析表现，规划下一步",
+  evaluator: "多维深度评估",
+  followup: "生成追问逻辑",
+  ask_question: "抽取下一道题",
+};
+
+export const INTERVIEW_NODE_LABELS: Record<string, string> = {
+  master: "调度",
+  evaluator: "评估官",
+  followup: "面试官",
+  ask_question: "出题官",
+};
+
+export const PREPARE_NODE_TITLES: Record<string, string> = {
+  master: "识别方向，启动准备",
+  memory_search: "读取你的历史表现",
+  jd_analysis: "构建考点地图",
+  question_gen: "定制专属题目",
+  launch: "进入面试",
+};
+
+/** 格式化 Trace 节点的 tokens，过滤 JSON 并美化输出。 */
+export function formatTraceTokens(id: string, tokens: string): string {
+  if (!tokens) return "(无详细信息)";
+
+  // 出题节点特殊处理：提取 JSON 中的 question 字段
+  if (id === "question_gen" || id === "ask_question") {
+    const robustPattern =
+      /["']?question["']?\s* : \s*["']((?:[^"'\\]|\\?[\s\S])*?)(?:["']|$)/gi;
+    // 注意：上面的正则空格是为了匹配，实际代码中可能更紧凑
+    const matches = Array.from(
+      tokens.matchAll(
+        /["']?question["']?\s*:\s*["']((?:[^"'\\]|\\?[\s\S])*?)(?:["']|$)/gi,
+      ),
+    );
+    const questions = matches
+      .map((m) => m[1].replace(/\\"/g, '"').replace(/\\n/g, " ").trim())
+      .filter((q) => q.length > 2);
+
+    if (questions.length > 0) {
+      return questions.map((q) => `→ ${q}`).join("\n    ");
+    }
+  }
+
+  // 其他节点：过滤 JSON 标记，保留普通文本
+  return tokens
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => {
+      return (
+        line &&
+        !line.startsWith("[") &&
+        !line.startsWith("{") &&
+        !line.includes('": "') &&
+        !line.startsWith("}") &&
+        !line.startsWith("]")
+      );
+    })
+    .map((line) => line.replace(/^[•\-]\s*/, "→ "))
+    .join("\n    ");
 }
 
 export type InterviewProgressState = {
@@ -78,11 +148,11 @@ export interface InterviewReport {
 export type UserContextResponse = {
   is_returning: boolean;
   target_role: string | null;
-  work_years: string | null;
   target_company: string | null;
   user_background: string | null;
   session_count: number;
   last_session_id: string | null;
+  resume_filename: string | null;
 };
 
 export type InterviewHistoryItem = {
@@ -111,9 +181,12 @@ export async function fetchInterviewHistory({
   const baseUrl = process.env.NEXT_PUBLIC_API_URL;
   if (!baseUrl) throw new Error("缺少后端接口配置");
 
-  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/interview/history?limit=${limit}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const response = await fetch(
+    `${baseUrl.replace(/\/$/, "")}/api/v1/interview/history?limit=${limit}`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
 
   if (!response.ok) throw new Error("获取面试历史失败");
   return response.json() as Promise<InterviewHistoryResponse>;
@@ -134,6 +207,7 @@ export type ActiveSessionResponse = {
   total_questions?: number;
   followup_count?: number;
   messages: ActiveMessageItem[];
+  prepare_trace?: InterviewPrepareTracePayload | null;
   report?: InterviewReport | null;
 };
 
@@ -146,9 +220,12 @@ export async function fetchActiveInterviewSession({
   const baseUrl = process.env.NEXT_PUBLIC_API_URL;
   if (!baseUrl) throw new Error("缺少后端接口配置");
 
-  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/interview/active`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const response = await fetch(
+    `${baseUrl.replace(/\/$/, "")}/api/v1/interview/active`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
 
   if (!response.ok) throw new Error("获取活动面试会话失败");
   return response.json() as Promise<ActiveSessionResponse>;
@@ -170,6 +247,8 @@ type StreamInterviewChatOptions = {
   message: string;
   preparedQuestions?: PreparedQuestion[];
   jdContext?: JDContext | null;
+  targetRole?: string;
+  useQABank?: boolean;
   signal?: AbortSignal;
   onDelta: (text: string) => void;
   onState?: (state: InterviewProgressState) => void;
@@ -185,6 +264,8 @@ export async function streamInterviewChat({
   message,
   preparedQuestions,
   jdContext,
+  targetRole,
+  useQABank,
   signal,
   onDelta,
   onState,
@@ -196,19 +277,24 @@ export async function streamInterviewChat({
     throw new Error("缺少后端接口配置");
   }
 
-  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/interview/turn`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
+  const response = await fetch(
+    `${baseUrl.replace(/\/$/, "")}/api/v1/interview/turn`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message,
+        prepared_questions: preparedQuestions,
+        jd_context: jdContext,
+        target_role: targetRole,
+        use_qa_bank: useQABank ?? false,
+      }),
+      signal,
     },
-    body: JSON.stringify({
-      message,
-      prepared_questions: preparedQuestions,
-      jd_context: jdContext,
-    }),
-    signal,
-  });
+  );
 
   if (!response.ok || !response.body) {
     throw new Error(DEFAULT_ERROR_MESSAGE);
@@ -216,7 +302,8 @@ export async function streamInterviewChat({
 
   await readSseStream({
     stream: response.body,
-    onEvent: (event) => handleSseEvent(event, onDelta, onState, onReport, onTraceNode),
+    onEvent: (event) =>
+      handleSseEvent(event, onDelta, onState, onReport, onTraceNode),
   });
 }
 
@@ -247,7 +334,11 @@ function handleSseEvent(
     return;
   }
 
-  if (event === "node_start" || event === "node_token" || event === "node_done") {
+  if (
+    event === "node_start" ||
+    event === "node_token" ||
+    event === "node_done"
+  ) {
     const payload = parseJsonPayload<{
       node: string;
       label?: string;
@@ -255,8 +346,18 @@ function handleSseEvent(
       elapsed_ms?: number;
       chain?: string[];
       summary_score?: number;
+      candidate_level?: "beginner" | "junior" | "mid" | "senior";
+      latent_signals?: string[];
+      missing_dimensions?: string[];
+      followup_focus?: string;
+      assistant_message?: string;
     }>(data);
-    const phase = event === "node_start" ? "start" : event === "node_token" ? "token" : "done";
+    const phase =
+      event === "node_start"
+        ? "start"
+        : event === "node_token"
+          ? "token"
+          : "done";
     onTraceNode?.({
       phase,
       node: payload.node,
@@ -265,6 +366,11 @@ function handleSseEvent(
       elapsedMs: payload.elapsed_ms,
       chain: payload.chain,
       summaryScore: payload.summary_score,
+      candidateLevel: payload.candidate_level,
+      latentSignals: payload.latent_signals,
+      missingDimensions: payload.missing_dimensions,
+      followupFocus: payload.followup_focus,
+      assistantMessage: payload.assistant_message,
     });
     return;
   }
@@ -284,9 +390,12 @@ export async function fetchInterviewContext({
   const baseUrl = process.env.NEXT_PUBLIC_API_URL;
   if (!baseUrl) throw new Error("缺少后端接口配置");
 
-  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/interview/context`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const response = await fetch(
+    `${baseUrl.replace(/\/$/, "")}/api/v1/interview/context`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
 
   if (!response.ok) throw new Error("获取用户信息失败");
   return response.json() as Promise<UserContextResponse>;
@@ -301,9 +410,12 @@ export async function fetchCoachOpeningMessage({
   const baseUrl = process.env.NEXT_PUBLIC_API_URL;
   if (!baseUrl) throw new Error("缺少后端接口配置");
 
-  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/api/coach/opening-message`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const response = await fetch(
+    `${baseUrl.replace(/\/$/, "")}/api/coach/opening-message`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
 
   if (!response.ok) throw new Error("获取 Coach 开场词失败");
   return response.json() as Promise<CoachOpeningMessageResponse>;
@@ -326,14 +438,17 @@ export async function resetInterviewSession({
   if (target_role) body.target_role = target_role;
   if (user_background) body.user_background = user_background;
 
-  const res = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/interview/reset`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
+  const res = await fetch(
+    `${baseUrl.replace(/\/$/, "")}/api/v1/interview/reset`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify(body),
-  });
+  );
   if (!res.ok) {
     throw new Error(`Reset failed with HTTP status: ${res.status}`);
   }
@@ -360,17 +475,55 @@ export async function* startPrepareStreamFetch(params: {
   const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
   const form = new FormData();
   if (params.userDirection) form.append("user_direction", params.userDirection);
-  if (params.userBackground) form.append("user_background", params.userBackground);
+  if (params.userBackground)
+    form.append("user_background", params.userBackground);
   if (params.jdText) form.append("jd_text", params.jdText);
   if (params.jdUrl) form.append("jd_url", params.jdUrl);
   if (params.jdFile) form.append("jd_file", params.jdFile);
 
-  const resp = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/prepare/start`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${params.token}` },
-    body: form,
-    signal: params.signal,
-  });
+  const resp = await fetch(
+    `${baseUrl.replace(/\/$/, "")}/api/v1/prepare/start`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${params.token}` },
+      body: form,
+      signal: params.signal,
+    },
+  );
+
+  yield* _readPrepareStream(resp);
+}
+
+/** 启动 prepare + 面试开场一体化流（POST /prepare/launch）。
+ *  与 startPrepareStreamFetch 的区别：在 prepare done 后后端会自动接续 turn_* 事件，
+ *  前端无需再触发 __START__ 调用，直接由 phase_change → turn_* 驱动 UI。 */
+export async function* startPrepareAndLaunchStreamFetch(params: {
+  token: string;
+  userDirection?: string;
+  userBackground?: string;
+  jdText?: string;
+  jdUrl?: string;
+  jdFile?: File;
+  signal?: AbortSignal;
+}): AsyncGenerator<import("./prepare-types").PrepareSSEEvent, void, unknown> {
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
+  const form = new FormData();
+  if (params.userDirection) form.append("user_direction", params.userDirection);
+  if (params.userBackground)
+    form.append("user_background", params.userBackground);
+  if (params.jdText) form.append("jd_text", params.jdText);
+  if (params.jdUrl) form.append("jd_url", params.jdUrl);
+  if (params.jdFile) form.append("jd_file", params.jdFile);
+
+  const resp = await fetch(
+    `${baseUrl.replace(/\/$/, "")}/api/v1/prepare/launch`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${params.token}` },
+      body: form,
+      signal: params.signal,
+    },
+  );
 
   yield* _readPrepareStream(resp);
 }
@@ -382,30 +535,32 @@ export async function* resumePrepareStreamFetch(params: {
   userBackground?: string;
   jdText?: string;
   weakAreas?: string;
-  starStories?: string;
   signal?: AbortSignal;
 }): AsyncGenerator<import("./prepare-types").PrepareSSEEvent, void, unknown> {
   const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
   const form = new FormData();
   form.append("direction", params.direction);
-  if (params.userBackground) form.append("user_background", params.userBackground);
+  if (params.userBackground)
+    form.append("user_background", params.userBackground);
   if (params.jdText) form.append("jd_text", params.jdText);
   if (params.weakAreas) form.append("weak_areas", params.weakAreas);
-  if (params.starStories) form.append("star_stories", params.starStories);
 
-  const resp = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/prepare/resume`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${params.token}` },
-    body: form,
-    signal: params.signal,
-  });
+  const resp = await fetch(
+    `${baseUrl.replace(/\/$/, "")}/api/v1/prepare/resume`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${params.token}` },
+      body: form,
+      signal: params.signal,
+    },
+  );
 
   yield* _readPrepareStream(resp);
 }
 
 /** 内部通用的 SSE 读取生成器 */
 async function* _readPrepareStream(
-  resp: Response
+  resp: Response,
 ): AsyncGenerator<import("./prepare-types").PrepareSSEEvent, void, unknown> {
   if (!resp.ok || !resp.body) throw new Error("Prepare stream failed");
 
@@ -424,7 +579,9 @@ async function* _readPrepareStream(
         const trimmedLine = line.trim();
         if (trimmedLine.startsWith("data: ")) {
           try {
-            yield JSON.parse(trimmedLine.slice(6)) as import("./prepare-types").PrepareSSEEvent;
+            yield JSON.parse(
+              trimmedLine.slice(6),
+            ) as import("./prepare-types").PrepareSSEEvent;
           } catch {
             // ignore parsing error
           }
@@ -442,10 +599,11 @@ type AppRouter = {
 };
 
 export type EnterInterviewRoomContext = {
-  target_role: string;
+  target_role?: string;
   user_background?: string;
   jd_text?: string;
   jd_url?: string;
+  use_qa_bank?: boolean;
 };
 
 /** 统一封装从任意入口进入 /interview 的流程：写 sessionStorage + reset 后台 session + push。
@@ -476,4 +634,3 @@ export async function enterInterviewRoom({
 
   router.push("/interview");
 }
-

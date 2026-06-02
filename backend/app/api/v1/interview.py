@@ -78,6 +78,8 @@ async def turn(
                 db=db,
                 prepared_questions=req.prepared_questions,
                 jd_context=req.jd_context,
+                target_role=req.target_role,
+                use_qa_bank=req.use_qa_bank,
             ):
                 yield {
                     "event": event["event"],

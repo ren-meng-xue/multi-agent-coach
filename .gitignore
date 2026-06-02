@@ -20,6 +20,7 @@ node_modules/
 .env.*.local
 !.env.example
 !.env.claude-mcp-prod.example
+!.env.claude-mcp-openai.example
 
 # OS
 .DS_Store
@@ -44,7 +45,9 @@ dist/
 build/
 
 # Claude Code local
-.claude/
+.claude/*
+!.claude/skills/
+!.claude/skills/**
 .playwright-mcp/
 .gstack/
 

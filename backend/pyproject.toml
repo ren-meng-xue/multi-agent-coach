@@ -28,7 +28,11 @@ dependencies = [
     "pypdf2>=3.0.1",
     "mammoth>=1.8.0",
     "beautifulsoup4>=4.12.3",
+    "rich>=13.9.4",
 ]
+
+[project.scripts]
+eval-cli = "app.eval.cli:main"
 
 [dependency-groups]
 dev = [

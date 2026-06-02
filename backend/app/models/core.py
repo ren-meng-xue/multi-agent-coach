@@ -31,6 +31,8 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True)
     target_role: Mapped[str | None] = mapped_column(String(255))
     work_years: Mapped[str | None] = mapped_column(String(64))
+    resume_text: Mapped[str | None] = mapped_column(Text)
+    resume_filename: Mapped[str | None] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -38,39 +40,6 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
-    stories: Mapped[list["UserStory"]] = relationship(
-        back_populates="user",
-        cascade="all, delete-orphan",
-    )
-
-
-class UserStory(Base):
-    """用户的 STAR 故事库，用于面试时提取项目细节。"""
-
-    __tablename__ = "user_stories"
-    id: Mapped[UUID] = mapped_column(
-        PG_UUID(as_uuid=True),
-        primary_key=True,
-        server_default=text("gen_random_uuid()"),
-    )
-    user_id: Mapped[str] = mapped_column(
-        String(64),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    title: Mapped[str] = mapped_column(String(255), nullable=False)
-    role: Mapped[str | None] = mapped_column(String(255))
-    tags: Mapped[list[str] | None] = mapped_column(JSON)
-    content_json: Mapped[dict] = mapped_column(JSON, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
-
-    user: Mapped[User] = relationship(back_populates="stories")
 
 
 class InterviewSession(Base):
@@ -142,6 +111,11 @@ class InterviewSession(Base):
     pass_fail: Mapped[str | None] = mapped_column(String(20))
     key_issues: Mapped[list[str] | None] = mapped_column(JSON)
     report_json: Mapped[dict | None] = mapped_column(JSON)
+    use_qa_bank: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default="false",
+    )
 
     user: Mapped[User] = relationship(back_populates="interview_sessions")
     messages: Mapped[list["InterviewMessage"]] = relationship(

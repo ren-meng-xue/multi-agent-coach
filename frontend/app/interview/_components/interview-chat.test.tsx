@@ -10,7 +10,7 @@ if (typeof globalThis.crypto.randomUUID === "undefined") {
 }
 import userEvent from "@testing-library/user-event";
 import { InterviewChat } from "./interview-chat";
-import { startPrepareStreamFetch, streamInterviewChat } from "@/lib/interview-chat";
+import { startPrepareAndLaunchStreamFetch, startPrepareStreamFetch, streamInterviewChat } from "@/lib/interview-chat";
 import { useAuth } from "@clerk/nextjs";
 
 const mockUseAuth = vi.fn().mockReturnValue({
@@ -35,18 +35,33 @@ vi.mock("@/lib/interview-chat", () => ({
   streamInterviewChat: vi.fn(),
   resetInterviewSession: vi.fn().mockResolvedValue(undefined),
   startPrepareStreamFetch: vi.fn(),
+  startPrepareAndLaunchStreamFetch: vi.fn(),
   resumePrepareStreamFetch: vi.fn(),
   fetchActiveInterviewSession: vi.fn().mockResolvedValue({}),
+  fetchInterviewContext: vi.fn().mockResolvedValue({
+    is_returning: false,
+    target_role: null,
+    target_company: null,
+    user_background: null,
+    session_count: 0,
+    last_session_id: null,
+    resume_filename: "resume.pdf",
+  }),
   isTextMessage: (message: { role: string }) => message.role === "user" || message.role === "assistant",
   isPrepareTraceMessage: (message: { role: string; kind?: string }) =>
     message.role === "trace" && message.kind === "prepare",
   isTurnTraceMessage: (message: { role: string; kind?: string }) =>
     message.role === "trace" && message.kind === "turn",
+  formatTraceTokens: (id: string, tokens: string) => tokens,
+  INTERVIEW_NODE_TITLES: {},
+  INTERVIEW_NODE_LABELS: {},
+  PREPARE_NODE_TITLES: {},
 }));
 
 import { fetchActiveInterviewSession } from "@/lib/interview-chat";
 const mockStreamInterviewChat = vi.mocked(streamInterviewChat);
 const mockStartPrepareStreamFetch = vi.mocked(startPrepareStreamFetch);
+const mockStartPrepareAndLaunchStreamFetch = vi.mocked(startPrepareAndLaunchStreamFetch);
 const mockFetchActiveSession = vi.mocked(fetchActiveInterviewSession);
 
 describe("InterviewChat", () => {
@@ -56,6 +71,7 @@ describe("InterviewChat", () => {
     vi.useRealTimers();
     mockStreamInterviewChat.mockReset();
     mockStartPrepareStreamFetch.mockReset();
+    mockStartPrepareAndLaunchStreamFetch.mockReset();
     mockFetchActiveSession.mockReset();
     writeTextMock = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", {
@@ -91,10 +107,10 @@ describe("InterviewChat", () => {
   async function startPreparedInterview() {
     await userEvent.type(screen.getByLabelText("输入面试练习内容"), "练分布式系统");
     await userEvent.click(screen.getByRole("button", { name: "发送" }));
+    // 面试现在是自动开始的
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /开始本轮面试/ })).toBeInTheDocument();
-    });
-    await userEvent.click(screen.getByRole("button", { name: /开始本轮面试/ }));
+      expect(mockStreamInterviewChat).toHaveBeenCalled();
+    }, { timeout: 3000 });
   }
 
   it("输入栏固定在聊天面板底部，长内容只滚动消息区", () => {
@@ -146,7 +162,7 @@ describe("InterviewChat", () => {
 
     expect(screen.getByText("练分布式系统")).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /开始本轮面试/ })).toBeInTheDocument();
+      expect(screen.getAllByText(/准备就绪/).length).toBeGreaterThan(0);
     });
     expect(mockStartPrepareStreamFetch).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -199,7 +215,7 @@ describe("InterviewChat", () => {
     });
   });
 
-  it("流式请求失败后显示错误气泡并恢复输入", async () => {
+  it("首题启动失败后隐藏准备卡和内部开始动作，只保留紧凑错误行并恢复输入", async () => {
     mockPrepareDone();
     mockStreamInterviewChat.mockRejectedValue(new Error("AI 暂时无法响应"));
 
@@ -211,6 +227,7 @@ describe("InterviewChat", () => {
     await waitFor(() => {
       expect(screen.getByText("AI 暂时无法响应")).toBeInTheDocument();
     });
+    expect(screen.queryByText("准备完成")).not.toBeInTheDocument();
     expect(input).not.toBeDisabled();
   });
 
@@ -237,7 +254,6 @@ describe("InterviewChat", () => {
     await waitFor(() => {
       expect(screen.getAllByText(/准备就绪/).length).toBeGreaterThan(0);
     });
-    await userEvent.click(screen.getByRole("button", { name: /开始本轮面试/ }));
 
     // 等待消息流结束
     await waitFor(() => {
@@ -252,7 +268,7 @@ describe("InterviewChat", () => {
 
     // 检查复制的内容是否符合预期
     expect(writeTextMock).toHaveBeenCalledWith(
-      "【面试官】：你好！在开始之前，请告诉我你想练习的面试岗位、公司，或特定的技术主题。\n\n**你可以这样发起：**\n\n**前端开发**（例如：React 性能优化、大厂面试）\n\n**后端开发**（例如：Java/Go 微服务、高并发架构）\n\n**移动端开发**（例如：iOS/Android 实战、跨端架构）\n\n**Python AI Agent**（例如：RAG 优化、Agent 编排）\n\n请直接输入你的目标（例如：「我想面字节的前端岗位」），我们将立即开始。\n\n【求职者】：练分布式系统\n\n【求职者】：开始本轮面试\n\n【面试官】：请先介绍一个项目。"
+      "【面试官】：你好！我还没有读取到本场面试的目标岗位。请直接输入你想练习的岗位或面试方向，我们将立即开始。\n\n【求职者】：练分布式系统\n\n【面试官】：请先介绍一个项目。"
     );
 
     // 检查状态更新为“已复制”
@@ -266,9 +282,94 @@ describe("InterviewChat", () => {
     }, { timeout: 3000 });
   });
 
+  it("点击复制完整记录按钮可以将当前会话（含 AI 思考过程）格式化并复制到剪贴板", async () => {
+    mockStartPrepareStreamFetch.mockImplementation(async function* () {
+      yield {
+        event: "node_start",
+        data: { node: "master", label: "MASTER" }
+      };
+      yield {
+        event: "node_token",
+        data: { node: "master", text: "正在为您定制题目" }
+      };
+      yield {
+        event: "node_done",
+        data: { node: "master" }
+      };
+      yield {
+        event: "node_start",
+        data: { node: "question_gen", label: "出题专家" }
+      };
+      yield {
+        event: "node_token",
+        data: { node: "question_gen", text: '{"question": "什么是分布式锁？"}' }
+      };
+      yield {
+        event: "node_done",
+        data: { node: "question_gen" }
+      };
+      yield { event: "done", data: { prepared_questions: [], summary: "准备完成", direction: "分布式" } };
+    });
+
+    render(<InterviewChat />);
+
+    // 发送消息
+    await userEvent.type(screen.getByLabelText("输入面试练习内容"), "练分布式");
+    await userEvent.click(screen.getByRole("button", { name: "发送" }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/准备就绪/).length).toBeGreaterThan(0);
+    });
+
+    // 面试现在是自动开始的，不再需要手动点击“开始本轮面试”按钮
+    await waitFor(() => {
+      expect(mockStreamInterviewChat).toHaveBeenCalled();
+    }, { timeout: 3000 });
+
+    const fullCopyButton = screen.getByRole("button", { name: /复制完整记录/i });
+    expect(fullCopyButton).not.toBeDisabled();
+
+    // 模拟一个 Turn Trace 以测试评分和标签
+    await act(async () => {
+      mockStreamInterviewChat.mock.calls[0]?.[0].onTraceNode?.({
+        phase: "start",
+        node: "evaluator",
+        label: "评估官",
+      });
+      mockStreamInterviewChat.mock.calls[0]?.[0].onTraceNode?.({
+        phase: "done",
+        node: "evaluator",
+        summaryScore: 9.2,
+        candidateLevel: "senior",
+        latentSignals: ["架构思维强"],
+      });
+    });
+
+    // 等待 UI 更新显示思考节点
+    await waitFor(() => {
+      expect(screen.getByText(/评估官/)).toBeInTheDocument();
+    });
+
+    // 点击复制
+    await userEvent.click(fullCopyButton);
+
+    // 检查复制的内容是否包含所有结构化数据
+    const clipboardText = writeTextMock.mock.calls[writeTextMock.mock.calls.length - 1][0];
+    expect(clipboardText).toContain("【AI 思考过程 - 准备阶段】：");
+    expect(clipboardText).toContain("什么是分布式锁？");
+    expect(clipboardText).toContain("[级别: senior]");
+    expect(clipboardText).toContain("[信号: 架构思维强]");
+    expect(clipboardText).toContain("【求职者】：练分布式");
+
+    // 检查状态更新
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "已复制" })).toBeInTheDocument();
+    });
+  });
+
   it("初始渲染时显示 AI 开场引导消息，不为空白", () => {
     render(<InterviewChat />);
-    expect(screen.getByText(/面试岗位/)).toBeInTheDocument();
+    expect(screen.getByText(/目标岗位/)).toBeInTheDocument();
   });
 
   it("closing 阶段显示「开启下一场模拟面试」按钮，输入框仍可使用", async () => {
@@ -324,7 +425,7 @@ describe("InterviewChat", () => {
     await waitFor(() => {
       expect(screen.queryByText("本轮面试报告")).not.toBeInTheDocument();
     });
-    expect(screen.getByText(/面试岗位/)).toBeInTheDocument();
+    expect(screen.getByText(/目标岗位/)).toBeInTheDocument();
   });
 
   it("收到 report 事件后，ReportCard 在聊天流末尾渲染", async () => {
@@ -360,7 +461,7 @@ describe("InterviewChat", () => {
     render(<InterviewChat />);
 
     const input = screen.getByLabelText("输入面试练习内容");
-    
+
     // 1. isComposing = true 时，回车不发送
     await userEvent.type(input, "输入中");
     fireEvent.compositionStart(input); // 显式设置 isComposingRef = true
@@ -368,7 +469,7 @@ describe("InterviewChat", () => {
       key: "Enter",
       code: "Enter",
     });
-    
+
     // 等待以确保没有任何异步调用发生
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(mockStartPrepareStreamFetch).not.toHaveBeenCalled();
@@ -394,16 +495,16 @@ describe("InterviewChat", () => {
     render(<InterviewChat />);
 
     const input = screen.getByLabelText("输入面试练习内容");
-    
+
     // 确保有输入内容，否则 handleSubmit 会直接返回
     await userEvent.type(input, "内容");
-    
+
     // 1. 模拟合成开始
     fireEvent.compositionStart(input);
-    
+
     // 2. 模拟合成结束，但在紧接着触发 Enter (模拟某些浏览器下 compositionEnd 先于 keydown 的情况)
     fireEvent.compositionEnd(input);
-    
+
     // 此时 event.isComposing 为 false，但由于 setTimeout(..., 0)，isComposingRef 应该还在保护中
     fireEvent.keyDown(input, {
       key: "Enter",
@@ -411,14 +512,14 @@ describe("InterviewChat", () => {
       isComposing: false,
       nativeEvent: { isComposing: false },
     });
-    
+
     // 等待以确保没有任何发送调用发生
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(mockStartPrepareStreamFetch).not.toHaveBeenCalled();
-    
+
     // 3. 等待合成状态彻底清除（setTimeout 0 结束）
     await new Promise((resolve) => setTimeout(resolve, 10));
-    
+
     // 4. 再次回车，此时应该可以正常发送
     fireEvent.keyDown(input, {
       key: "Enter",
@@ -443,7 +544,7 @@ describe("InterviewChat", () => {
     // Phase 3: 有 target_role 时走多 Agent 准备流，首屏消息为空，不显示旧的开场消息
     expect(screen.queryByText(/前端工程师/)).not.toBeInTheDocument();
     // 通用开场白也不显示（由 PreparationCard 接管）
-    expect(screen.queryByText(/面试岗位/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/目标岗位/)).not.toBeInTheDocument();
   });
 
   it("准备流水线失败时回退到带岗位上下文的开场消息，不留下空白页", async () => {
@@ -469,7 +570,7 @@ describe("InterviewChat", () => {
 
     render(<InterviewChat />);
 
-    expect(screen.getByText(/面试岗位/)).toBeInTheDocument();
+    expect(screen.getByText(/目标岗位/)).toBeInTheDocument();
   });
 
   it("在用户发送回答后，渲染 TurnTraceCard，并通过 onTraceNode 事件更新卡片状态与评分", async () => {
@@ -479,7 +580,7 @@ describe("InterviewChat", () => {
     let round = 0;
     mockStreamInterviewChat.mockImplementation(async (options) => {
       const { onTraceNode, onDelta, onState } = options;
-      
+
       // 等待 10ms，让 React 先把 handleStartFirstQuestion 或 handleSend 产生的消息渲染上屏
       await new Promise((resolve) => setTimeout(resolve, 10));
 
@@ -532,7 +633,8 @@ describe("InterviewChat", () => {
     // 断言 TurnTraceCard 在聊天流中正确展现，包含评估分数与面试追问
     await waitFor(() => {
       expect(screen.getAllByText(/多 Agent/)[0]).toBeInTheDocument();
-      expect(screen.getByText(/8\.5/)).toBeInTheDocument();
+      // 由于是第 1 题（turnIndex=1）且 isOpening=true，评分 UI 是隐藏的，这里我们主要测试节点渲染
+      expect(screen.getByText(/评估/)).toBeInTheDocument();
       expect(screen.getByText(/你提到的 RAG 是如何调优的/)).toBeInTheDocument();
     });
   });
@@ -585,6 +687,73 @@ describe("InterviewChat", () => {
       await waitFor(() => {
         expect(screen.getByText("已开始的面试")).toBeInTheDocument();
       });
+      expect(replace).not.toHaveBeenCalled();
+    });
+
+    it("/interview/active 返回 prepare_trace 时在首题前恢复准备面板", async () => {
+      mockFetchActiveSession.mockResolvedValue({
+        session_id: "abc",
+        stage: "interview",
+        question_count: 1,
+        prepare_trace: {
+          status: "done",
+          nodes: [
+            {
+              id: "master",
+              label: "MASTER",
+              title: "识别方向，启动准备",
+              status: "done",
+              tokens: "• 用户目标是Senior Developer岗位。\n",
+            },
+          ],
+          questions: [],
+          summary: "",
+          direction: "Senior Developer",
+        },
+        messages: [
+          { role: "assistant", content: "第一题：请介绍项目" },
+        ],
+      } as any);
+      const replace = vi.fn();
+      vi.mocked(useRouter).mockReturnValue({ push: vi.fn(), replace } as any);
+
+      render(<InterviewChat />);
+
+      await waitFor(() => {
+        expect(screen.getByText("AI 思考过程 - 准备阶段")).toBeInTheDocument();
+      });
+      expect(screen.getByText("调度")).toBeInTheDocument();
+      expect(screen.getByText("用户目标是Senior Developer岗位。")).toBeInTheDocument();
+      expect(screen.getByText("第一题：请介绍项目")).toBeInTheDocument();
+      expect(replace).not.toHaveBeenCalled();
+    });
+
+    it("/interview/active 返回 opening 空会话时启动准备流水线，而不是静态开场", async () => {
+      mockFetchActiveSession.mockResolvedValue({
+        session_id: "abc",
+        target_role: "WEB前端工程师",
+        stage: "opening",
+        question_count: 0,
+        total_questions: 5,
+        messages: [],
+      } as any);
+      mockStartPrepareAndLaunchStreamFetch.mockImplementation(async function* () {
+        yield { event: "node_start", data: { node: "master", label: "MASTER" } };
+      });
+      const replace = vi.fn();
+      vi.mocked(useRouter).mockReturnValue({ push: vi.fn(), replace } as any);
+
+      render(<InterviewChat />);
+
+      await waitFor(() => {
+        expect(mockStartPrepareAndLaunchStreamFetch).toHaveBeenCalledWith(
+          expect.objectContaining({
+            token: "test-token",
+            userDirection: "WEB前端工程师",
+          }),
+        );
+      });
+      expect(screen.queryByText(/今天练/)).not.toBeInTheDocument();
       expect(replace).not.toHaveBeenCalled();
     });
 

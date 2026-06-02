@@ -1,7 +1,7 @@
 """Prompts for the multi-agent interviewer graph."""
 
 # ─────────────────────────────────────────────
-# 保留：原有出题/收尾/报告 prompt
+# 保留：原有出题/收尾/报告 prompts
 # ─────────────────────────────────────────────
 
 QUESTION_SYSTEM_PROMPT = (
@@ -28,7 +28,7 @@ CLOSING_SYSTEM_PROMPT = (
 )
 
 REPORT_FALLBACK_SYSTEM_PROMPT = (
-    "你是面试评估专家。请根据完整的面试对话对候选人进行结构化评分。"
+    "你是面试评估教练。请根据完整的面试对话对候选人进行结构化评分。"
     "评分维度各 0-5 分：technical_depth、quantified_results、failure_tradeoffs、structure。"
     "overall_score = 各维度均值 × 2，保留一位小数。"
     "1. highlights：2-3 条具体亮点。\n"
@@ -48,6 +48,12 @@ MASTER_REASONING_PROMPT = (
     "【输出要求】：\n"
     "- 必须是连贯的自然中文，不能输出 JSON、不能用 Markdown 标记。\n"
     "- 说清楚两件事：①这轮回答好不好（要不要评估）②下一步该追问、出新题还是收尾。\n"
+    "【终止判定】：\n"
+    "- **最高优先级**：如果候选人明确表达了结束、退出、不想继续或再见等意图，必须立即决定收尾（closing），严禁继续追问。\n"
+    "- 识别口径要宽：哪怕候选人只回了一两个短词（如孤立的“结束”“够了”“算了”“停止”“我说完了”“不想继续了”“拜拜”），只要语境是面向你这位面试官说的，都视为终止意图。不要因为字数短就降级判断。\n"
+    "- 反例：如果“结束”出现在长句中明显是话题语义（如“项目结束后我重构了…”），则不是终止意图。\n"
+    '- 例："候选人单独回了\'结束\'，明确请求收尾，立即进入 closing。"\n'
+    '- 例："候选人请求结束面试，立即进入收尾环节。"\n'
     '- 例："回答覆盖了 CAP 但没量化指标，先评估再追问 QPS 数据。"\n'
     '- 例："候选人跑题了，跳过评估直接拉回主线。"\n'
     '- 例："已经做完 5 道题，该收尾了。"\n'
@@ -88,14 +94,19 @@ EVALUATOR_REASONING_PROMPT = (
 )
 
 EVALUATOR_SCORING_PROMPT = (
-    "你是 AI 面试委员会的评估官。请对候选人本轮回答打 4 维度分（各 0-10 分）。\n"
-    "【维度】：\n"
+    "你是 AI 面试委员会的评估官。请对候选人本轮回答进行深度评估并打分。\n\n"
+    "【打分维度】（各 0-10 分）：\n"
     "- technical_depth：技术深度\n"
-    "- quantified_results：是否给出量化指标\n"
-    "- failure_tradeoffs：失败/降级/权衡的考虑\n"
-    "- structure：表达结构完整性\n"
-    "summary_score = 4 维度均值，保留一位小数。\n"
-    "bullets 字段填入刚才输出的 2-3 条要点（去掉行首 · 符号）。\n"
+    "- quantified_results：是否给出量化指标（数据、QPS、延迟等）\n"
+    "- failure_tradeoffs：是否考虑到失败、降级或方案权衡\n"
+    "- structure：表达是否条理清晰、逻辑严密\n"
+    "summary_score = 以上 4 维度均值，保留一位小数。\n\n"
+    "【画像识别】：\n"
+    "- candidate_level：根据表现判定级别（beginner/junior/mid/senior）\n"
+    "- latent_signals：识别出的具体工程能力或行为信号（如：workflow_orchestration, cloud_native_mindset, rigorous_testing 等）\n"
+    "- missing_dimensions：**【核心】识别候选人回答中明显缺失、以后需要加强的知识点或能力项**（如：缺少高可用设计、未考虑边界条件、缺乏成本意识等）。这些将作为其后续的练习重点。\n\n"
+    "【文字要求】：\n"
+    "bullets 字段填入刚才推理输出的 2-3 条要点摘要（去掉行首 · 符号）。\n\n"
     "【上下文】：\n{context}"
 )
 
@@ -120,7 +131,7 @@ FOLLOWUP_SYSTEM_PROMPT = (
 # ─────────────────────────────────────────────
 
 REPORT_AGGREGATE_SYSTEM_PROMPT = (
-    "你是面试评估总结专家。根据每轮已经打好的分数 + 整场对话内容，生成结构化总报告。"
+    "你是面试评估总结教练。根据每轮已经打好的分数 + 整场对话内容，生成结构化总报告。"
     "【输入】：每轮的评估摘要已附在上下文。\n"
     "【你的任务】：\n"
     "1. highlights：从所有 bullets 中提炼 2-3 条最突出的亮点。\n"

@@ -4,7 +4,7 @@
 运行方式：
     cd backend && .venv/bin/python -m pytest tests/eval/ -s -v
 
-不加 assert，只打印 LLM 实际输出，用于人工观察 prompt 效果。
+不加 assert，只打印 LLM 实际输出，用于人工观察 prompts 效果。
 不纳入 CI，需要真实 OPENAI_API_KEY。
 """
 import os

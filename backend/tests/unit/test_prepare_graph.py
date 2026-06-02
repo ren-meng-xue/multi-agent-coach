@@ -33,3 +33,25 @@ async def test_route_after_master_need_direction_returns_wait():
         "need_direction": True,
     }
     assert route_after_master(state) == "wait_direction"
+
+
+def test_memory_search_completion_trace_is_backend_generated():
+    from app.agents.prepare.graph import _node_completion_trace
+
+    lines = _node_completion_trace(
+        "memory_search",
+        {
+            "weak_areas": ["技术深度不足"],
+        },
+    )
+
+    assert "读取到历史薄弱点 1 项。" in lines
+    assert any("技术深度不足" in line for line in lines)
+
+
+def test_jd_analysis_completion_trace_handles_missing_jd():
+    from app.agents.prepare.graph import _node_completion_trace
+
+    assert _node_completion_trace("jd_analysis", {"jd_context": None}) == [
+        "未提供具体的职位描述（JD）。"
+    ]

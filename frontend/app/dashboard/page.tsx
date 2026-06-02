@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { AppShell } from "../components/app-shell";
 import { DashboardContent } from "./dashboard-content";
-import { fetchInterviewContext } from "@/lib/interview-chat";
+import { fetchDashboardData, type DashboardData } from "@/lib/user";
 
 const DEV_AUTH_BYPASS_TOKEN = "dev-auth-bypass-token";
 const isDevAuthBypassEnabled = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "1";
@@ -12,7 +12,7 @@ const isDevAuthBypassEnabled = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "1";
 /** 渲染个人仪表盘路由页面。 */
 export default function DashboardPage() {
   const { isLoaded, isSignedIn, getToken } = useAuth();
-  const [sessionCount, setSessionCount] = useState<number>(37);
+  const [data, setData] = useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -29,8 +29,8 @@ export default function DashboardPage() {
         return;
       }
       try {
-        const context = await fetchInterviewContext({ token });
-        setSessionCount(context.session_count);
+        const dashboardData = await fetchDashboardData({ token });
+        setData(dashboardData);
       } catch (error) {
         console.error("DashboardPage fetch error:", error);
       } finally {
@@ -51,8 +51,12 @@ export default function DashboardPage() {
               <div className="h-64 bg-[#e8e7e2] rounded-xl" />
            </div>
         </div>
+      ) : data ? (
+        <DashboardContent data={data} />
       ) : (
-        <DashboardContent sessionCount={sessionCount} />
+        <div className="flex items-center justify-center h-[60vh] text-gray-500">
+           数据加载失败，请重试
+        </div>
       )}
     </AppShell>
   );

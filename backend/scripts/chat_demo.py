@@ -3,7 +3,7 @@
 模拟真实面试一问一答，直接调 LangGraph，不需要启动 HTTP 服务。
 
 运行：
-    cd backend && .venv/bin/python scripts/chat_demo.py
+    cd backend && .venv/bin/python scripts-old1-old/chat_demo.py
 """
 import asyncio
 import sys
@@ -35,7 +35,7 @@ async def one_turn(state: InterviewState, user_input: str) -> tuple[str, Intervi
 
 
 def print_turn(role: str, text: str):
-    print(f"\n{'面试官' if role == 'ai' else '  用户'}：{text}")
+    print(f"\n{'面试官' if role == '.ai' else '  用户'}：{text}")
 
 
 async def main():
@@ -71,14 +71,14 @@ async def main():
         # ── 第 2 题：监控与调试，中等回答（缺量化），预期追问 ─
         (
             "我们用 LangSmith 做主要的追踪。"
-            "每个节点的输入/输出 State、LLM 调用的 prompt、token 用量和延迟都会自动上报，"
+            "每个节点的输入/输出 State、LLM 调用的 prompts、token 用量和延迟都会自动上报，"
             "当某个 Agent 决策异常时可以直接在 LangSmith 里回放完整执行路径。"
         ),
 
         # ── 追问后：加入量化和权衡，预期进入第 3 题 ──────────
         (
             "具体 case：decide_next 节点偶尔把弱回答判成 next_question。"
-            "我在 LangSmith 过滤出这批异常，发现是 prompt 里没要求量化结果需有基线对比。"
+            "我在 LangSmith 过滤出这批异常，发现是 prompts 里没要求量化结果需有基线对比。"
             "修复后误判率从约 20% 降到 3%。"
             "同时用 structlog 记录每轮 action/reason，接入 Grafana 看板做趋势监控。"
             "权衡：LangSmith 全量追踪成本高，prod 只追踪异常路径，dev 全量开。"
@@ -92,7 +92,7 @@ async def main():
     for user_input in script:
         print_turn("user", user_input)
         reply, state = await one_turn(state, user_input)
-        print_turn("ai", reply)
+        print_turn(".ai", reply)
         print(f"  [stage={state.get('stage')}, 第{state.get('question_count')}题, followup={state.get('followup_count')}]")
 
     print("\n" + "=" * 50)

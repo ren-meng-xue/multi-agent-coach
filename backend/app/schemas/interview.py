@@ -49,6 +49,8 @@ class TurnRequest(BaseModel):
     message: str
     prepared_questions: list[dict[str, Any]] | None = None
     jd_context: dict[str, Any] | None = None
+    target_role: str | None = None
+    use_qa_bank: bool = False
 
     @field_validator("message")
     @classmethod
@@ -66,10 +68,11 @@ class UserContextResponse(BaseModel):
 
     is_returning: bool
     target_role: str | None
-    work_years: str | None = None
     target_company: str | None
     user_background: str | None
     session_count: int
+    last_session_id: str | None = None
+    resume_filename: str | None = None
 
 
 class ResetRequest(BaseModel):
@@ -128,4 +131,5 @@ class ActiveSessionResponse(BaseModel):
     total_questions: int = 5
     followup_count: int = 0
     messages: list[ActiveMessageItem] = []
+    prepare_trace: dict[str, Any] | None = None
     report: dict[str, Any] | None = None

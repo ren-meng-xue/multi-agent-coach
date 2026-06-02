@@ -1,7 +1,10 @@
 """验证 report_node 的 CandidateMemory 持久化集成。"""
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
 from app.agents.interviewer.nodes import report_node
+
 
 @pytest.mark.asyncio
 async def test_report_node_calls_upsert_memory(db):
@@ -27,27 +30,29 @@ async def test_report_node_calls_upsert_memory(db):
         ],
         "messages": []
     }
-    
-    # Mock upsert_candidate_memory
-    with patch("app.agents.interviewer.nodes.upsert_candidate_memory", new_callable=AsyncMock) as mock_upsert:
-        # 还需要 Mock _report_aggregate_text 避免调 LLM
-        with patch("app.agents.interviewer.nodes._report_aggregate_text", new_callable=AsyncMock) as mock_text:
-            mock_text.return_value = MagicMock(
-                highlights=[], improvements=[], key_concepts=[], common_mistakes=[]
-            )
-            
-            await report_node(state)
-            
-            # 验证调用
-            mock_upsert.assert_called_once()
-            # 检查 positional args
-            args, kwargs = mock_upsert.call_args
-            # 第一个参数是 db，第二个是 user_id
-            assert args[1] == "user_test_123"
-            assert kwargs["latest_level"] == "senior"
-            assert set(kwargs["latent_signals"]) == {"signal1", "signal2"}
-            # 验证短板标签去重
-            assert set(kwargs["weakness_tags"]) == {"dim1", "dim2"}
+
+    # Mock upsert_candidate_memory 和 _report_aggregate_text
+    with (
+        patch("app.agents.interviewer.nodes.upsert_candidate_memory", new_callable=AsyncMock) as mock_upsert,
+        patch("app.agents.interviewer.nodes._report_aggregate_text", new_callable=AsyncMock) as mock_text,
+    ):
+        mock_text.return_value = MagicMock(
+            highlights=[], improvements=[], key_concepts=[], common_mistakes=[]
+        )
+
+        await report_node(state)
+
+        # 验证调用
+        mock_upsert.assert_called_once()
+        # 检查 positional args
+        args, kwargs = mock_upsert.call_args
+        # 第一个参数是 db，第二个是 user_id
+        assert args[1] == "user_test_123"
+        assert kwargs["latest_level"] == "senior"
+        assert set(kwargs["latent_signals"]) == {"signal1", "signal2"}
+        # 验证短板标签去重
+        assert set(kwargs["weakness_tags"]) == {"dim1", "dim2"}
+
 
 @pytest.mark.asyncio
 async def test_report_node_swallows_upsert_memory_error(db):
@@ -63,14 +68,16 @@ async def test_report_node_swallows_upsert_memory_error(db):
         }],
         "messages": []
     }
-    
-    with patch("app.agents.interviewer.nodes.upsert_candidate_memory", side_effect=Exception("DB Error")):
-        with patch("app.agents.interviewer.nodes._report_aggregate_text", new_callable=AsyncMock) as mock_text:
-            mock_text.return_value = MagicMock(
-                highlights=[], improvements=[], key_concepts=[], common_mistakes=[]
-            )
-            
-            result = await report_node(state)
-            # 验证报告依然产出了
-            assert "report" in result
-            assert result["report"]["overall_score"] > 0
+
+    with (
+        patch("app.agents.interviewer.nodes.upsert_candidate_memory", side_effect=Exception("DB Error")),
+        patch("app.agents.interviewer.nodes._report_aggregate_text", new_callable=AsyncMock) as mock_text,
+    ):
+        mock_text.return_value = MagicMock(
+            highlights=[], improvements=[], key_concepts=[], common_mistakes=[]
+        )
+
+        result = await report_node(state)
+        # 验证报告依然产出了
+        assert "report" in result
+        assert result["report"]["overall_score"] > 0

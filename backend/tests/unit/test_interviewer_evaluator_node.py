@@ -218,7 +218,7 @@ async def test_followup_injects_focus_and_signals_into_prompt():
     captured = {}
 
     async def fake_generate(system_prompt: str, state):
-        captured["prompt"] = system_prompt
+        captured["prompts"] = system_prompt
         return "针对 event lifecycle 的追问"
 
     state = {
@@ -235,9 +235,9 @@ async def test_followup_injects_focus_and_signals_into_prompt():
     with patch("app.agents.interviewer.nodes._generate_text", new=AsyncMock(side_effect=fake_generate)):
         result = await followup_node(state)
 
-    assert "workflow_orchestration" in captured["prompt"]
-    assert "architecture" in captured["prompt"]
-    assert "followup_focus" in captured["prompt"]
+    assert "workflow_orchestration" in captured["prompts"]
+    assert "architecture" in captured["prompts"]
+    assert "followup_focus" in captured["prompts"]
     assert result["assistant_message"] == "针对 event lifecycle 的追问"
     assert result["followup_count"] == 1
 

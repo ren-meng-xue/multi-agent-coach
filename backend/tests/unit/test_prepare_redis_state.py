@@ -47,14 +47,12 @@ async def test_prepare_resume_pulls_from_redis():
     # 模拟 Redis 返回上一轮的缓存状态
     cached_state = {
         "weak_areas": ["Concurrency", "SSRF"],
-        "star_stories": [{"id": 1, "title": "SSRF Fix"}]
     }
     mock_redis.get.return_value = json.dumps(cached_state)
 
     async def mock_stream(state):
         # 验证传入 Graph 运行的 state 中正确回填了 Redis 里的缓存数据
         assert state["weak_areas"] == ["Concurrency", "SSRF"]
-        assert state["star_stories"] == [{"id": 1, "title": "SSRF Fix"}]
         # 验证客户端传的 direction 有效
         assert state["user_direction"] == "Security Expert"
         yield {"event": "done", "data": {}}

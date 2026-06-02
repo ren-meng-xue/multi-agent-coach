@@ -1,9 +1,11 @@
 """验证 CandidateMemory 服务的 upsert 逻辑。"""
+from datetime import datetime
+
 import pytest
-from datetime import datetime, timedelta
-from sqlalchemy import select
-from app.models.core import User, CandidateMemory, InterviewSession
+
+from app.models.core import InterviewSession, User
 from app.services.candidate_memory import upsert_candidate_memory
+
 
 @pytest.fixture
 async def test_user(db):

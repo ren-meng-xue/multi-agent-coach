@@ -7,6 +7,8 @@ from sqlalchemy import select
 
 from app.models.core import InterviewMessage, InterviewSession, User
 from app.services.interview_turn import (
+    encode_prepare_trace_message,
+    get_active_interview_session,
     get_or_create_active_session,
     reset_interview_session,
     stream_interview_turn,
@@ -56,6 +58,41 @@ async def test_get_or_create_active_session_abandons_stale_active_run(db):
     assert old_session.status == "abandoned"
     assert new_session.status == "in_progress"
     assert is_first_time is False
+
+
+@pytest.mark.asyncio
+async def test_active_session_returns_prepare_trace_snapshot(db):
+    """恢复活动会话时，应返回后端持久化的准备阶段 trace 快照。"""
+    user_id = f"user_prepare_trace_{uuid4().hex}"
+    session, _ = await get_or_create_active_session(db, user_id=user_id)
+    trace_payload = {
+        "status": "done",
+        "nodes": [
+            {
+                "id": "master",
+                "label": "MASTER",
+                "title": "识别方向，启动准备",
+                "status": "done",
+                "tokens": "• 用户目标是Senior Developer岗位。\n",
+            }
+        ],
+        "questions": [],
+        "summary": "",
+        "direction": "Senior Developer",
+    }
+    db.add(
+        InterviewMessage(
+            session_id=session.id,
+            role="system",
+            content=encode_prepare_trace_message(trace_payload),
+        )
+    )
+    await db.commit()
+
+    active = await get_active_interview_session(db, user_id=user_id)
+
+    assert active["prepare_trace"] == trace_payload
+    assert active["messages"] == []
 
 
 @pytest.mark.asyncio
@@ -113,6 +150,69 @@ async def test_stream_interview_turn_persists_user_and_assistant_messages(db, mo
     assert session.target_company == "大厂"
     assert session.user_background == "多 Agent 面试教练项目"
     assert session.question_count == 1
+
+
+@pytest.mark.asyncio
+async def test_first_question_uses_prepared_questions_for_existing_user_session(db, monkeypatch):
+    """即使不是首次用户，首题启动也必须把准备阶段题目传入图状态。"""
+    user_id = f"user_turn_prepared_existing_{uuid4().hex}"
+    old_session, _ = await get_or_create_active_session(db, user_id=user_id)
+    old_session.status = "abandoned"
+    await db.commit()
+    await reset_interview_session(
+        db,
+        user_id=user_id,
+        target_role="前端工程师",
+        user_background="Vue 项目",
+    )
+
+    prepared_questions = [
+        {
+            "id": 1,
+            "question": "请描述一次你和 UI/UX 设计师协作的经历。",
+            "category": "behavioral",
+            "focus_area": "协作",
+            "priority": 1,
+        }
+    ]
+    captured_state = {}
+
+    async def fake_graph_events(state):
+        captured_state.update(state)
+        yield {
+            "event": "final",
+            "data": {
+                **state,
+                "stage": "interview",
+                "question_count": 1,
+                "assistant_message": "请描述一次你和 UI/UX 设计师协作的经历。",
+            },
+        }
+
+    monkeypatch.setattr("app.services.interview_turn.stream_interviewer_turn_events", fake_graph_events)
+
+    events = [
+        event
+        async for event in stream_interview_turn(
+            "__START__",
+            user_id=user_id,
+            db=db,
+            prepared_questions=prepared_questions,
+        )
+    ]
+
+    assert captured_state["prepared_questions"] == prepared_questions
+    assert "db" not in captured_state
+    assert any(event["event"] == "done" for event in events)
+
+    message_result = await db.execute(
+        select(InterviewMessage)
+        .where(InterviewMessage.session_id == captured_state["session_id"])
+        .order_by(InterviewMessage.created_at)
+    )
+    messages = message_result.scalars().all()
+    assert [m.role for m in messages] == ["assistant"]
+    assert all(m.content != "__START__" for m in messages)
 
 
 @pytest.mark.asyncio

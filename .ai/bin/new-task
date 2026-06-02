@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# .ai/bin/new-task
+# 职责：自动创建任务脚手架，确保时间戳和 ID 格式绝对正确。
+
+set -euo pipefail
+
+if [ $# -lt 1 ]; then
+    echo "Usage: $0 <name> [workflow] [priority] [depth]"
+    echo "  depth: quick | standard | thorough | full (default: standard)"
+    exit 1
+fi
+
+NAME=$1
+WF=${2:-feature}
+PRIORITY=${3:-normal}
+DEPTH=${4:-standard}
+
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+WORKFLOWS_DIR="$ROOT/.ai/workflows"
+
+# 校验 workflow 存在性
+if [ ! -f "$WORKFLOWS_DIR/$WF.yaml" ]; then
+    echo "ERROR: Workflow '$WF' not found in $WORKFLOWS_DIR"
+    echo "Available workflows:"
+    ls "$WORKFLOWS_DIR"/*.yaml | xargs -n1 basename | sed 's/\.yaml//'
+    exit 1
+fi
+
+# 校验 task name 格式 (小写连字符)
+if [[ ! "$NAME" =~ ^[a-z0-9-]+$ ]]; then
+    echo "ERROR: Task name '$NAME' is invalid. Must be lowercase alphanumeric with hyphens (e.g., 'fix-bug-123')."
+    exit 1
+fi
+
+VALID_DEPTHS="quick standard thorough full"
+if ! echo "$VALID_DEPTHS" | grep -qw "$DEPTH"; then
+    echo "ERROR: depth must be one of: $VALID_DEPTHS"
+    exit 1
+fi
+
+DATE_ID=$(date +%Y%m%d)
+TASK_ID="${DATE_ID}-${NAME}"
+TASK_DIR="$ROOT/.ai/tasks/$TASK_ID"
+CREATED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+if [ -d "$TASK_DIR" ]; then
+    echo "ERROR: Task directory already exists: $TASK_DIR"
+    exit 1
+fi
+
+mkdir -p "$TASK_DIR"
+
+# 创建 status.json (对齐 .ai/prompts/status-template.md)
+cat <<EOF > "$TASK_DIR/status.json"
+{
+  "task_id": "$TASK_ID",
+  "title": "",
+  "workflow": "$WF",
+  "state": "plan",
+  "current_owner": "planner",
+  "next_owner": null,
+  "priority": "$PRIORITY",
+  "depth": "$DEPTH",
+  "created_at": "$CREATED_AT",
+  "updated_at": "$CREATED_AT",
+  "blockers": [],
+  "notes": ""
+}
+EOF
+
+# 创建基础 task.md
+cat <<EOF > "$TASK_DIR/task.md"
+# Task: $NAME
+
+## Description
+(在此输入详细描述)
+
+## Acceptance Criteria
+- [ ] 
+EOF
+
+echo "✅ Task created: $TASK_ID"
+echo "Path: $TASK_DIR"

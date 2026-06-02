@@ -2,10 +2,11 @@
 import json
 from typing import Any
 
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, func
+from sqlalchemy.ext.asyncio import AsyncSession
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.agents.coach.prompts import COACH_PLAN_SYSTEM_PROMPT, COACH_REVIEW_SYSTEM_PROMPT
@@ -48,13 +49,19 @@ async def _generate_review_text(state: CoachState) -> str:
     model = _chat_model(streaming=True).with_config(tags=["coach_review_stream"])
     
     memory_ctx = f"【候选人长期记忆】\n{json.dumps(state['candidate_memory'], ensure_ascii=False)}"
-    session_ctx = f"【最近一场面试表现】\n{json.dumps(state['last_session_report'], ensure_ascii=False)}"
-    
-    prompt = f"{COACH_REVIEW_SYSTEM_PROMPT}\n\n{memory_ctx}\n\n{session_ctx}"
+    session_ctx = (
+        f"【最近一场面试表现】\n"
+        f"岗位：{state['target_role'] or '未指定'}\n"
+        f"报告内容：{json.dumps(state['last_session_report'], ensure_ascii=False)}"
+    )
     
     # 模拟 astream 以便 SSE 捕获 tokens
     full_text = []
-    async for chunk in model.astream([SystemMessage(content=prompt)]):
+    messages = [
+        SystemMessage(content=COACH_REVIEW_SYSTEM_PROMPT),
+        HumanMessage(content=f"{memory_ctx}\n\n{session_ctx}")
+    ]
+    async for chunk in model.astream(messages):
         content = chunk.content
         if isinstance(content, str):
             full_text.append(content)
@@ -73,10 +80,14 @@ async def _generate_structured_plan(state: CoachState) -> CoachPlanSchema:
     
     review_ctx = f"【复盘总结】\n{state['review_text']}"
     memory_ctx = f"【候选人长期画像】\n{json.dumps(state['candidate_memory'], ensure_ascii=False)}"
+    role_ctx = f"【本次练习岗位】\n{state['target_role'] or '未指定'}"
     
-    prompt = f"{COACH_PLAN_SYSTEM_PROMPT}\n\n{review_ctx}\n\n{memory_ctx}"
+    messages = [
+        SystemMessage(content=COACH_PLAN_SYSTEM_PROMPT),
+        HumanMessage(content=f"{role_ctx}\n\n{review_ctx}\n\n{memory_ctx}")
+    ]
     
-    result = await model.ainvoke([SystemMessage(content=prompt)])
+    result = await model.ainvoke(messages)
     if isinstance(result, CoachPlanSchema):
         return result
     raise ValueError("LLM failed to produce CoachPlanSchema")
@@ -91,7 +102,19 @@ async def load_memory_node(state: CoachState) -> dict[str, Any]:
     user_id = state["user_id"]
     session_id = state["session_id"]
     
-    # 1. 加载长期记忆
+    # 1. 统计面试总场次 (仅统计已完成且有评分的)
+    count_stmt = (
+        select(func.count(InterviewSession.id))
+        .where(
+            InterviewSession.user_id == user_id,
+            InterviewSession.status == "completed",
+            InterviewSession.score.is_not(None)
+        )
+    )
+    count_res = await db.execute(count_stmt)
+    total_sessions = count_res.scalar() or 0
+
+    # 2. 加载长期记忆
     stmt_mem = select(CandidateMemory).where(CandidateMemory.user_id == user_id)
     res_mem = await db.execute(stmt_mem)
     mem_row = res_mem.scalar_one_or_none()
@@ -102,19 +125,28 @@ async def load_memory_node(state: CoachState) -> dict[str, Any]:
             "latest_level": mem_row.latest_level,
             "cumulative_signals": mem_row.cumulative_signals,
             "weakness_tags": mem_row.weakness_tags,
-            "total_sessions": mem_row.total_sessions,
+            "total_sessions": total_sessions,
+        }
+    else:
+        candidate_memory = {
+            "latest_level": None,
+            "cumulative_signals": [],
+            "weakness_tags": [],
+            "total_sessions": total_sessions,
         }
     
-    # 2. 加载最近面试报告
+    # 2. 加载最近面试报告与岗位
     stmt_session = select(InterviewSession).where(InterviewSession.id == session_id)
     res_session = await db.execute(stmt_session)
     session_row = res_session.scalar_one_or_none()
     
     last_session_report = session_row.report_json if session_row else {}
+    target_role = session_row.target_role if session_row else None
     
     return {
         "candidate_memory": candidate_memory,
-        "last_session_report": last_session_report
+        "last_session_report": last_session_report,
+        "target_role": target_role
     }
 
 async def review_node(state: CoachState) -> dict[str, Any]:

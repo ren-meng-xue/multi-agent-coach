@@ -17,24 +17,13 @@ async def test_memory_search_returns_weak_areas_from_history():
             target_role="AI Agent 工程师",
         )
     ]
-    mock_stories = [
-        MagicMock(
-            title="LangGraph 工单系统",
-            role="AI 工程师",
-            tags=["LangGraph", "Agent"],
-            content_json={"situation": "...", "task": "...", "action": "...", "result": "..."},
-        )
-    ]
 
     state: PrepareState = {"user_id": "user_123", "user_direction": "AI Agent 工程师"}
 
-    with patch("app.agents.prepare.nodes._get_recent_sessions", new_callable=AsyncMock, return_value=mock_sessions), \
-         patch("app.agents.prepare.nodes._get_user_stories", new_callable=AsyncMock, return_value=mock_stories):
+    with patch("app.agents.prepare.nodes._get_recent_sessions", new_callable=AsyncMock, return_value=mock_sessions):
         result = await memory_search_node(state)
 
     assert len(result["weak_areas"]) > 0
-    assert len(result["star_stories"]) == 1
-    assert result["star_stories"][0]["title"] == "LangGraph 工单系统"
 
 
 @pytest.mark.asyncio
@@ -44,12 +33,10 @@ async def test_memory_search_empty_when_no_history():
 
     state: PrepareState = {"user_id": "new_user"}
 
-    with patch("app.agents.prepare.nodes._get_recent_sessions", new_callable=AsyncMock, return_value=[]), \
-         patch("app.agents.prepare.nodes._get_user_stories", new_callable=AsyncMock, return_value=[]):
+    with patch("app.agents.prepare.nodes._get_recent_sessions", new_callable=AsyncMock, return_value=[]):
         result = await memory_search_node(state)
 
     assert result["weak_areas"] == []
-    assert result["star_stories"] == []
 
 
 @pytest.mark.asyncio
@@ -104,7 +91,6 @@ async def test_question_gen_returns_5_questions():
         "direction": "AI Agent 工程师",
         "user_direction": "AI Agent 工程师",
         "weak_areas": ["量化结果欠缺"],
-        "star_stories": [],
         "jd_context": None,
     }
 
@@ -132,7 +118,6 @@ async def test_question_gen_weak_areas_first():
         "direction": "后端工程师",
         "user_direction": "后端工程师",
         "weak_areas": ["量化结果欠缺", "系统设计薄弱"],
-        "star_stories": [],
         "jd_context": None,
     }
 
@@ -159,7 +144,6 @@ async def test_master_detects_direction_from_user_input():
         "user_direction": "AI Agent 工程师",
         "jd_raw": None,
         "weak_areas": [],
-        "star_stories": [],
     }
 
     mock_decision = MagicMock()
@@ -194,7 +178,6 @@ async def test_master_sets_need_direction_when_no_input():
         "user_direction": None,
         "jd_raw": None,
         "weak_areas": [],
-        "star_stories": [],
     }
 
     mock_decision = MagicMock()
@@ -225,7 +208,6 @@ async def test_master_includes_memory_search_when_has_history():
         "user_direction": "后端工程师",
         "jd_raw": None,
         "weak_areas": ["量化不足"],  # 已有历史
-        "star_stories": [],
     }
 
     mock_decision = MagicMock()

@@ -1,14 +1,12 @@
 """验证用户阶段 API 接口。"""
-import pytest
-from fastapi.testclient import TestClient
-from app.main import app
-from app.core.auth import get_current_user_id
+from unittest.mock import AsyncMock, patch
 
-from unittest.mock import patch, AsyncMock
 import pytest
 from fastapi.testclient import TestClient
-from app.main import app
+
 from app.core.auth import get_current_user_id
+from app.main import app
+
 
 @pytest.fixture
 def mock_auth():

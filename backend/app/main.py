@@ -13,9 +13,11 @@ from app.agents.interviewer.graph import (
 )
 from app.api.v1 import auth as auth_v1
 from app.api.v1 import coach as coach_v1
+from app.api.v1 import eval as eval_v1
 from app.api.v1 import health as health_v1
 from app.api.v1 import interview as interview_v1
 from app.api.v1 import prepare as prepare_v1
+from app.api.v1 import qa_bank as qa_bank_v1
 from app.api.v1 import user as user_v1
 from app.core.config import configure_langsmith_environment, get_settings
 from app.core.exceptions import AppException
@@ -173,4 +175,6 @@ app.include_router(interview_v1.router, prefix="/api/v1", tags=["interview"])
 app.include_router(prepare_v1.router, prefix="/api/v1", tags=["prepare"])
 app.include_router(user_v1.router, prefix="/api/v1", tags=["user"])
 app.include_router(coach_v1.router, prefix="/api/v1", tags=["coach"])
+app.include_router(eval_v1.router, prefix="/api/v1", tags=["eval"])
+app.include_router(qa_bank_v1.router, prefix="/api/v1", tags=["qa-bank"])
 app.include_router(coach_v1.router, prefix="/api", tags=["coach"])

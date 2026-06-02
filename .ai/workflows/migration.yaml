@@ -1,0 +1,63 @@
+id: migration
+version: 2
+name: Migration Flow
+description: 数据迁移流程。review-first 模式，先评审方案再执行迁移。
+
+entry: plan
+terminal: done
+
+steps:
+  office-hours:
+    owner: planner
+    min_depth: thorough
+    next: plan
+
+  plan:
+    owner: planner
+    min_depth: quick
+    outputs:
+      - task.md
+      - plan.md
+    checkpoint: true
+    next: review
+
+  review:
+    owner: reviewer
+    min_depth: quick
+    outputs:
+      - review.md
+    next: migration
+    transitions:
+      approved: migration
+      changes_requested: plan
+
+  migration:
+    owner: backend
+    min_depth: quick
+    next: verification
+    on_blocked: blocked
+
+  blocked:
+    owner: current_agent
+    min_depth: quick
+    resume_to: migration
+
+  verification:
+    owner: tester
+    min_depth: quick
+    next: ship
+    transitions:
+      passed: ship
+      failed: migration
+
+  ship:
+    owner: planner
+    min_depth: full
+    checkpoint: true
+    next: done
+
+  done:
+    owner: planner
+    min_depth: quick
+    outputs:
+      - handoff.md
