@@ -48,7 +48,6 @@ async def _call_question(input_json: dict[str, Any]) -> dict[str, Any]:
         direction (str)
         user_direction (str | None)
         weak_areas (list[str])
-        star_stories (list[dict], 每项含 title)
         jd_context (dict | None, 含 focus_areas / key_skills)
     """
     state = cast(PrepareState, {**input_json})

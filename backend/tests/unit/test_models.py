@@ -12,11 +12,11 @@ def test_users_table_registered():
     assert table_names == {
         # 业务表
         "users",
-        "user_stories",
         "interview_sessions",
         "interview_messages",
         "candidate_memory",
         "coach_plans",
+        "user_qa_bank",
         # 评估系统表（phase4-parallel-eval）
         "eval_suites",
         "eval_cases",
@@ -31,7 +31,7 @@ def test_users_table_columns():
     from app.models.core import User
 
     cols = {c.name for c in User.__table__.columns}
-    assert cols == {"id", "email", "target_role", "work_years", "created_at"}
+    assert cols == {"id", "email", "target_role", "work_years", "resume_text", "resume_filename", "created_at"}
 
 
 def test_interview_sessions_table_columns():
@@ -56,6 +56,7 @@ def test_interview_sessions_table_columns():
         "pass_fail",
         "key_issues",
         "report_json",
+        "use_qa_bank",
     }
 
 

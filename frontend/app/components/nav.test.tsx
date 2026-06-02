@@ -36,10 +36,8 @@ describe("MainNav", () => {
     // 面试房间已收紧为 Coach 的派生入口，不在导航栏单列
     expect(screen.queryByText("面试房间")).not.toBeInTheDocument();
     expect(screen.getByText("个人仪表盘")).toBeInTheDocument();
-    expect(screen.getByText("设置 & 故事库")).toBeInTheDocument();
+    expect(screen.getByText("设置")).toBeInTheDocument();
   });
-
-
 
   it("根据当前路径高亮对应菜单项", () => {
     mockUsePathname.mockReturnValue("/dashboard");

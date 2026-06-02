@@ -1,4 +1,4 @@
-/** 用户个人资料与故事库的 API 封装。 */
+/** 用户个人资料的 API 封装。 */
 
 export type UserProfile = {
   id: string;
@@ -8,23 +8,6 @@ export type UserProfile = {
   resume_text: string | null;
   evaluation: string | null;
   total_sessions: number;
-};
-
-export type UserStory = {
-  id: string;
-  user_id: string;
-  title: string;
-  role: string | null;
-  tags: string[] | null;
-  content_json: {
-    situation?: string;
-    task?: string;
-    action?: string;
-    result?: string;
-    [key: string]: any;
-  };
-  created_at: string;
-  updated_at: string;
 };
 
 export type UserProfileResponse = {
@@ -55,20 +38,6 @@ export type DashboardData = {
   }[];
 };
 
-export type UserStoryResponse = {
-  code: number;
-  msg: string;
-  data: UserStory;
-};
-
-export type UserStoryListResponse = {
-  code: number;
-  msg: string;
-  data: {
-    stories: UserStory[];
-  };
-};
-
 const getBaseUrl = () => {
   const baseUrl = process.env.NEXT_PUBLIC_API_URL;
   if (!baseUrl) throw new Error("缺少后端接口配置");
@@ -76,7 +45,10 @@ const getBaseUrl = () => {
 };
 
 /** 统一处理响应。 */
-async function handleResponse<T>(response: Response, errorMsg: string): Promise<T> {
+async function handleResponse<T>(
+  response: Response,
+  errorMsg: string,
+): Promise<T> {
   if (!response.ok) {
     const errorBody = await response.json().catch(() => ({}));
     throw new Error(`${errorMsg}: ${response.status} ${errorBody.msg || ""}`);
@@ -86,7 +58,11 @@ async function handleResponse<T>(response: Response, errorMsg: string): Promise<
 }
 
 /** 获取用户 Dashboard 看板数据。 */
-export async function fetchDashboardData({ token }: { token: string }): Promise<DashboardData> {
+export async function fetchDashboardData({
+  token,
+}: {
+  token: string;
+}): Promise<DashboardData> {
   const response = await fetch(`${getBaseUrl()}/api/v1/user/dashboard`, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -94,78 +70,15 @@ export async function fetchDashboardData({ token }: { token: string }): Promise<
 }
 
 /** 获取用户个人配置。 */
-export async function fetchUserProfile({ token }: { token: string }): Promise<UserProfile> {
+export async function fetchUserProfile({
+  token,
+}: {
+  token: string;
+}): Promise<UserProfile> {
   const response = await fetch(`${getBaseUrl()}/api/v1/user/profile`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   return handleResponse<UserProfile>(response, "获取用户资料失败");
-}
-
-/** 获取故事列表。 */
-export async function fetchUserStories({ token }: { token: string }): Promise<UserStory[]> {
-  const response = await fetch(`${getBaseUrl()}/api/v1/user/stories`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  const data = await handleResponse<{ stories: UserStory[] }>(response, "获取故事库失败");
-  return data.stories;
-}
-
-/** 创建新故事。 */
-export async function createUserStory({
-  token,
-  story,
-}: {
-  token: string;
-  story: Omit<UserStory, "id" | "user_id" | "created_at" | "updated_at">;
-}): Promise<UserStory> {
-  const response = await fetch(`${getBaseUrl()}/api/v1/user/stories`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(story),
-  });
-  return handleResponse<UserStory>(response, "创建故事失败");
-}
-
-/** 更新故事内容。 */
-export async function updateUserStory({
-  token,
-  storyId,
-  story,
-}: {
-  token: string;
-  storyId: string;
-  story: Partial<Omit<UserStory, "id" | "user_id" | "created_at" | "updated_at">>;
-}): Promise<UserStory> {
-  const response = await fetch(`${getBaseUrl()}/api/v1/user/stories/${storyId}`, {
-    method: "PATCH",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(story),
-  });
-  return handleResponse<UserStory>(response, "更新故事失败");
-}
-
-/** 删除故事。 */
-export async function deleteUserStory({
-  token,
-  storyId,
-}: {
-  token: string;
-  storyId: string;
-}): Promise<void> {
-  const response = await fetch(`${getBaseUrl()}/api/v1/user/stories/${storyId}`, {
-    method: "DELETE",
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({}));
-    throw new Error(`删除故事失败: ${response.status} ${errorBody.msg || ""}`);
-  }
 }
 
 /** 上传简历。 */

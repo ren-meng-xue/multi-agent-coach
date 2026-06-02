@@ -44,20 +44,6 @@ async def _get_recent_sessions(user_id: str, limit: int = 5) -> list[Any]:
         return list(result.scalars().all())
 
 
-async def _get_user_stories(user_id: str) -> list[Any]:
-    """读取用户故事库。"""
-    from sqlalchemy import select
-
-    from app.db.session import async_session_factory
-    from app.models.core import UserStory
-
-    async with async_session_factory() as db:
-        result = await db.execute(
-            select(UserStory).where(UserStory.user_id == user_id)
-        )
-        return list(result.scalars().all())
-
-
 def _extract_weak_areas(sessions: list[Any]) -> list[str]:
     """从历史 session report 提取薄弱点描述。"""
     weak = []
@@ -89,32 +75,21 @@ def _extract_weak_areas(sessions: list[Any]) -> list[str]:
 # ─────────────────────────────────────────────
 
 async def memory_search_node(state: PrepareState) -> PrepareState:
-    """查询历史面试表现和故事库，填充 weak_areas + star_stories。"""
+    """查询历史面试表现，填充 weak_areas。"""
     user_id = state.get("user_id", "")
     if not user_id:
-        return {**state, "weak_areas": [], "star_stories": []}
+        return {**state, "weak_areas": []}
 
     sessions = await _get_recent_sessions(user_id)
-    stories = await _get_user_stories(user_id)
 
     weak_areas = _extract_weak_areas(sessions)
-    star_stories = [
-        {
-            "title": s.title,
-            "role": s.role or "",
-            "tags": s.tags or [],
-            "content_json": s.content_json or {},
-        }
-        for s in stories
-    ]
 
     log.info(
         "memory_search_done",
         user_id=user_id,
         weak_count=len(weak_areas),
-        story_count=len(star_stories),
     )
-    return {**state, "weak_areas": weak_areas, "star_stories": star_stories}
+    return {**state, "weak_areas": weak_areas}
 
 
 def _llm(streaming: bool = False, timeout: int = 30) -> Any:
@@ -172,7 +147,7 @@ async def jd_analysis_node(state: PrepareState) -> PrepareState:
 
 
 async def question_gen_node(state: PrepareState) -> PrepareState:
-    """基于方向 + 薄弱点 + 故事库生成 5 道定制题目（流式输出）。"""
+    """基于方向 + 薄弱点生成 5 道定制题目（流式输出）。"""
     import json
     import re
 
@@ -184,7 +159,6 @@ async def question_gen_node(state: PrepareState) -> PrepareState:
     direction = state.get("direction") or state.get("user_direction") or "通用软件工程师"
     target_role = state.get("user_direction") or direction
     weak_areas = state.get("weak_areas") or []
-    star_stories = state.get("star_stories") or []
     jd_context = state.get("jd_context")
 
     jd_block = ""
@@ -193,18 +167,12 @@ async def question_gen_node(state: PrepareState) -> PrepareState:
 
     weak_block = f"历史薄弱点（优先出题）：{', '.join(weak_areas)}" if weak_areas else ""
 
-    stories_block = ""
-    if star_stories:
-        titles = [s["title"] for s in star_stories[:3]]
-        stories_block = f"候选人真实项目（可以针对这些项目出具体问题）：{', '.join(titles)}"
-
     prompt = QUESTION_GEN_SYSTEM_PROMPT.format(
         count=5,
         direction=direction,
         target_role=target_role,
         jd_context_block=jd_block,
         weak_areas_block=weak_block,
-        star_stories_block=stories_block,
     )
 
     # 流式调用，tagged 供 SSE 捕获
@@ -274,7 +242,6 @@ async def master_node(state: PrepareState) -> PrepareState:
     user_direction = state.get("user_direction") or ""
     jd_raw = state.get("jd_raw") or ""
     weak_areas = state.get("weak_areas") or []
-    star_stories = state.get("star_stories") or []
 
     log.info("master_node_start", user_direction=user_direction, jd_raw_len=len(jd_raw))
 
@@ -283,7 +250,6 @@ async def master_node(state: PrepareState) -> PrepareState:
   - 目标岗位/方向：{user_direction or "未设置"}
   - 是否提供 JD：{"是" if jd_raw else "否"}
   - 历史薄弱点：{", ".join(weak_areas) if weak_areas else "无（新用户或未查询）"}
-  - 故事库项目数：{len(star_stories)}
 """.strip()
 
     # Phase 1: 流式推理（供 SSE 捕获，用户可见）

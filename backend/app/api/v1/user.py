@@ -14,16 +14,11 @@ from app.models.core import (
     CoachPlan,
     InterviewSession,
 )
-from app.models.core import UserStory as UserStoryModel
 from app.schemas.response import Response
 from app.schemas.user import (
     DashboardData,
     UserProfile,
     UserProfileUpdate,
-    UserStory,
-    UserStoryCreate,
-    UserStoryList,
-    UserStoryUpdate,
 )
 from app.services.coach_opening import invalidate_coach_opening_cache
 from app.services.interview_turn import ensure_user_exists
@@ -230,94 +225,3 @@ async def update_profile(
     await db.commit()
     await db.refresh(user)
     return Response.ok(data=UserProfile.model_validate(user))
-
-
-@router.get("/stories", response_model=Response[UserStoryList])
-async def list_stories(
-    user_id: str = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-):
-    """列出当前用户的所有故事。"""
-    result = await db.execute(
-        select(UserStoryModel)
-        .where(UserStoryModel.user_id == user_id)
-        .order_by(UserStoryModel.created_at.desc())
-    )
-    stories = result.scalars().all()
-    return Response.ok(data=UserStoryList(stories=[UserStory.model_validate(s) for s in stories]))
-
-
-@router.post("/stories", response_model=Response[UserStory])
-async def create_story(
-    req: UserStoryCreate,
-    user_id: str = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-):
-    """为当前用户创建一个新故事。"""
-    await ensure_user_exists(db, user_id=user_id)
-    
-    story = UserStoryModel(
-        user_id=user_id,
-        title=req.title,
-        role=req.role,
-        tags=req.tags,
-        content_json=req.content_json,
-    )
-    db.add(story)
-    await db.commit()
-    await db.refresh(story)
-    return Response.ok(data=UserStory.model_validate(story))
-
-
-@router.patch("/stories/{story_id}", response_model=Response[UserStory])
-async def update_story(
-    story_id: UUID,
-    req: UserStoryUpdate,
-    user_id: str = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-):
-    """更新指定故事的内容。"""
-    result = await db.execute(
-        select(UserStoryModel).where(
-            UserStoryModel.id == story_id,
-            UserStoryModel.user_id == user_id
-        )
-    )
-    story = result.scalar_one_or_none()
-    if not story:
-        raise HTTPException(status_code=404, detail="故事不存在")
-        
-    if req.title is not None:
-        story.title = req.title
-    if req.role is not None:
-        story.role = req.role
-    if req.tags is not None:
-        story.tags = req.tags
-    if req.content_json is not None:
-        story.content_json = req.content_json
-        
-    await db.commit()
-    await db.refresh(story)
-    return Response.ok(data=UserStory.model_validate(story))
-
-
-@router.delete("/stories/{story_id}", response_model=Response)
-async def delete_story(
-    story_id: UUID,
-    user_id: str = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-):
-    """删除指定故事。"""
-    result = await db.execute(
-        select(UserStoryModel).where(
-            UserStoryModel.id == story_id,
-            UserStoryModel.user_id == user_id
-        )
-    )
-    story = result.scalar_one_or_none()
-    if not story:
-        raise HTTPException(status_code=404, detail="故事不存在")
-        
-    await db.delete(story)
-    await db.commit()
-    return Response.ok()

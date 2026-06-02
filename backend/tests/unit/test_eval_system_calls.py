@@ -28,7 +28,6 @@ async def test_question_adapter_calls_question_gen_node():
                 "direction": "Python 后端",
                 "user_direction": None,
                 "weak_areas": ["分布式"],
-                "star_stories": [],
                 "jd_context": None,
             },
         )

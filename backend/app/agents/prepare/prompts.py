@@ -52,14 +52,12 @@ QUESTION_GEN_SYSTEM_PROMPT = """你是专业面试出题官。根据以下信息
 3. 题目优先级分配：
    - 若有薄弱点，针对薄弱点的题目排在最前（分配 priority=1,2）。
    - 其余题目分配 priority=3,4,5。
-4. 结合候选人真实项目经历出具体问题（如果有故事库）。
-5. 题目类型: technical/behavioral/system_design 各占比均衡。
-6. 每道题输出 JSON: {{"id":N,"question":"...","category":"...","focus_area":"...","priority":N}}
-7. 输出纯 JSON 数组，不要任何其他内容。
+4. 题目类型: technical/behavioral/system_design 各占比均衡。
+5. 每道题输出 JSON: {{"id":N,"question":"...","category":"...","focus_area":"...","priority":N}}
+6. 输出纯 JSON 数组，不要任何其他内容。
 
 练习上下文：
 练习方向：{direction}
 目标岗位：{target_role}
 {jd_context_block}
-{weak_areas_block}
-{star_stories_block}"""
+{weak_areas_block}"""
