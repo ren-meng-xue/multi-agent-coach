@@ -97,25 +97,6 @@ export const PREPARE_NODE_TITLES: Record<string, string> = {
 export function formatTraceTokens(id: string, tokens: string): string {
   if (!tokens) return "(无详细信息)";
 
-  // 出题节点特殊处理：提取 JSON 中的 question 字段
-  if (id === "question_gen" || id === "ask_question") {
-    const robustPattern =
-      /["']?question["']?\s* : \s*["']((?:[^"'\\]|\\?[\s\S])*?)(?:["']|$)/gi;
-    // 注意：上面的正则空格是为了匹配，实际代码中可能更紧凑
-    const matches = Array.from(
-      tokens.matchAll(
-        /["']?question["']?\s*:\s*["']((?:[^"'\\]|\\?[\s\S])*?)(?:["']|$)/gi,
-      ),
-    );
-    const questions = matches
-      .map((m) => m[1].replace(/\\"/g, '"').replace(/\\n/g, " ").trim())
-      .filter((q) => q.length > 2);
-
-    if (questions.length > 0) {
-      return questions.map((q) => `→ ${q}`).join("\n    ");
-    }
-  }
-
   // 其他节点：过滤 JSON 标记，保留普通文本
   return tokens
     .split("\n")
