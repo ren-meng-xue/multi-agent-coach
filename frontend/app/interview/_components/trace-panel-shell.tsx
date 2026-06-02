@@ -31,10 +31,10 @@ export function TracePanelShell({
     <div
       className={`w-full rounded-2xl border transition-all duration-300 ${
         tone === "success"
-          ? "bg-[#E8F8F5]/30 border-emerald-500/20 dark:bg-emerald-950/5 dark:border-emerald-500/15 shadow-[0_4px_20px_-4px_rgba(16,185,129,0.06)]"
+          ? "bg-[#E8F8F5]/60 border-emerald-500/35 dark:bg-emerald-950/10 dark:border-emerald-500/30 shadow-[0_2px_12px_-2px_rgba(16,185,129,0.15)]"
           : tone === "error"
-            ? "bg-[#FDF2F4]/30 border-rose-500/20 dark:bg-rose-950/5 dark:border-rose-500/15 shadow-[0_4px_20px_-4px_rgba(244,63,94,0.06)]"
-            : "bg-[#534AB7]/[0.015] border-[#534AB7]/10 dark:bg-white/[0.01] dark:border-white/[0.06] shadow-[0_4px_24px_-4px_rgba(83,74,183,0.04)]"
+            ? "bg-[#FDF2F4]/60 border-rose-500/35 dark:bg-rose-950/10 dark:border-rose-500/30 shadow-[0_2px_12px_-2px_rgba(244,63,94,0.15)]"
+            : "bg-[#534AB7]/[0.05] border-[#534AB7]/20 dark:bg-white/[0.03] dark:border-white/[0.10] shadow-[0_2px_12px_-2px_rgba(83,74,183,0.12)]"
       } ${className}`}
     >
       {/* Header 行：可点击折叠/展开，动态显示题目结果 */}
@@ -51,15 +51,15 @@ export function TracePanelShell({
             className={`relative inline-flex size-1.5 rounded-full ${getDotClass(tone)}`}
           />
         </span>
-        <span className="flex-1 text-[10px] font-extrabold tracking-tight text-[#534AB7]/70 dark:text-[#CECBF6]/70 line-clamp-1">
+        <span className="flex-1 text-[10px] font-extrabold tracking-tight text-[#534AB7]/85 dark:text-[#CECBF6]/80 line-clamp-1">
           {title}
         </span>
         {meta}
-        <span className="ml-1 flex-shrink-0 text-[9px] font-medium text-[#534AB7]/30 dark:text-[#CECBF6]/25">
+        <span className="ml-1 flex-shrink-0 text-[9px] font-medium text-[#534AB7]/55 dark:text-[#CECBF6]/50">
           ({toggleText})
         </span>
         <svg
-          className={`size-3 flex-shrink-0 text-[#534AB7]/30 dark:text-[#CECBF6]/25 transition-transform duration-300 ${expanded ? "rotate-180" : ""}`}
+          className={`size-3 flex-shrink-0 text-[#534AB7]/55 dark:text-[#CECBF6]/50 transition-transform duration-300 ${expanded ? "rotate-180" : ""}`}
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
