@@ -69,6 +69,8 @@ export interface TraceNodeData {
   missingDimensions?: string[];
   followupFocus?: string;
   chiefToolCalls?: string[];
+  /** designer agent 出题结果，在 chief_think/chief_respond 节点展示 */
+  designedQuestion?: string;
 }
 
 export interface InterviewTraceNodeEvent {
@@ -86,4 +88,6 @@ export interface InterviewTraceNodeEvent {
   chiefToolCalls?: string[];
   /** 节点产出的 AI 回复（ask_question/followup/closing 用准备题库路径时无 LLM token 流，通过此字段补充） */
   assistantMessage?: string;
+  /** designer agent 出题结果 */
+  designedQuestion?: string;
 }
