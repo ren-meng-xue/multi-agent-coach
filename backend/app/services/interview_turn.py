@@ -451,6 +451,17 @@ async def stream_interview_turn(
     if use_qa_bank:
         state["use_qa_bank"] = True
 
+    # 优先持久化用户消息，确保即使后续 AI 回复流中断，会话状态也不回退
+    if message != "__START__":
+        user_msg = InterviewMessage(
+            session_id=session.id,
+            role="user",
+            content=message,
+            question_number=session.question_count or None,
+        )
+        db.add(user_msg)
+        await db.commit()
+
     assistant_chunks: list[str] = []
     node_events: list[dict] = []
     output: InterviewState | None = None
@@ -544,7 +555,8 @@ async def stream_interview_turn(
     if not assistant_chunks:
         yield {"event": "delta", "data": {"text": assistant_content}}
 
-    messages_to_persist = [
+    # 持久化 AI 消息及 Trace
+    db.add(
         InterviewMessage(
             session_id=session.id,
             role="assistant",
@@ -552,18 +564,7 @@ async def stream_interview_turn(
             question_number=session.question_count or None,
             turn_trace_json=turn_trace_json,
         )
-    ]
-    if message != "__START__":
-        messages_to_persist.insert(
-            0,
-            InterviewMessage(
-                session_id=session.id,
-                role="user",
-                content=message,
-                question_number=session.question_count or None,
-            ),
-        )
-    db.add_all(messages_to_persist)
+    )
     await db.commit()
 
     if session.stage == "closing" and report_data:
