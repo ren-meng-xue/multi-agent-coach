@@ -1,8 +1,9 @@
-import { readSseStream, type SseEvent } from "./sse";
+import { readSseStream, readSseStreamGen, type SseEvent } from "./sse";
 import type {
   InterviewTraceNodeEvent,
   JDContext,
   PreparedQuestion,
+  PrepareSSEEvent,
   TraceNodeData,
 } from "./prepare-types";
 
@@ -69,6 +70,8 @@ export function isTurnTraceMessage(
 export const INTERVIEW_NODE_TITLES: Record<string, string> = {
   master: "分析表现，规划下一步",
   evaluator: "多维深度评估",
+  chief_think: "规划工具调用",
+  chief_respond: "组织面试回复",
   followup: "生成追问逻辑",
   ask_question: "抽取下一道题",
 };
@@ -76,6 +79,8 @@ export const INTERVIEW_NODE_TITLES: Record<string, string> = {
 export const INTERVIEW_NODE_LABELS: Record<string, string> = {
   master: "调度",
   evaluator: "评估官",
+  chief_think: "思考",
+  chief_respond: "回复",
   followup: "面试官",
   ask_question: "出题官",
 };
@@ -195,6 +200,7 @@ export async function fetchInterviewHistory({
 export type ActiveMessageItem = {
   role: string;
   content: string;
+  turn_trace?: InterviewTurnTracePayload | null;
 };
 
 export type ActiveSessionResponse = {
@@ -350,6 +356,7 @@ function handleSseEvent(
       latent_signals?: string[];
       missing_dimensions?: string[];
       followup_focus?: string;
+      chief_tool_calls?: string[];
       assistant_message?: string;
     }>(data);
     const phase =
@@ -370,6 +377,7 @@ function handleSseEvent(
       latentSignals: payload.latent_signals,
       missingDimensions: payload.missing_dimensions,
       followupFocus: payload.followup_focus,
+      chiefToolCalls: payload.chief_tool_calls,
       assistantMessage: payload.assistant_message,
     });
     return;
@@ -471,7 +479,7 @@ export async function* startPrepareStreamFetch(params: {
   jdUrl?: string;
   jdFile?: File;
   signal?: AbortSignal;
-}): AsyncGenerator<import("./prepare-types").PrepareSSEEvent, void, unknown> {
+}): AsyncGenerator<PrepareSSEEvent, void, unknown> {
   const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
   const form = new FormData();
   if (params.userDirection) form.append("user_direction", params.userDirection);
@@ -505,7 +513,7 @@ export async function* startPrepareAndLaunchStreamFetch(params: {
   jdUrl?: string;
   jdFile?: File;
   signal?: AbortSignal;
-}): AsyncGenerator<import("./prepare-types").PrepareSSEEvent, void, unknown> {
+}): AsyncGenerator<PrepareSSEEvent, void, unknown> {
   const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
   const form = new FormData();
   if (params.userDirection) form.append("user_direction", params.userDirection);
@@ -536,7 +544,7 @@ export async function* resumePrepareStreamFetch(params: {
   jdText?: string;
   weakAreas?: string;
   signal?: AbortSignal;
-}): AsyncGenerator<import("./prepare-types").PrepareSSEEvent, void, unknown> {
+}): AsyncGenerator<PrepareSSEEvent, void, unknown> {
   const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
   const form = new FormData();
   form.append("direction", params.direction);
@@ -561,35 +569,17 @@ export async function* resumePrepareStreamFetch(params: {
 /** 内部通用的 SSE 读取生成器 */
 async function* _readPrepareStream(
   resp: Response,
-): AsyncGenerator<import("./prepare-types").PrepareSSEEvent, void, unknown> {
+): AsyncGenerator<PrepareSSEEvent, void, unknown> {
   if (!resp.ok || !resp.body) throw new Error("Prepare stream failed");
 
-  const reader = resp.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
-      for (const line of lines) {
-        const trimmedLine = line.trim();
-        if (trimmedLine.startsWith("data: ")) {
-          try {
-            yield JSON.parse(
-              trimmedLine.slice(6),
-            ) as import("./prepare-types").PrepareSSEEvent;
-          } catch {
-            // ignore parsing error
-          }
-        }
-      }
+  for await (const { event, data } of readSseStreamGen(resp.body)) {
+    let parsed: PrepareSSEEvent["data"];
+    try {
+      parsed = JSON.parse(data) as PrepareSSEEvent["data"];
+    } catch {
+      continue;
     }
-  } finally {
-    reader.releaseLock();
+    yield { event: event as PrepareSSEEvent["event"], data: parsed };
   }
 }
 

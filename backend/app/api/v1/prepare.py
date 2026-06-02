@@ -2,6 +2,7 @@
 """Prepare pipeline API endpoints."""
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from collections.abc import AsyncIterator
@@ -17,8 +18,7 @@ from app.api.v1.auth import get_current_user_id
 from app.core.logging import get_logger
 from app.db.session import get_db
 from app.models.core import InterviewMessage, InterviewSession
-from app.services.interview_turn import encode_prepare_trace_message
-from app.services.interview_turn import stream_interview_turn
+from app.services.interview_turn import encode_prepare_trace_message, stream_interview_turn
 from app.services.jd_extractor import JDSource, NeedManualInput, extract_jd_text_async
 
 router = APIRouter()
@@ -28,17 +28,19 @@ log = get_logger("app.api.v1.prepare")
 async def _sse_format(events: AsyncIterator[dict]) -> AsyncIterator[str]:
     try:
         async for ev in events:
-            yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
+            event_name = ev.get("event", "message")
+            data = ev.get("data", {})
+            yield f"event: {event_name}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+    except asyncio.CancelledError:
+        log.info("prepare_stream_cancelled")
+        raise
     except Exception as exc:
         log.error("prepare_stream_failed", error=str(exc), exc_info=True)
-        error_event = {
-            "event": "error",
-            "data": {
-                "message": "准备流水线失败，请直接进入面试或稍后重试。",
-                "code": "prepare_stream_failed",
-            },
+        error_payload = {
+            "message": "准备流水线失败，请直接进入面试或稍后重试。",
+            "code": "prepare_stream_failed",
         }
-        yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
+        yield f"event: error\ndata: {json.dumps(error_payload, ensure_ascii=False)}\n\n"
 
 
 @router.post("/prepare/start")
@@ -93,14 +95,16 @@ async def prepare_start(
         err_msg = str(exc)
 
         async def _err():
-            yield f"data: {json.dumps({'event': 'error', 'data': {'message': err_msg, 'code': 'need_manual_input'}}, ensure_ascii=False)}\n\n"
+            payload = {"message": err_msg, "code": "need_manual_input"}
+            yield f"event: error\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
         return StreamingResponse(_err(), media_type="text/event-stream")
     except Exception as exc:
         log.error("jd_extract_failed", error=str(exc))
         err_msg = "JD 提取失败，请手动粘贴 JD 文本后重试。"
 
         async def _generic_err():
-            yield f"data: {json.dumps({'event': 'error', 'data': {'message': err_msg, 'code': 'jd_extract_failed'}}, ensure_ascii=False)}\n\n"
+            payload = {"message": err_msg, "code": "jd_extract_failed"}
+            yield f"event: error\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
         return StreamingResponse(_generic_err(), media_type="text/event-stream")
 
     session_id = str(uuid.uuid4())
@@ -354,7 +358,8 @@ async def prepare_launch(
         err_msg = str(exc)
 
         async def _err():
-            yield f"data: {json.dumps({'event': 'error', 'data': {'message': err_msg, 'code': 'need_manual_input'}}, ensure_ascii=False)}\n\n"
+            payload = {"message": err_msg, "code": "need_manual_input"}
+            yield f"event: error\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
         return StreamingResponse(_err(), media_type="text/event-stream")
     except Exception as exc:
@@ -362,7 +367,8 @@ async def prepare_launch(
         err_msg = "JD 提取失败，请手动粘贴 JD 文本后重试。"
 
         async def _generic_err():
-            yield f"data: {json.dumps({'event': 'error', 'data': {'message': err_msg, 'code': 'jd_extract_failed'}}, ensure_ascii=False)}\n\n"
+            payload = {"message": err_msg, "code": "jd_extract_failed"}
+            yield f"event: error\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
         return StreamingResponse(_generic_err(), media_type="text/event-stream")
 

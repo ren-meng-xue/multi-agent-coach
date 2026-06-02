@@ -35,13 +35,19 @@ async def test_load_memory_node(mock_db):
     mock_session.report_json = {"overall_score": 4.0}
     
     # 设置 mock_db.execute 返回不同的结果
+    mock_res_count = MagicMock()
+    mock_res_count.scalar.return_value = 1
+
     mock_res_mem = MagicMock()
     mock_res_mem.scalar_one_or_none.return_value = mock_mem
-    
+
     mock_res_session = MagicMock()
     mock_res_session.scalar_one_or_none.return_value = mock_session
-    
-    mock_db.execute.side_effect = [mock_res_mem, mock_res_session]
+
+    mock_res_user = MagicMock()
+    mock_res_user.scalar_one_or_none.return_value = "3年Python后端经验，熟悉FastAPI。"
+
+    mock_db.execute.side_effect = [mock_res_count, mock_res_mem, mock_res_session, mock_res_user]
     
     state = {"db": mock_db, "user_id": user_id, "session_id": session_id}
     result = await load_memory_node(state)

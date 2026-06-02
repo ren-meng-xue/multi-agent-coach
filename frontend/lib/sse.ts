@@ -28,6 +28,39 @@ export async function readSseStream({ stream, onEvent }: ReadSseStreamOptions): 
   }
 }
 
+/** 异步生成器版本的 SSE 读取器，支持 for await。 */
+export async function* readSseStreamGen(
+  stream: ReadableStream<Uint8Array>,
+): AsyncGenerator<SseEvent> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split(/\r?\n\r?\n/);
+      buffer = events.pop() ?? "";
+
+      for (const rawEvent of events) {
+        if (rawEvent.trim()) {
+          yield parseSseEvent(rawEvent);
+        }
+      }
+    }
+
+    buffer += decoder.decode();
+    if (buffer.trim()) {
+      yield parseSseEvent(buffer);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 function emitCompleteEvents(buffer: string, onEvent: (event: SseEvent) => void): string {
   const events = buffer.split(/\r?\n\r?\n/);
   const remainder = events.pop() ?? "";

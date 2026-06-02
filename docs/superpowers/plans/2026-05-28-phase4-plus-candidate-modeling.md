@@ -96,7 +96,7 @@ async def test_evaluator_uses_last_n_messages_in_context():
     messages = []
     for i in range(20):
         messages.append(HumanMessage(content=f"user msg {i}"))
-        messages.append(AIMessage(content=f".ai msg {i}"))
+        messages.append(AIMessage(content=f"ai msg {i}"))
     state = {
         "question_count": 2,
         "messages": messages,

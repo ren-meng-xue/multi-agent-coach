@@ -2,12 +2,14 @@
 """Node functions for the prepare pipeline."""
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal, cast
 
+from langchain_core.messages import SystemMessage
 from openai import APIConnectionError, APITimeoutError, InternalServerError, RateLimitError
 from pydantic import BaseModel
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
+from app.agents.prepare.prompts import SUPERVISOR_DECISION_PROMPT, SUPERVISOR_REASONING_PROMPT
 from app.agents.prepare.state import PrepareState
 from app.core.logging import get_logger
 
@@ -78,7 +80,8 @@ async def memory_search_node(state: PrepareState) -> PrepareState:
     """查询历史面试表现，填充 weak_areas。"""
     user_id = state.get("user_id", "")
     if not user_id:
-        return {**state, "weak_areas": []}
+        completed = state.get("completed_tools", [])
+        return {**state, "weak_areas": [], "completed_tools": completed + ["memory_search"]}
 
     sessions = await _get_recent_sessions(user_id)
 
@@ -89,7 +92,8 @@ async def memory_search_node(state: PrepareState) -> PrepareState:
         user_id=user_id,
         weak_count=len(weak_areas),
     )
-    return {**state, "weak_areas": weak_areas}
+    completed = state.get("completed_tools", [])
+    return {**state, "weak_areas": weak_areas, "completed_tools": completed + ["memory_search"]}
 
 
 def _llm(streaming: bool = False, timeout: int = 30) -> Any:
@@ -124,7 +128,8 @@ async def jd_analysis_node(state: PrepareState) -> PrepareState:
 
     jd_raw = state.get("jd_raw")
     if not jd_raw:
-        return {**state, "jd_context": None}
+        completed = state.get("completed_tools", [])
+        return {**state, "jd_context": None, "completed_tools": completed + ["jd_analysis"]}
 
     prompt = JD_ANALYSIS_SYSTEM_PROMPT.format(jd_raw=jd_raw[:4000])
     model = _llm().with_structured_output(_JDContextModel)
@@ -143,7 +148,8 @@ async def jd_analysis_node(state: PrepareState) -> PrepareState:
         "difficulty": output.difficulty,
     }
     log.info("jd_analysis_done", role=output.role, skills_count=len(output.key_skills))
-    return {**state, "jd_context": jd_context}
+    completed = state.get("completed_tools", [])
+    return {**state, "jd_context": jd_context, "completed_tools": completed + ["jd_analysis"]}
 
 
 async def question_gen_node(state: PrepareState) -> PrepareState:
@@ -218,72 +224,91 @@ async def question_gen_node(state: PrepareState) -> PrepareState:
         summary = "题目生成遇到了一点小问题，你可以点击下方按钮直接开始面试，我将为你实时出题。"
 
     log.info("question_gen_done", count=len(questions))
-    return {**state, "prepared_questions": questions, "summary": summary}
-
-
-class _MasterDecision(BaseModel):
-    direction: str = ""
-    chain: list[str] = []
-    need_direction: bool = False
-
-
-VALID_PREPARE_NODES = {"memory_search", "jd_analysis", "question_gen"}
-
-
-async def master_node(state: PrepareState) -> PrepareState:
-    """识别练习方向，决定调用链。流式输出推理 bullets，结构化输出决策。"""
-    from langchain_core.messages import SystemMessage
-
-    from app.agents.prepare.prompts import (
-        MASTER_DECISION_PROMPT,
-        MASTER_REASONING_PROMPT,
-    )
-
-    user_direction = state.get("user_direction") or ""
-    jd_raw = state.get("jd_raw") or ""
-    weak_areas = state.get("weak_areas") or []
-
-    log.info("master_node_start", user_direction=user_direction, jd_raw_len=len(jd_raw))
-
-    context = f"""
-用户档案：
-  - 目标岗位/方向：{user_direction or "未设置"}
-  - 是否提供 JD：{"是" if jd_raw else "否"}
-  - 历史薄弱点：{", ".join(weak_areas) if weak_areas else "无（新用户或未查询）"}
-""".strip()
-
-    # Phase 1: 流式推理（供 SSE 捕获，用户可见）
-    reasoning_prompt = MASTER_REASONING_PROMPT.format(context=context)
-    model_stream = _llm(streaming=True).with_config(tags=["prepare_master_stream"])
-    async for _ in model_stream.astream([SystemMessage(content=reasoning_prompt)]):
-        pass  # 流由 astream_events 在 graph 层捕获，此处只触发
-
-    # Phase 2: 结构化决策（快速，非流式）
-    decision_prompt = MASTER_DECISION_PROMPT.format(context=context)
-    model_decision = _llm().with_structured_output(_MasterDecision)
-
-    @_retry_llm
-    async def _invoke_decision() -> _MasterDecision:
-        return await model_decision.ainvoke([SystemMessage(content=decision_prompt)])  # type: ignore[return-value]
-
-    decision: _MasterDecision = await _invoke_decision()
-
-    # [C3] 保证 question_gen 始终在 chain 末尾，并过滤非法节点
-    chain = [n for n in decision.chain if n in VALID_PREPARE_NODES]
-    chain = list(dict.fromkeys(chain + ["question_gen"]))
-
-    log.info(
-        "master_done",
-        direction=decision.direction,
-        chain=chain,
-        need_direction=decision.need_direction,
-    )
+    completed = state.get("completed_tools", [])
     return {
         **state,
-        "direction": decision.direction,
-        "chain": chain,
-        "need_direction": decision.need_direction,
+        "prepared_questions": questions,
+        "summary": summary,
+        "completed_tools": completed + ["question_gen"],
     }
 
 
+# ─────────────────────────────────────────────
+# SUPERVISOR
+# ─────────────────────────────────────────────
+
+class SupervisorDecision(BaseModel):
+    next: Literal["memory_search", "jd_analysis", "question_gen", "need_direction", "END"]
+    direction: str = ""
+    reasoning: str = ""
+
+def _build_state_summary(state: PrepareState) -> str:
+    """将当前 state 转为可读快照供 Supervisor 参考。"""
+    user_direction = state.get("user_direction") or ""
+    jd_raw = state.get("jd_raw") or ""
+    weak_areas = state.get("weak_areas") or []
+    jd_context = state.get("jd_context")
+    completed = state.get("completed_tools", [])
+
+    summary = [
+        f"用户目标方向: {user_direction or '未提供'}",
+        f"是否提供 JD: {'是' if jd_raw else '否'}",
+        f"历史薄弱点: {', '.join(weak_areas) if weak_areas else '无'}",
+        f"JD 分析结果: {'已完成' if jd_context else '未完成'}",
+        f"已运行 Agent: {', '.join(completed) if completed else '无'}",
+    ]
+    return "\n".join(summary)
+
+async def supervisor_node(state: PrepareState) -> PrepareState:
+    """Supervisor Loop 中央调度节点。"""
+    # 1. 防死循环检查
+    iteration = state.get("iteration_count", 0)
+    if iteration >= 6:
+        log.warning("supervisor_max_iterations_reached", iteration=iteration)
+        return {**state, "next_action": "END", "iteration_count": iteration + 1}
+
+    state_summary = _build_state_summary(state)
+    completed_tools = state.get("completed_tools", [])
+
+    log.info("supervisor_node_start", iteration=iteration, completed=completed_tools)
+
+    # Phase 1: 流式推理（供 SSE 捕获）
+    reasoning_prompt = SUPERVISOR_REASONING_PROMPT.format(state_summary=state_summary)
+    model_stream = _llm(streaming=True).with_config(tags=["prepare_supervisor_stream"])
+    async for _ in model_stream.astream([SystemMessage(content=reasoning_prompt)]):
+        pass
+
+    # Phase 2: 结构化决策
+    decision_prompt = SUPERVISOR_DECISION_PROMPT.format(
+        state_summary=state_summary,
+        completed_tools=", ".join(completed_tools) if completed_tools else "无"
+    )
+    model_decision = _llm().with_structured_output(SupervisorDecision)
+
+    @_retry_llm
+    async def _invoke_decision() -> SupervisorDecision:
+        return await model_decision.ainvoke([SystemMessage(content=decision_prompt)])  # type: ignore[return-value]
+
+    decision: SupervisorDecision = await _invoke_decision()
+
+    # 强制防重复：如果 LLM 建议跑已跑过的工具，强制 END（除非是特殊状态）
+    if decision.next in completed_tools:
+        log.warning("supervisor_loop_detected", tool=decision.next)
+        decision.next = "END"
+
+    updates: dict[str, Any] = {
+        "next_action": decision.next,
+        "iteration_count": iteration + 1,
+        "need_direction": decision.next == "need_direction",
+    }
+    if decision.direction:
+        updates["direction"] = decision.direction
+
+    log.info(
+        "supervisor_done",
+        next=decision.next,
+        direction=decision.direction,
+        reasoning=decision.reasoning
+    )
+    return cast(PrepareState, {**dict(state), **updates})
 

@@ -1,17 +1,16 @@
 ---
-description: Project skill entry. Full rules live in .ai/skills/video-to-chinese.md.
+description: 视频字幕转中文 markdown。规则待补完。
 argument-hint: "<operation>"
 disable-model-invocation: true
 ---
 
 # video-to-chinese
 
-本文件只是 Claude Code 的 skill 注册入口。
+skill 注册入口。原完整规则文件已下线，待补完触发方式、写入边界、二次确认和删除规则。
 
-完整规则以项目协议文件为唯一来源：
+配套 hook 仍在运行：
 
-```text
-.ai/skills/video-to-chinese.md
-```
+- `.claude/hooks/video_to_chinese_pre_write.py`（PreToolUse / Write）
+- `.claude/hooks/video_to_chinese_post_write.py`（PostToolUse / Write）
 
-执行前必须先读取该文件，并遵守其中的触发方式、写入边界、二次确认和删除规则。
+历史产出位于 `.claude/skills/video-to-chinese/docs/`。

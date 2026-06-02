@@ -35,7 +35,7 @@ async def one_turn(state: InterviewState, user_input: str) -> tuple[str, Intervi
 
 
 def print_turn(role: str, text: str):
-    print(f"\n{'面试官' if role == '.ai' else '  用户'}：{text}")
+    print(f"\n{'面试官' if role == 'ai' else '  用户'}：{text}")
 
 
 async def main():
@@ -92,7 +92,7 @@ async def main():
     for user_input in script:
         print_turn("user", user_input)
         reply, state = await one_turn(state, user_input)
-        print_turn(".ai", reply)
+        print_turn("ai", reply)
         print(f"  [stage={state.get('stage')}, 第{state.get('question_count')}题, followup={state.get('followup_count')}]")
 
     print("\n" + "=" * 50)

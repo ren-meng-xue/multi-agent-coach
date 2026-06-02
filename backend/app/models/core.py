@@ -33,6 +33,7 @@ class User(Base):
     work_years: Mapped[str | None] = mapped_column(String(64))
     resume_text: Mapped[str | None] = mapped_column(Text)
     resume_filename: Mapped[str | None] = mapped_column(String(255))
+    resume_summary: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -161,6 +162,7 @@ class InterviewMessage(Base):
         nullable=False,
         server_default="false",
     )
+    turn_trace_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

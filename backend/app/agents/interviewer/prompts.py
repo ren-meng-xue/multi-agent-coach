@@ -75,8 +75,9 @@ MASTER_DECISION_PROMPT = (
     "- chain 不能为空\n"
     "- chain 末尾必须是 followup / ask_question / closing 之一\n"
     "- chain 含 closing 时，closing 必须是最后一个\n"
-    "- 一般情况下，followup 或 ask_question 之前都应该跑 evaluator；"
-    "  但用户跑题/敷衍时可以跳过 evaluator 直接追问\n"
+    "- 非终止场景下，默认必须先跑 evaluator，再由系统根据评分决定 followup 或 ask_question。\n"
+    "- 只有候选人明显跑题、空泛敷衍、没有回答当前问题时，才可以跳过 evaluator 直接 followup 拉回主线。\n"
+    "- 如果候选人回答已经覆盖问题核心、结构清晰且没有明显缺失，应倾向进入 ask_question，而不是继续深挖同一知识点。\n"
     "【上下文】：\n{context}"
 )
 

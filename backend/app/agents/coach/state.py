@@ -15,6 +15,7 @@ class CoachState(TypedDict):
     candidate_memory: dict[str, Any] | None
     last_session_report: dict[str, Any] | None
     target_role: str | None
+    resume_summary: str | None
     
     # 输出字段
     review_text: str

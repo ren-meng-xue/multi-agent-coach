@@ -31,7 +31,7 @@ def test_users_table_columns():
     from app.models.core import User
 
     cols = {c.name for c in User.__table__.columns}
-    assert cols == {"id", "email", "target_role", "work_years", "resume_text", "resume_filename", "created_at"}
+    assert cols == {"id", "email", "target_role", "work_years", "resume_text", "resume_filename", "resume_summary", "created_at"}
 
 
 def test_interview_sessions_table_columns():
@@ -72,5 +72,6 @@ def test_interview_messages_table_columns():
         "content",
         "question_number",
         "is_followup",
+        "turn_trace_json",
         "created_at",
     }

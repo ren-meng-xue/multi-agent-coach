@@ -66,7 +66,17 @@ class InterviewState(TypedDict, total=False):
     candidate_profile: CandidateProfile  # 跨轮累积
     followup_focus: str  # 由 master 输出，followup 消费，单轮有效
 
+    # Chief Interviewer ReAct loop
+    chief_iteration: int
+    chief_messages: list[BaseMessage]
+    chief_thoughts: list[str]
+    chief_tool_results: list[dict[str, Any]]
+    evaluator_report: dict[str, Any] | None
+    designer_output: dict[str, Any] | None
+    designer_dual_output: dict[str, Any] | None
+
     # 报告
     qa_bank_items: list[dict[str, Any]] | None
+    use_qa_bank: bool
     resume_text: str | None
     report: dict[str, Any]

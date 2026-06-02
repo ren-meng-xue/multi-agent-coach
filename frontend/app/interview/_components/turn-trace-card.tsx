@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { cn } from "@/lib/utils";
 import type { TraceNodeData } from "@/lib/prepare-types";
@@ -29,13 +29,7 @@ export function TurnTraceCard({
   isEmbedded = false,
   hasContent = false,
 }: TurnTraceCardProps) {
-  const [expanded, setExpanded] = useState(status === "running" || nodes.length > 0);
-
-  useEffect(() => {
-    if (status === "running" || nodes.length > 0) {
-      setExpanded(true);
-    }
-  }, [status, nodes.length]);
+  const [expanded, setExpanded] = useState(false);
 
   const isDone = status === "done";
   
@@ -64,20 +58,21 @@ export function TurnTraceCard({
         expanded={expanded}
         title={headerText}
         tone={error ? "error" : isDone ? "success" : "default"}
-        toggleText={expanded ? "收起思考过程" : "展开思考过程"}
+        toggleText={expanded ? "收起依据" : "查看依据"}
         onToggle={() => setExpanded((v) => !v)}
         meta={
           <span className="flex shrink-0 items-center gap-2">
             {typeof summaryScore === "number" && !isOpening && turnIndex > 1 && (
-              <span className="rounded-full bg-[#534AB7]/10 px-2 py-0.5 font-bold text-[#534AB7] dark:bg-[#cecbf6]/10 dark:text-[#cecbf6] text-[9px]">
-                {summaryScore.toFixed(1)} / 10
+              <span className="rounded-full bg-[#534AB7]/10 px-2.5 py-0.5 font-extrabold text-[#534AB7] border border-[#534AB7]/15 dark:bg-[#cecbf6]/10 dark:text-[#cecbf6] dark:border-[#cecbf6]/15 text-[9px] shadow-sm">
+                评分：{summaryScore.toFixed(1)} / 10
               </span>
             )}
           </span>
         }
       >
-        <div className="mb-2 px-1 text-[11px] font-bold text-black/55 dark:text-white/55">
-          {isOpening || turnIndex === 1 ? "AI 思考过程 - 准备阶段" : "AI 思考过程 - 分析与出题"}
+        <div className="mb-2.5 px-1 text-[11px] font-extrabold text-[#534AB7] dark:text-[#CECBF6] flex items-center gap-1.5">
+          <span className="inline-block size-1.5 bg-[#534AB7] rounded-full dark:bg-[#CECBF6] animate-pulse" />
+          <span>{isOpening || turnIndex === 1 ? "出题依据" : "分析摘要"}</span>
         </div>
         <AgentTrace 
           nodes={nodes} 

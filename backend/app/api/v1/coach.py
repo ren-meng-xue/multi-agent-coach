@@ -1,4 +1,5 @@
 """教练复盘 API 路由。"""
+import asyncio
 import json
 from uuid import UUID
 
@@ -86,11 +87,17 @@ async def start_coach_review(
                             "event": "final",
                             "data": json.dumps({"plan_id": str(plan_id) if plan_id else None})
                         }
+        except asyncio.CancelledError:
+            log.info("coach_review_cancelled")
+            raise
         except Exception as exc:
             log.error("coach_review_sse_failed", error=str(exc))
             yield {
                 "event": "error",
-                "data": json.dumps({"detail": "教练复盘流水线失败"})
+                "data": json.dumps(
+                    {"message": "教练复盘流水线失败", "code": "coach_review_error"},
+                    ensure_ascii=False,
+                ),
             }
 
     return EventSourceResponse(event_generator())

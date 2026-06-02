@@ -2,6 +2,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from langchain_core.messages import AIMessage
 
 from app.agents.interviewer.graph import (
     CHAIN_NODES,
@@ -35,6 +36,7 @@ def test_build_interviewer_graph_does_not_error():
     """graph 编译本身不应抛错。"""
     g = build_interviewer_graph()
     assert g is not None
+
 
 
 # ─────────────────────────────────────────────
@@ -81,6 +83,57 @@ async def test_stream_events_evaluator_done_payload():
         assert data["candidate_level"] == "senior"
         assert data["latent_signals"] == ["architecture"]
         assert data["missing_dimensions"] == ["quantification"]
+
+
+@pytest.mark.asyncio
+async def test_stream_events_chief_done_payload_includes_hidden_evaluator_report():
+    """新 Chief 流程中 evaluator 在隐藏节点执行，评估数据应从 Chief state 透出。"""
+    state = {"session_id": "test_session", "question_count": 1}
+
+    mock_event = {
+        "event": "on_chain_end",
+        "name": "chief_think",
+        "metadata": {"langgraph_node": "chief_think"},
+        "data": {
+            "output": {
+                "chief_messages": [
+                    AIMessage(
+                        content="",
+                        tool_calls=[{"name": "design_question", "args": {"focus": "new_question"}, "id": "design"}],
+                    )
+                ],
+                "evaluator_report": {
+                    "scoring": {
+                        "summary_score": 6.5,
+                        "candidate_level": "mid",
+                        "latent_signals": ["quantification_gap"],
+                        "missing_dimensions": [],
+                    }
+                },
+            }
+        },
+    }
+
+    async def mock_astream(*args, **kwargs):
+        yield mock_event
+        yield {"event": "on_chain_end", "name": "LangGraph", "data": {"output": {}}}
+
+    mock_graph = MagicMock()
+    mock_graph.astream_events.side_effect = mock_astream
+
+    with patch("app.agents.interviewer.graph.get_interviewer_graph", return_value=mock_graph):
+        events = []
+        async for ev in stream_interviewer_turn_events(state):
+            events.append(ev)
+
+        node_done = next(e for e in events if e["event"] == "node_done")
+        data = node_done["data"]
+        assert data["node"] == "chief_think"
+        assert data["chief_tool_calls"] == ["design_question"]
+        assert data["summary_score"] == 6.5
+        assert data["candidate_level"] == "mid"
+        assert data["latent_signals"] == ["quantification_gap"]
+        assert data["missing_dimensions"] == []
 
 @pytest.mark.asyncio
 async def test_stream_events_master_done_payload():

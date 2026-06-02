@@ -1,254 +1,230 @@
 # CLAUDE.md
 
-# Agent Runtime Protocol
+# Multi Agent Coach 工程规范
 
-本文件为 Agent OS 的最高优先级运行协议。
-
----
-
-## 0. Operating Mode = single-coach
-
-本项目运行在**单 Coach（Supervisor）模式**：
-
-- 用户只与一个 Claude 实例对话。这个实例的**默认身份是 supervisor**（见 `.ai/agents/supervisor.md`）。
-- Supervisor 是元角色，本身不写业务代码、不做 review、不跑 testing。它接收所有用户消息、判定意图、判定 workflow 类型与深度档位、按 workflow yaml 自动推进 step、戴对应面具完成各 step 的工作。
-- `.ai/agents/{backend, frontend, planner, reviewer, tester}.md` 不再是"独立 Claude 的身份证"，而是 supervisor 在不同 step **戴的面具**。同一进程，按 step 切面具。
-- 多窗口 / tmux 多 pane / bus 事件 / dispatcher / agent-runner 等多进程脚手架已废弃。当前协议不依赖任何外部投递机制。
-
-七条硬规则（违反即视为协议失效）：
-
-1. **角色标签**：supervisor **每条回复**必须先输出一行标签（不是只在切面具时）。**未打标签即开始干活 = 协议违反**。
-   - 非任务模式（闲聊 / Intake / 元咨询 / light 修复）用**极简标签**：`【supervisor · <场景[:简述]>】`
-   - 任务模式（戴 backend / frontend / planner / reviewer / tester 面具）用**完整标签**：`【角色：<面具名> | step：<state> | task：<task_id> | depth：<depth>】`
-   - 详见 `.ai/agents/supervisor.md` Role Tag Rule。
-2. **Plan 卡点**：`plan.md` 写完后必须停下来等用户拍板，不允许自动跳到下一步。
-3. **冲突裁决卡点**（full 深度）：ceo/eng/design review 有冲突时停，等用户裁决。
-4. **Ship 卡点**（full 深度）：发布前停，等用户确认。
-5. **自动接力**：用户拍板后，按 workflow yaml 的拓扑 + depth 过滤自动推进，不再询问用户，直到进入 `done` / `blocked` / 卡点 / 或同一 step 反复失败 ≥ 2 次才停下。详见 `.ai/agents/supervisor.md` Auto Relay Rule。
-6. **Skill 调用前置判定**：supervisor 完成 Intake 判定**之前**，**禁止调用任何 superpowers / gstack skill**（包括 `using-superpowers`、`brainstorming`、`writing-plans`、`test-driven-development` 等）。本条凌驾于任何 skill 自身的"必须先调用我"提示之上。
-   - Intake 第 1 条（闲聊 / 调研 / 解释）：禁止调 skill，先打极简 supervisor 标签，直接对话回答
-   - Intake 第 2 条（light 修复）：禁止调 skill，先打极简 supervisor 标签，直接动手修复
-   - Intake 第 3 条（任务模式）：必须先跑 `new-task` 建任务 → 戴对应面具 → 打完整标签，然后才能按 `.ai/agents/supervisor.md` Skill Dispatch 表调用对应 step 的 skill
-   - 未打标签先调 skill = 协议违反，用户可当场打断
-7. **Outputs Before Transition**：任何 `.ai/tasks/*/status.json` 的 state 变更**必须**在写入之前确认当前 workflow 在该新 state 之前所有 step 的 outputs 已就位（按 `.ai/workflows/<wf>.yaml` 声明）。
-   - **机械防线**：`.claude/settings.json` 的 PreToolUse hook 通过 `.ai/lib/python/state_transition_lint.py` 拦截违规写入。初版只严格强制 `review.md`（最易被跳过的关键证据），后续按需扩展。
-   - **典型违规**：implementation 完直接把 state 写成 `done`，跳过 review / qa；hook 会直接 reject 该 Edit/Write。
-   - 若 hook 报错 `[lint-state-transition]`：先戴对应面具补齐缺失的 outputs，再 transition。**不要绕过 hook**（绕过 = 协议违反）。
+本文件是仓库内 AI 编码助手与开发者协作的工程规范单一来源。开始任何工作前先阅读本文件；修改前端时再读 `frontend/README.md`，修改后端时再读 `backend/README.md`。
 
 ---
 
-## 1. Core Rules
+## 文档路由（任务开始前先读这里）
 
-Agent MUST：
+本节是查询路由，不是规范。Claude 接到任务时先用关键词在表里定位 🟢 当前真相文档，读完再动代码；修改"看起来设计奇怪"的代码前，去📜历史背景里找一遍——大多是历史决策的延续。
 
-- 进入任一 step 前**先打角色标签**（见 §0）
-- 仅执行**当前所戴面具**职责范围内工作（面具切换由 supervisor 按 workflow yaml 完成）
-- 严格遵循 Workflow
-- 按需加载 Context
-- 按当前 workflow 声明的 step 顺序流转，不可跳步
-- 当前 step 声明的 outputs 齐备后才能流转到下一 step
-- 状态变更（state / current_owner / next_owner）必须**先写 status.json，再产出内容**
+### 基础设施层（跨业务通用）
 
-Agent MUST NOT：
+- AI 协作流程 / artifact / review / synthesis → `docs/protocols/*.md`
+- MCP 配置 → `docs/claude-mcp.md`
 
-- 戴着某个面具时做该面具职责外的事（如戴 backend 面具时做 review）
-- 跳过 Plan 卡点（plan.md 写完即等用户确认，禁止自跳 implementation）
-- 跳过当前 workflow 中的任何 step
-- 全量扫描 Memory
-- 全量加载历史任务
-- 在拍板后的自动接力过程中无故停下询问用户（中断条件仅限 done / blocked / 反复失败）
+### 业务逻辑层（🟢=当前真相 必读 ｜ 📜=历史背景 看似奇怪时再读）
 
----
+| 任务关键词                       | 🟢 当前真相                                                                                                                                                                                                      | 📜 历史背景                                                                                                                     |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Interviewer / 面试官 / 对话节点  | `docs/superpowers/specs/2026-06-02-agentic-interviewer-design.md`                                                                                                                                                | `docs/superpowers/specs/2026-05-25-interviewer-agent-design.md`<br>`docs/superpowers/specs/2026-05-24-interview-chat-design.md` |
+| 面试房 UX / 前端对话流           | `docs/superpowers/specs/2026-05-25-interview-ux-phase2-design.md`                                                                                                                                                | —                                                                                                                               |
+| Prepare / Supervisor / JD / 题库 | `docs/superpowers/plans/2026-06-01-supervisor-parallel-subagents.md`<br>`docs/superpowers/plans/2026-06-01-backend-chain-prepare-to-interview.md`<br>`docs/superpowers/specs/2026-06-01-qa-bank-design.md`       | `docs/superpowers/specs/2026-05-25-phase3-jd-agent-design.md`                                                                   |
+| Coach / 反馈 / 简历记忆          | `docs/superpowers/plans/2026-06-02-coach-resume-memory.md`<br>`docs/superpowers/specs/2026-05-28-phase5-coach-agent-shared-memory-design.md`<br>`docs/superpowers/specs/2026-05-26-coach-single-entry-design.md` | `docs/superpowers/specs/2026-05-25-coach-interview-ux-integration.md`                                                           |
+| 候选人建模 / 追问策略 / Eval     | `docs/superpowers/specs/2026-05-28-phase4-plus-candidate-modeling-design.md`<br>`docs/superpowers/plans/2026-05-28-phase4-parallel-eval.md`                                                                      | `docs/superpowers/plans/2026-05-28-fix-eval-qa-issues.md`                                                                       |
 
-## 2. Task Contract
+### 路由使用规则
 
-每个任务必须包含：
-
-- 任务描述（task.md）
-- 执行计划（plan.md）
-- 状态记录（status.json）
-- 交接记录（handoff.md）
-- 审查记录（review.md，如适用）
-
-**创建约束：**
-
-- 禁止手动创建任务目录或硬编码时间戳。
-- **必须**使用工具脚本创建：`bash .ai/bin/new-task <name> <workflow> <priority>`。
-- 脚本会自动获取系统 UTC 时间，确保 `created_at` 与驾驶舱同步。
-
-文件结构以 `.ai/prompts/` 下各模板为准。
-status.json 的字段定义以 `.ai/prompts/status-template.md` 为唯一来源，本文件不重复枚举。
-
-支持的任务类型由 `.ai/workflows/*.yaml` 决定（当前包含：feature / bugfix / refactor / migration / release / rollback / hotfix）。新增 workflow 时只需增删对应 yaml，无需修改本文件。
+1. 任务开始时先在表里搜关键词，把 🟢 列文件读完再动代码。
+2. 修改"看起来设计奇怪"的代码前，去 📜 列找一遍——大多是历史决策。
+3. 表里没有的任务类型 → 在 `docs/superpowers/specs/` 按文件名搜，命中后按时间倒序读。
+4. QA 报告（`docs/superpowers/qa-reports/`）只在确认验收口径时读，不是常规入口。
+5. 调度台 / Cockpit / Inline Trace 相关文档已下线，不要把它们当作当前真相。
 
 ---
 
-## 3. Workflow
+## 0. 基本原则
 
-每个 workflow 的具体状态流转以 `.ai/workflows/<workflow>.yaml` 为唯一来源，本文件不再硬编码任何 workflow 的完整流程。
+- 每次回复使用中文。
+- 先理解上下文，再修改代码；不要凭文件名或旧记忆做大范围假设。
+- 优先遵循现有架构、命名、目录边界和测试风格。
+- 保持改动聚焦，只处理用户当前请求相关内容。
+- 不引入无关重构、格式化噪音或依赖升级。
+- 不提交真实密钥、Token、生产数据库地址或用户隐私数据。
+- 删除任何文件、目录、数据、分支或远程资源前，必须先说明删除目标与影响范围，并等待用户明确允许后再删除。
 
-通用约束：
+---
 
-- `state` 字段值即任务当前所处的 workflow step，**全部使用小写**（不再使用 TODO / IN_PROGRESS / DONE 这类进度细分）
-- 任务"是否结束"由是否进入 `done` 表达
-- `blocked` 为通用异常状态，任意 step 都可进入；解除后由 workflow 的 `resume_to` 字段决定返回 step
+## 1. Git 规则
 
-下例仅为 `feature` workflow 的形态示意，其他 workflow（bugfix / migration / hotfix 等）见各自 yaml：
+- 默认不创建 commit、不 push、不切分支，除非用户明确要求。
+- 开始修改前查看工作区状态，识别已有改动。
+- 不回滚用户或其他工具产生的改动；如果这些改动影响当前任务，先读懂并在其基础上继续。
+- 禁止使用破坏性命令清理工作区，例如强制 reset、强制 checkout、删除分支或删除远程资源，除非用户明确授权。
+- 提交前只包含当前任务相关文件；不要把日志、缓存、临时产物加入版本控制。
+
+---
+
+## 2. 默认工作流
+
+1. 阅读相关入口文档和代码，确认需求边界。
+2. 对复杂任务先形成简短计划；简单修复可直接执行。
+3. 修改代码时保持小步、可验证。
+4. 根据改动范围运行对应测试、类型检查、lint 或构建。
+5. 最终回复说明改了什么、验证结果、未完成或无法验证的风险。
+
+遇到不确定点时：
+
+- 如果能从仓库上下文安全推断，直接做出保守选择。
+- 如果选择会影响数据、安全、对外契约或较大产品行为，先向用户确认。
+
+---
+
+## 3. 项目结构
 
 ```text
-planning
-↓
-implementation
-↓
-review
-↓
-testing
-↓
-done
+multi-agent-coach/
+├── backend/         # FastAPI 后端服务
+├── frontend/        # Next.js 前端应用
+├── docs/            # 项目文档、协议、报告
+├── docker-compose.yml
+├── dev.sh           # 本地全栈启动脚本
+├── README.md        # 项目总入口
+└── CLAUDE.md        # 工程规范单一来源
+```
+
+本地开发日志如 `backend.log`、`celery.log`、`frontend.log` 只用于排查，不需要提交。
+
+---
+
+## 4. 后端规范
+
+技术栈：Python 3.12、FastAPI、SQLAlchemy 2.x async、asyncpg、Alembic、Celery、Redis、structlog、Pytest、Ruff、Mypy。
+
+- 配置统一通过 `pydantic-settings` 读取 `.env` 和环境变量。
+- 数据库结构变更必须通过 Alembic 迁移管理，不要直接手改表结构。
+- 异步数据库代码使用 SQLAlchemy 2.x async API。
+- API schema 使用 Pydantic，路由层保持薄，业务逻辑下沉到 services、agents 或明确的领域模块。
+- 日志使用 `structlog`，不要用 `print`。
+- 外部 API、LLM、抓取和网络调用必须考虑 timeout、retry、错误日志和降级行为。
+- 不要吞异常；fallback 必须记录 warning 或 error。
+- 用户可见失败要返回明确、可排查的错误信息。
+- 认证和权限逻辑属于安全边界，改动时必须补充测试。
+
+常用后端命令：
+
+```bash
+cd backend
+uv run ruff check .
+uv run mypy app
+uv run pytest tests/
+uv run alembic upgrade head
 ```
 
 ---
 
-## 4. Context Loading
+## 5. 前端规范
 
-Memory 分两层，按需加载：
+技术栈：Next.js App Router、React、TypeScript、Tailwind CSS、shadcn/ui、lucide-react、Clerk、Vitest、Testing Library。
 
-| 层 | 位置 | 内容 | 管理方式 |
-|---|---|---|---|
-| 项目记忆 | `.ai/memory/` | 架构、规范、API、决策、测试 | workflow 自动维护（见 supervisor.md） |
-| 自动记忆 | `~/.claude/projects/.../memory/` | 用户偏好、反馈、项目目标 | Claude Code 自动写入 |
+- 组件优先使用现有 shadcn/ui 和项目内已有组件。
+- 图标优先使用 `lucide-react`。
+- 不新增 UI 或状态管理依赖，除非用户同意且理由明确。
+- 组件职责保持单一，复杂业务逻辑放到 hooks、services、server actions 或清晰的工具函数。
+- 用户可见流程必须覆盖 loading、error、empty state。
+- 表单和交互必须考虑禁用态、错误提示、重复提交和移动端布局。
+- 不做纯营销落地页式界面，优先交付可用产品界面。
+- 文案要直接、具体，避免用页面文字解释实现细节或快捷键。
+- 修改 UI 后，在可行时用浏览器实际打开页面检查布局、交互和控制台错误。
 
-### 加载机制
+常用前端命令：
 
-1. **索引入口**：`.ai/memory/MEMORY.md` 列出所有可用记忆及其描述
-2. **Intake 加载**：supervisor 判定 workflow + depth 后，按任务关键词匹配并加载相关 memory（规则见 `.ai/agents/supervisor.md` Memory Loading 段）
-3. **面具切换加载**：切面具时按该面具的 Context 段声明补加载
-4. **done 自动写**：任务归档时 supervisor 检出新知识并写入对应 memory 文件
-
-### 加载规则
-
-- 仅加载完成当前任务所需的最小 Context
-- 不加载无关 Memory
-- 不加载全部历史任务
-- 先读 MEMORY.md 索引再决定加载哪些具体文件
-
----
-
-## 5. Decision Priority
-
-发生冲突时按以下顺序裁决：
-
-```text
-CLAUDE.md
-↓
-用户当前请求
-↓
-Task（task.md / plan.md / status.json / handoff.md / review.md）
-↓
-Workflow（workflows/*.yaml + workflows/README.md）
-↓
-Decisions（memory/decisions.md）
-↓
-Memory（memory/* 其余知识，内部次序：architecture → conventions → project → 领域规范）
-↓
-Agent（agents/*.md 角色定义）
+```bash
+cd frontend
+pnpm test
+pnpm typecheck
+pnpm build
 ```
 
-高优先级覆盖低优先级。
+---
 
-说明：
+## 6. 注释规范
 
-- CLAUDE.md 与用户当前请求若直接冲突（如用户要求跳过 review/testing），Agent 必须先向用户明确确认是否临时覆盖协议，确认后才执行
-- 本节链条与 `.ai/README.md` 的规范优先级保持一致
+- 代码应优先通过命名和结构自解释。
+- 只在复杂业务规则、边界条件、外部系统约束或非显然取舍处写注释。
+- 注释解释“为什么”和“风险”，不要复述代码在做什么。
+- 不保留过期 TODO；若必须保留，写清楚触发条件和后续动作。
 
 ---
 
-## 6. Collaboration
+## 7. Review 重点
 
-单 Coach 模式下不存在多 Agent 实例间通信，所有"协作"都退化为 supervisor 在不同 step 切面具。规则：
+做代码 review 或自检时优先看：
 
-- supervisor 是唯一与用户对话的入口
-- 面具之间不直接对话，所有交接信息走 `handoff.md`（追加段）
-- 所有任务状态必须同步到 `status.json`（lint-protocol 可校验）
-- 跨 step 流转必须严格按 `.ai/workflows/<workflow>.yaml` 的 `next` / `transitions` 字段
+- 行为是否满足用户请求，是否引入回归。
+- 数据模型、迁移、API contract 是否前后一致。
+- 认证、权限、用户隔离和敏感信息处理是否安全。
+- 异步流程、SSE、队列、重试和幂等是否可靠。
+- LLM 输出是否被错误信任，是否缺少校验或边界保护。
+- 错误处理是否可观测，用户是否能获得明确反馈。
+- 测试是否覆盖 success、failure 和关键 regression case。
 
----
-
-## 7. Handoff
-
-交接时必须在 `handoff.md` **追加**一段（不覆盖前一段），格式见 `.ai/prompts/handoff-template.md`。
-
-必填：
-
-- Completed
-- Next Step（含下一负责人 + 下一动作）
-
-按需补充（**无内容时直接省略整个小节，不写"无"/"None"**）：
-
-- Pending
-- Risks
-- Blockers
+Review 结论先列问题，按严重程度排序；没有发现问题时明确说明剩余风险或测试缺口。
 
 ---
 
-## 8. Memory Rules
+## 8. 测试规范
 
-Memory 用于长期知识沉淀。
+- bug 修复应补 regression test，除非成本明显不合理并在回复中说明。
+- 新功能至少覆盖主要 success case 和 failure case。
+- 后端逻辑优先写单元测试；涉及路由、认证、数据库或迁移时补集成验证。
+- 前端交互优先用 Testing Library 覆盖用户行为，不测试实现细节。
+- 修改共享类型、API schema、数据库模型或认证逻辑时，应扩大验证范围。
+- 如果未运行应有验证，最终回复必须说明原因。
 
-允许：
+推荐验证矩阵：
 
-- 架构设计
-- 重要决策
-- 开发规范
-- 可复用经验
-
-禁止：
-
-- 任务进度
-- 调试日志
-- 临时记录
-- 一次性方案
-
----
-
-## 9. Definition of Done
-
-进入 done 前必须满足：
-
-- 当前 workflow（见 `.ai/workflows/<id>.yaml`）声明的所有 step 已按顺序完成
-- 各 step 声明的 outputs 文件均已生成（如 `plan.md` / `review.md` / `handoff.md` 等）
-- `status.json.state = done`，`next_owner = null`
-- `handoff.md` 已记录最终交接
-
-各 workflow 必经 step 不在本文件中重复枚举，以对应 yaml 为唯一来源。新增 workflow 不需要修改本节。
+| 改动范围           | 最低验证                             |
+| ------------------ | ------------------------------------ |
+| 文档               | 检查链接、命令和描述是否准确         |
+| 后端业务逻辑       | `uv run ruff check .`、相关 `pytest` |
+| 后端类型或共享模块 | `uv run mypy app`、相关 `pytest`     |
+| 数据库模型         | Alembic 迁移、相关 DB 测试或迁移验证 |
+| 前端组件           | `pnpm test`、`pnpm typecheck`        |
+| 前端构建或路由     | `pnpm build`                         |
+| 跨前后端契约       | 后端测试 + 前端类型检查 + 浏览器手测 |
 
 ---
 
-## 10. Failure Handling
+## 9. 本地启动
 
-`blocked` 是 workflow 内的合法状态，用于业务依赖等待。
-下面这些情况是**协议违反**，Agent 必须中断流转并显式上报，不能默默继续：
+一键启动全栈：
 
-| 异常 | 处理 |
-|---|---|
-| `status.json` 缺失或 JSON 损坏 | 标记任务为 broken，向用户说明，停止流转 |
-| `workflow` id 在 `.ai/workflows/` 不存在 | 向用户确认 workflow 类型，修正 `status.json` 后重试 |
-| `state` 不在当前 workflow 的 steps 列表内 | 视为非法状态，回退到上一个合法 state 或进入 `blocked` |
-| `current_owner` / `next_owner` 不在当前 workflow 声明的合法角色集 | 申请重新指派，不擅自接管 |
-| 当前 step 声明的 outputs 缺失 | 不允许流转到 next，先补齐 outputs |
-| `handoff.md` 缺失或未追加新段 | 不允许进入 next step |
-| 同一 step 长期 `blocked`（>1 个工作周期） | 升级到 planner，由 planner 决定改 workflow 或拆任务 |
+```bash
+./dev.sh
+```
 
-校验工具：`.ai/bin/lint-protocol` 可在 CI 或本地批量执行上述检查。
+手动启动前端：
+
+```bash
+cd frontend
+pnpm install
+pnpm dev
+```
+
+手动启动后端：
+
+```bash
+cd backend
+uv sync
+uv run uvicorn app.main:app --reload
+```
+
+默认地址：
+
+- 前端：`http://localhost:3000`
+- 后端：`http://localhost:8000`
 
 ---
 
-## 11. Principles
+## 10. 完成标准
 
-1. Context First（先理解上下文再行动）
-2. On-Demand Loading（按需加载）
-3. Workflow Is Mandatory（流程不可跳过）
-4. Decisions Override Implementation（决策优先于实现）
-5. Outputs Before Transition（产出齐备才能流转到下一 step）
-6. Workflow Defines Completion（done 的判定以当前 workflow 必需 step 为准）
-7. Memory Stores Knowledge, Not Progress（Memory 存知识，不存进度）
+任务完成前确认：
+
+- 用户请求的行为已经实现或明确解释为何不能实现。
+- 改动范围与需求匹配，没有混入无关变更。
+- 相关测试、类型检查、lint 或构建已运行；未运行项已说明。
+- 没有新增真实密钥、临时日志、缓存文件或无关生成物。
+- 最终回复包含改动摘要、验证结果和必要的后续风险。

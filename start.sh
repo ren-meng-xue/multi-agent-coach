@@ -42,8 +42,19 @@ echo -e "${C_GREEN}🎨 [Frontend] 启动中...${C_RESET}"
 (cd frontend && pnpm dev --port 3000 > ../logs/frontend.log 2>&1) &
 
 # 4. 启动 Agent OS 总线
-echo -e "${C_GREEN}🤖 [Agent OS] 启动总线监听器...${C_RESET}"
-bash .ai/bus/bin/watch.sh > logs/bus.log 2>&1 &
+AGENT_OS_DIR=""
+if [ -d ".ai" ]; then
+    AGENT_OS_DIR=".ai"
+elif [ -d "ai" ]; then
+    AGENT_OS_DIR="ai"
+fi
+
+if [ -n "$AGENT_OS_DIR" ] && [ -f "$AGENT_OS_DIR/bus/bin/watch.sh" ]; then
+    echo -e "${C_GREEN}🤖 [Agent OS] 启动总线监听器...${C_RESET}"
+    bash "$AGENT_OS_DIR/bus/bin/watch.sh" > logs/bus.log 2>&1 &
+else
+    echo -e "${C_YELLOW}🤖 [Agent OS] 未找到总线脚本，跳过。${C_RESET}"
+fi
 
 echo -e "${C_CYAN}-------------------------------------------------------${C_RESET}"
 echo -e "🌐 前端: ${C_YELLOW}http://localhost:3000${C_RESET}"
@@ -63,7 +74,11 @@ while true; do
     nc -z localhost 5432 && echo -e "Postgres: ${C_GREEN}ONLINE${C_RESET}" || echo -e "Postgres: ${C_RED}OFFLINE${C_RESET}"
     
     echo -e "\n${C_CYAN}=== Agent OS Cockpit ===${C_RESET}"
-    python3 .ai/dashboard/cockpit_rich.py
+    if [ -n "$AGENT_OS_DIR" ] && [ -f "$AGENT_OS_DIR/dashboard/cockpit_rich.py" ]; then
+        python3 "$AGENT_OS_DIR/dashboard/cockpit_rich.py"
+    else
+        echo -e "${C_YELLOW}Agent OS Cockpit unavailable: missing dashboard script.${C_RESET}"
+    fi
     
     echo -e "\n${C_DIM}Tips: 查看日志使用 'tail -f logs/*.log' | 退出按 Ctrl+C${C_RESET}"
     sleep 2

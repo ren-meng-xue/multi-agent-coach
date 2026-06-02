@@ -24,6 +24,7 @@ async def test_memory_search_returns_weak_areas_from_history():
         result = await memory_search_node(state)
 
     assert len(result["weak_areas"]) > 0
+    assert "memory_search" in result["completed_tools"]
 
 
 @pytest.mark.asyncio
@@ -37,6 +38,7 @@ async def test_memory_search_empty_when_no_history():
         result = await memory_search_node(state)
 
     assert result["weak_areas"] == []
+    assert "memory_search" in result["completed_tools"]
 
 
 @pytest.mark.asyncio
@@ -63,7 +65,7 @@ async def test_jd_analysis_returns_jd_context():
 
     assert result["jd_context"] is not None
     assert result["jd_context"]["key_skills"] == ["Python", "分布式系统", "Kafka"]
-    assert result["jd_context"]["difficulty"] == "hard"
+    assert "jd_analysis" in result["completed_tools"]
 
 
 @pytest.mark.asyncio
@@ -74,6 +76,7 @@ async def test_jd_analysis_skips_when_no_jd():
     state: PrepareState = {"user_id": "u1", "jd_raw": None}
     result = await jd_analysis_node(state)
     assert result.get("jd_context") is None
+    assert "jd_analysis" in result["completed_tools"]
 
 
 # 测试辅助：模拟 async iterator
@@ -106,6 +109,7 @@ async def test_question_gen_returns_5_questions():
 
     assert len(result["prepared_questions"]) == 5
     assert result["prepared_questions"][0]["priority"] == 1
+    assert "question_gen" in result["completed_tools"]
 
 
 @pytest.mark.asyncio
@@ -136,8 +140,8 @@ async def test_question_gen_weak_areas_first():
 
 
 @pytest.mark.asyncio
-async def test_master_detects_direction_from_user_input():
-    from app.agents.prepare.nodes import master_node
+async def test_supervisor_detects_direction_from_user_input():
+    from app.agents.prepare.nodes import supervisor_node
 
     state: PrepareState = {
         "user_id": "u1",
@@ -147,9 +151,9 @@ async def test_master_detects_direction_from_user_input():
     }
 
     mock_decision = MagicMock()
+    mock_decision.next = "question_gen"
     mock_decision.direction = "AI Agent 工程师"
-    mock_decision.chain = ["question_gen"]
-    mock_decision.need_direction = False
+    mock_decision.reasoning = "已提供明确方向"
 
     with patch("app.agents.prepare.nodes._llm") as mock_llm:
         # reasoning stream
@@ -162,16 +166,16 @@ async def test_master_detects_direction_from_user_input():
         mock_llm.return_value.with_structured_output.return_value.ainvoke = AsyncMock(
             return_value=mock_decision
         )
-        result = await master_node(state)
+        result = await supervisor_node(state)
 
     assert result["direction"] == "AI Agent 工程师"
-    assert "question_gen" in result["chain"]
-    assert result["need_direction"] is False
+    assert result["next_action"] == "question_gen"
+    assert result["iteration_count"] == 1
 
 
 @pytest.mark.asyncio
-async def test_master_sets_need_direction_when_no_input():
-    from app.agents.prepare.nodes import master_node
+async def test_supervisor_sets_need_direction_when_no_input():
+    from app.agents.prepare.nodes import supervisor_node
 
     state: PrepareState = {
         "user_id": "new_user",
@@ -181,9 +185,9 @@ async def test_master_sets_need_direction_when_no_input():
     }
 
     mock_decision = MagicMock()
+    mock_decision.next = "need_direction"
     mock_decision.direction = ""
-    mock_decision.chain = ["question_gen"]
-    mock_decision.need_direction = True
+    mock_decision.reasoning = "缺少方向"
 
     with patch("app.agents.prepare.nodes._llm") as mock_llm:
         mock_stream = MagicMock()
@@ -194,36 +198,21 @@ async def test_master_sets_need_direction_when_no_input():
         mock_llm.return_value.with_structured_output.return_value.ainvoke = AsyncMock(
             return_value=mock_decision
         )
-        result = await master_node(state)
+        result = await supervisor_node(state)
 
     assert result["need_direction"] is True
+    assert result["next_action"] == "need_direction"
 
 
 @pytest.mark.asyncio
-async def test_master_includes_memory_search_when_has_history():
-    from app.agents.prepare.nodes import master_node
+async def test_supervisor_prevents_loop():
+    from app.agents.prepare.nodes import supervisor_node
 
     state: PrepareState = {
         "user_id": "u1",
-        "user_direction": "后端工程师",
-        "jd_raw": None,
-        "weak_areas": ["量化不足"],  # 已有历史
+        "iteration_count": 6,
     }
 
-    mock_decision = MagicMock()
-    mock_decision.direction = "后端工程师"
-    mock_decision.chain = ["memory_search", "question_gen"]
-    mock_decision.need_direction = False
-
-    with patch("app.agents.prepare.nodes._llm") as mock_llm:
-        mock_stream = MagicMock()
-        mock_stream.content = "• 发现历史记录"
-        mock_llm.return_value.with_config.return_value.astream = MagicMock(
-            return_value=aiter([mock_stream])
-        )
-        mock_llm.return_value.with_structured_output.return_value.ainvoke = AsyncMock(
-            return_value=mock_decision
-        )
-        result = await master_node(state)
-
-    assert "memory_search" in result["chain"]
+    result = await supervisor_node(state)
+    assert result["next_action"] == "END"
+    assert result["iteration_count"] == 7

@@ -91,3 +91,24 @@ test("evaluator 无画像数据时不渲染额外区域", () => {
   );
   expect(queryByText("缺失")).toBeNull();
 });
+
+test("chief_think done 时渲染工具调用和画像 chips", () => {
+  render(
+    <TraceNode
+      id="chief_think"
+      label="思考"
+      title="规划工具调用"
+      status="done"
+      tokens="准备评估并出题"
+      candidateLevel="mid"
+      latentSignals={["量化意识"]}
+      missingDimensions={["边界条件"]}
+      chiefToolCalls={["evaluate_answer", "design_question"]}
+    />
+  );
+  expect(screen.getByText("评估回答")).toBeInTheDocument();
+  expect(screen.getByText("设计题目")).toBeInTheDocument();
+  expect(screen.getByText("mid")).toBeInTheDocument();
+  expect(screen.getByText("量化意识")).toBeInTheDocument();
+  expect(screen.getByText(/缺失：边界条件/)).toBeInTheDocument();
+});

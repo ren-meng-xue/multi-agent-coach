@@ -25,6 +25,7 @@ from app.services.interview_turn import ensure_user_exists
 from app.services.resume_extractor import (
     extract_target_role_from_resume,
     extract_target_role_locally,
+    summarize_resume,
 )
 from app.services.user_stage import derive_user_stage
 from app.services.user_stats import get_user_dashboard_data
@@ -72,7 +73,14 @@ async def upload_resume(
         if extracted_role:
             user.target_role = extracted_role
     except Exception:
-        # 提取失败不阻塞简历上传
+        pass
+
+    # [Sync] 生成简历摘要供 Coach Agent 使用
+    try:
+        summary = await summarize_resume(text_content)
+        if summary:
+            user.resume_summary = summary
+    except Exception:
         pass
 
     await db.commit()

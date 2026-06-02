@@ -885,7 +885,7 @@ cd frontend && pnpm dev
 `task.md` 已经存在（planner 已填）。**不要用 `>` 覆盖**，先查看现状：
 
 ```bash
-cat .ai/tasks/20260601-backend-chain-prepare-to-interview/task.md
+cat ai/tasks/20260601-backend-chain-prepare-to-interview/task.md
 ```
 
 如果缺少"验收标准"或字段已过期，用 Edit/Write 工具替换具体段落，参考目标内容：
@@ -912,7 +912,7 @@ cat .ai/tasks/20260601-backend-chain-prepare-to-interview/task.md
 - [ ] **Step 5-2：写 review.md（新建文件，可以用 `>`）**
 
 ```bash
-cat > .ai/tasks/20260601-backend-chain-prepare-to-interview/review.md << 'EOF'
+cat > ai/tasks/20260601-backend-chain-prepare-to-interview/review.md << 'EOF'
 # Review
 
 ## 审查要点
@@ -946,7 +946,7 @@ EOF
 - [ ] **Step 5-3：写 handoff.md 并更新 status.json**
 
 ```bash
-cat >> .ai/tasks/20260601-backend-chain-prepare-to-interview/handoff.md << 'EOF'
+cat >> ai/tasks/20260601-backend-chain-prepare-to-interview/handoff.md << 'EOF'
 
 ## 2026-06-01 — planner → implementation
 

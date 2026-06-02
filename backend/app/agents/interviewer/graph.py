@@ -8,7 +8,7 @@ from typing import Any
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import END, StateGraph
 
-from app.agents.interviewer import nodes
+from app.agents.interviewer import chief, nodes
 from app.agents.interviewer.nodes import CHAIN_NODES
 from app.agents.interviewer.state import InterviewState
 
@@ -46,45 +46,35 @@ def _route_next_in_chain(current: str):
     return _route
 
 
+
 def build_interviewer_graph(checkpointer: Any | None = None):
     graph = StateGraph(InterviewState)
     graph.add_node("load_context", nodes.load_context_node)
-    graph.add_node("master", nodes.master_node)
-    graph.add_node("evaluator", nodes.evaluator_node)
-    graph.add_node("ask_question", nodes.ask_question_node)
-    graph.add_node("followup", nodes.followup_node)
-    graph.add_node("closing", nodes.closing_node)
+    graph.add_node("chief_think", chief.chief_think)
+    graph.add_node("chief_execute", chief.chief_execute)
+    graph.add_node("chief_respond", chief.chief_respond)
     graph.add_node("report", nodes.report_node)
 
     graph.set_entry_point("load_context")
-    graph.add_edge("load_context", "master")
+    graph.add_edge("load_context", "chief_think")
 
     graph.add_conditional_edges(
-        "master",
-        route_after_master,
+        "chief_think",
+        chief.route_after_chief_think,
         {
-            "evaluator": "evaluator",
-            "followup": "followup",
-            "ask_question": "ask_question",
-            "closing": "closing",
+            "chief_execute": "chief_execute",
+            "chief_respond": "chief_respond",
         },
     )
-
-    # evaluator 后看 chain 下一个
+    graph.add_edge("chief_execute", "chief_think")
     graph.add_conditional_edges(
-        "evaluator",
-        _route_next_in_chain("evaluator"),
+        "chief_respond",
+        chief.route_after_chief_respond,
         {
-            "followup": "followup",
-            "ask_question": "ask_question",
-            "closing": "closing",
-            END: END,
+            "report": "report",
+            "__end__": END,
         },
     )
-
-    graph.add_edge("ask_question", END)
-    graph.add_edge("followup", END)
-    graph.add_edge("closing", "report")
     graph.add_edge("report", END)
     return graph.compile(checkpointer=checkpointer)
 
@@ -127,6 +117,8 @@ async def run_interviewer_turn(state: InterviewState) -> InterviewState:
 
 
 NODE_LABELS = {
+    "chief_think": "思考",
+    "chief_respond": "回复",
     "master": "调度",
     "evaluator": "评估",
     "followup": "面试官 · 追问",
@@ -135,7 +127,7 @@ NODE_LABELS = {
 }
 
 # 不发 node_* 事件的内部节点（用户无需可见）
-_HIDDEN_NODES = {"load_context", "report"}
+_HIDDEN_NODES = {"load_context", "report", "chief_execute"}
 
 
 def _stream_chunk_text(chunk: Any) -> str:
@@ -151,6 +143,25 @@ def _stream_chunk_text(chunk: Any) -> str:
                 parts.append(item["text"])
         return "".join(parts)
     return str(content)
+
+
+def _latest_evaluation_payload(node_dict: dict[str, Any]) -> dict[str, Any]:
+    evals = node_dict.get("turn_evaluations") or []
+    if evals:
+        last = evals[-1]
+    else:
+        report = node_dict.get("evaluator_report") or {}
+        last = report.get("scoring") or {}
+
+    if not isinstance(last, dict) or "summary_score" not in last:
+        return {}
+
+    return {
+        "summary_score": last.get("summary_score"),
+        "candidate_level": last.get("candidate_level"),
+        "latent_signals": last.get("latent_signals", []),
+        "missing_dimensions": last.get("missing_dimensions", []),
+    }
 
 
 async def stream_interviewer_turn_events(state: InterviewState) -> AsyncIterator[dict[str, Any]]:
@@ -182,8 +193,8 @@ async def stream_interviewer_turn_events(state: InterviewState) -> AsyncIterator
                 "event": "node_start",
                 "data": {"node": ev_node, "label": NODE_LABELS.get(ev_node, ev_node)},
             }
-            # F9: 首轮启动静态文案流式体验模拟
-            if ev_node == "master" and state.get("question_count", 0) == 0:
+            # 首轮启动静态文案流式体验模拟
+            if ev_node == "chief_think" and state.get("question_count", 0) == 0:
                 has_prepared_questions = bool(state.get("prepared_questions"))
                 static_text = (
                     "• 从准备阶段题目池中抽取第一道题。"
@@ -191,7 +202,7 @@ async def stream_interviewer_turn_events(state: InterviewState) -> AsyncIterator
                     else "• 面试正式开始，进入首题出题。"
                 )
                 for char in static_text:
-                    yield {"event": "node_token", "data": {"node": "master", "text": char}}
+                    yield {"event": "node_token", "data": {"node": "chief_think", "text": char}}
                     await asyncio.sleep(0.02)
 
         # Token 流：根据 tag 路由
@@ -202,6 +213,9 @@ async def stream_interviewer_turn_events(state: InterviewState) -> AsyncIterator
             if "interviewer_answer_stream" in tags:
                 # 沿用现有 delta 通道供前端 onDelta 处理（不改名）
                 yield {"event": "token", "data": {"text": text}}
+                continue
+            if "chief_think_token_stream" in tags:
+                yield {"event": "node_token", "data": {"node": "chief_think", "text": text}}
                 continue
             if "master_token_stream" in tags:
                 yield {"event": "node_token", "data": {"node": "master", "text": text}}
@@ -230,17 +244,17 @@ async def stream_interviewer_turn_events(state: InterviewState) -> AsyncIterator
             if ev_node == "master" and isinstance(node_dict, dict):
                 payload["chain"] = node_dict.get("chain", [])
                 payload["followup_focus"] = node_dict.get("followup_focus", "")
-            if ev_node == "evaluator" and isinstance(node_dict, dict):
-                evals = node_dict.get("turn_evaluations") or []
-                if evals:
-                    last = evals[-1]
-                    payload["summary_score"] = last.get("summary_score")
-                    payload["candidate_level"] = last.get("candidate_level")
-                    payload["latent_signals"] = last.get("latent_signals", [])
-                    payload["missing_dimensions"] = last.get("missing_dimensions", [])
+            if ev_node == "chief_think" and isinstance(node_dict, dict):
+                msgs = node_dict.get("chief_messages") or []
+                last = msgs[-1] if msgs else None
+                tool_calls = [tc["name"] for tc in (getattr(last, "tool_calls", None) or [])]
+                payload["chief_tool_calls"] = tool_calls
+                payload["chief_thoughts"] = node_dict.get("chief_thoughts", [])
+            if isinstance(node_dict, dict):
+                payload.update(_latest_evaluation_payload(node_dict))
             # 对于 ask_question/followup/closing 节点，将 assistant_message 附在 node_done
             # 里，供前端在没有 LLM token 流时（如有备题路径）填充 trace 面板内容
-            if ev_node in ("ask_question", "followup", "closing") and isinstance(node_dict, dict):
+            if ev_node in ("ask_question", "followup", "closing", "chief_respond") and isinstance(node_dict, dict):
                 am = node_dict.get("assistant_message", "")
                 if am:
                     payload["assistant_message"] = am

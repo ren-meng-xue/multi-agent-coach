@@ -15,20 +15,21 @@ from app.core.logging import get_logger
 log = get_logger("app.agents.prepare.graph")
 
 _NODE_MAP = {
+    "supervisor": nodes.supervisor_node,
     "memory_search": nodes.memory_search_node,
     "jd_analysis": nodes.jd_analysis_node,
     "question_gen": nodes.question_gen_node,
 }
 
 _NODE_LABELS = {
-    "master": "调度",
+    "supervisor": "调度",
     "memory_search": "记忆检索",
     "jd_analysis": "JD分析",
     "question_gen": "出题",
 }
 
 _NODE_TITLES = {
-    "master": "识别方向，启动准备",
+    "supervisor": "识别方向，启动准备",
     "memory_search": "读取历史表现",
     "jd_analysis": "构建岗位考点地图",
     "question_gen": "定制专属题目",
@@ -75,60 +76,41 @@ def _node_completion_trace(ev_node: str, state: dict[str, Any]) -> list[str]:
     return []
 
 
-def route_after_master(state: PrepareState) -> str:
-    if state.get("need_direction"):
+def _supervisor_router(state: PrepareState) -> str:
+    """读取 supervisor 的决策，路由到下一节点。"""
+    action = state.get("next_action", "END")
+    if action == "need_direction":
         return "wait_direction"
-    chain = state.get("chain") or []
-    if chain:
-        return chain[0]
-    return "question_gen"
-
-
-def _route_next_in_chain(current: str):
-    """返回 chain 里 current 之后的下一个节点名。"""
-    def _route(state: PrepareState) -> str:
-        chain = state.get("chain") or []
-        try:
-            idx = chain.index(current)
-            if idx + 1 < len(chain):
-                return chain[idx + 1]
-        except ValueError:
-            pass
-        return END
-    return _route
+    return action
 
 
 def _build_graph() -> Any:
     g = StateGraph(PrepareState)
-    g.add_node("master", nodes.master_node)
+    g.add_node("supervisor", nodes.supervisor_node)
     g.add_node("memory_search", nodes.memory_search_node)
     g.add_node("jd_analysis", nodes.jd_analysis_node)
     g.add_node("question_gen", nodes.question_gen_node)
 
-    g.set_entry_point("master")
+    g.set_entry_point("supervisor")
+
+    # Supervisor → 各子节点（含 END）
     g.add_conditional_edges(
-        "master",
-        route_after_master,
+        "supervisor",
+        _supervisor_router,
         {
             "memory_search": "memory_search",
             "jd_analysis": "jd_analysis",
             "question_gen": "question_gen",
-            "wait_direction": END,  # 暂停等用户输入，resume 时重新触发
+            "wait_direction": END,
+            "END": END,
         },
     )
 
-    # 动态路由：每个子 Agent 完成后看 chain 里下一个是谁
-    for node_name in ("memory_search", "jd_analysis"):
-        g.add_conditional_edges(
-            node_name,
-            _route_next_in_chain(node_name),
-            {
-                "jd_analysis": "jd_analysis",
-                "question_gen": "question_gen",
-                END: END,
-            },
-        )
-    g.add_edge("question_gen", END)
+    # 各子节点完成后回流到 supervisor
+    g.add_edge("memory_search", "supervisor")
+    g.add_edge("jd_analysis", "supervisor")
+    g.add_edge("question_gen", "supervisor")
+
     return g.compile()
 
 
@@ -168,29 +150,34 @@ async def stream_prepare_events(state: PrepareState) -> AsyncIterator[dict[str, 
         ev_node = event.get("metadata", {}).get("langgraph_node", "")
 
         # 节点开始
-        if ev_name == "on_chain_start" and ev_node and ev_node != current_node:
-            current_node = ev_node
-            elapsed_tracker[ev_node] = time.time()
-            yield {
-                "event": "node_start",
-                "data": {
-                    "node": ev_node,
-                    "label": _NODE_LABELS.get(ev_node, ev_node),
-                    "title": _NODE_TITLES.get(ev_node, ev_node),
-                },
-            }
+        if ev_name == "on_chain_start" and ev_node:
+            # 对于 supervisor，允许重复触发；对于其他节点，只触发一次且避免重复 yield 同一节点
+            if ev_node == "supervisor" or (ev_node != current_node and ev_node not in finished_nodes):
+                current_node = ev_node
+                elapsed_tracker[ev_node] = time.time()
+                yield {
+                    "event": "node_start",
+                    "data": {
+                        "node": ev_node,
+                        "label": _NODE_LABELS.get(ev_node, ev_node),
+                        "title": _NODE_TITLES.get(ev_node, ev_node),
+                    },
+                }
 
-        # 流式 token（master + question_gen）
+        # 流式 token（supervisor + question_gen）
         token = _extract_token(event)
         tags = event.get("tags", [])
-        if token and any(t in tags for t in ("prepare_master_stream", "prepare_question_gen_stream")):
+        if token and any(t in tags for t in ("prepare_supervisor_stream", "prepare_question_gen_stream")):
             yield {"event": "node_token", "data": {"node": ev_node, "text": token}}
 
         # 节点结束
-        if ev_name == "on_chain_end" and ev_node and ev_node not in finished_nodes:
+        if ev_name == "on_chain_end" and ev_node:
             # 只有当 event['name'] 跟 ev_node 一致或者是顶级节点时才算真正结束
-            # astream_events 会 yield 子 chain 的结束
             if event.get("name") != ev_node:
+                continue
+            
+            # 对于 supervisor 允许重复触发，其他节点只触发一次
+            if ev_node != "supervisor" and ev_node in finished_nodes:
                 continue
 
             finished_nodes.add(ev_node)
@@ -198,7 +185,7 @@ async def stream_prepare_events(state: PrepareState) -> AsyncIterator[dict[str, 
             node_state = event.get("data", {}).get("output") or {}
 
             extra: dict[str, Any] = {"elapsed_ms": elapsed_ms}
-            if ev_node == "master":
+            if ev_node == "supervisor":
                 # 兼容 Pydantic 对象和 dict
                 node_dict = node_state
                 if hasattr(node_state, "model_dump"):
@@ -207,7 +194,7 @@ async def stream_prepare_events(state: PrepareState) -> AsyncIterator[dict[str, 
                     node_dict = node_state.dict()
                 
                 if isinstance(node_dict, dict):
-                    extra["chain"] = node_dict.get("chain", [])
+                    extra["next_action"] = node_dict.get("next_action", "END")
                     extra["need_direction"] = node_dict.get("need_direction", False)
 
             if isinstance(node_state, dict):

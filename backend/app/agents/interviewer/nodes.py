@@ -123,13 +123,22 @@ async def _generate_text(system_prompt: str, state: InterviewState) -> str:
 
 async def load_context_node(state: InterviewState) -> InterviewState:
     """Normalize defaults before master scheduling."""
+    question_count = state.get("question_count", 0)
     return {
         "stage": state.get("stage") or "interview",
-        "question_count": state.get("question_count", 0),
+        "question_count": question_count,
         "total_questions": state.get("total_questions", 5),
         "followup_count": state.get("followup_count", 0),
         "max_followups": state.get("max_followups", 2),
+        "current_question_index": state.get("current_question_index", question_count),
         "turn_evaluations": state.get("turn_evaluations", []),
+        "chief_iteration": 0,
+        "chief_messages": [],
+        "chief_thoughts": [],
+        "chief_tool_results": [],
+        "evaluator_report": None,
+        "designer_output": None,
+        "designer_dual_output": None,
     }
 
 
@@ -221,6 +230,13 @@ def _enforce_chain(chain: list[str], state: InterviewState) -> list[str]:
             log.warning("master_chain_forced_closing", original=chain)
         return ["closing"]
 
+    # 2.5 当前题追问达到上限后必须推进流程，不能继续在同一题内深挖。
+    if followup_count >= max_followups:
+        forced = ["closing"] if question_count >= total_questions else ["evaluator", "ask_question"]
+        if chain != forced:
+            log.warning("master_chain_forced_after_max_followups", original=chain, fixed=forced)
+        return forced
+
     # 3. 过滤非法节点 + 去空
     cleaned = [n for n in chain if n in CHAIN_NODES]
     if not cleaned:
@@ -300,7 +316,7 @@ def _build_evaluator_context(state: InterviewState) -> str:
     msgs = state.get("messages", [])[-MAX_TURNS:]
     transcript = []
     for m in msgs:
-        role = "面试官" if getattr(m, "type", "") == ".ai" else "候选人"
+        role = "面试官" if getattr(m, "type", "") == "ai" else "候选人"
         text = str(getattr(m, "content", ""))[:400]
         transcript.append(f"{role}：{text}")
 
@@ -380,6 +396,16 @@ async def evaluator_node(state: InterviewState) -> InterviewState:
     if user_id and hasattr(db, "execute"):
         try:
             from uuid import UUID
+
+            from sqlalchemy.ext.asyncio import AsyncSession
+
+            if not isinstance(db, AsyncSession):
+                return {
+                    **state,
+                    "turn_evaluations": updated,
+                    "candidate_profile": new_profile,
+                }
+
             raw_sid = state.get("session_id")
             session_id = UUID(str(raw_sid)) if raw_sid else None
 
@@ -496,7 +522,7 @@ async def ask_question_node(state: InterviewState) -> InterviewState:
     """出新一题（优先用 prepared_questions）。"""
     next_question_count = state.get("question_count", 0) + 1
     prepared = state.get("prepared_questions") or []
-    idx = state.get("current_question_index", 0)
+    idx = state.get("current_question_index", state.get("question_count", 0))
 
     if prepared and idx < len(prepared):
         question_text = prepared[idx]["question"]

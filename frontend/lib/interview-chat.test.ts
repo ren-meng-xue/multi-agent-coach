@@ -182,6 +182,39 @@ describe("streamInterviewChat", () => {
       chain: ["evaluator", "followup"],
     });
   });
+
+  it("透传 chief_think 的评估数据和工具调用", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          makeSseStream(
+            'event: node_done\ndata: {"node":"chief_think","elapsed_ms":88,"summary_score":8.2,"candidate_level":"mid","latent_signals":["量化意识"],"missing_dimensions":["边界条件"],"chief_tool_calls":["evaluate_answer","design_question"]}\n\n' +
+              "event: done\ndata: {}\n\n",
+          ),
+          { status: 200 },
+        ),
+      ),
+    );
+
+    const events: unknown[] = [];
+    await streamInterviewChat({
+      token: "test-token",
+      message: "hi",
+      onDelta: vi.fn(),
+      onTraceNode: (ev) => events.push(ev),
+    });
+
+    expect(events[0]).toMatchObject({
+      phase: "done",
+      node: "chief_think",
+      summaryScore: 8.2,
+      candidateLevel: "mid",
+      latentSignals: ["量化意识"],
+      missingDimensions: ["边界条件"],
+      chiefToolCalls: ["evaluate_answer", "design_question"],
+    });
+  });
 });
 
 describe("resetInterviewSession", () => {
@@ -261,6 +294,54 @@ describe("fetchInterviewContext", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 401 })));
     const { fetchInterviewContext } = await import("./interview-chat");
     await expect(fetchInterviewContext({ token: "bad" })).rejects.toThrow("获取用户信息失败");
+  });
+});
+
+describe("fetchActiveInterviewSession", () => {
+  beforeEach(() => {
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "http://localhost:8000");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("获取活动会话，包含 turn_trace 消息", async () => {
+    const payload = {
+      session_id: "session-123",
+      messages: [
+        { role: "user", content: "hi" },
+        {
+          role: "assistant",
+          content: "hello",
+          turn_trace: {
+            status: "done",
+            nodes: [{ id: "master", status: "done", tokens: "thinking" }],
+            turnIndex: 1,
+          },
+        },
+      ],
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { fetchActiveInterviewSession } = await import("./interview-chat");
+    const result = await fetchActiveInterviewSession({ token: "test-token" });
+
+    expect(result.session_id).toBe("session-123");
+    expect(result.messages[1].turn_trace).toMatchObject({
+      status: "done",
+      turnIndex: 1,
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/v1/interview/active",
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer test-token" }),
+      }),
+    );
   });
 });
 

@@ -222,7 +222,7 @@ def _build_evaluator_context(state: InterviewState) -> str:
     msgs = state.get("messages", [])[-MAX_TURNS:]
     transcript = []
     for m in msgs:
-        role = "面试官" if getattr(m, "type", "") == ".ai" else "候选人"
+        role = "面试官" if getattr(m, "type", "") == "ai" else "候选人"
         text = str(getattr(m, "content", ""))[:400]
         transcript.append(f"{role}：{text}")
 

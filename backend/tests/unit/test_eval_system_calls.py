@@ -60,7 +60,7 @@ async def test_scoring_adapter_converts_messages_and_returns_latest_evaluation()
             TargetType.SCORING,
             {
                 "messages": [
-                    {"role": ".ai", "content": "讲讲你的项目"},
+                    {"role": "ai", "content": "讲讲你的项目"},
                     {"role": "user", "content": "我做了 A/B 测试，CTR 提升 12%"},
                 ],
                 "target_role": "AI 工程师",
@@ -136,6 +136,53 @@ async def test_followup_adapter_returns_assistant_message():
 
 
 @pytest.mark.asyncio
+async def test_agent_quality_adapter_runs_chief_loop():
+    """AGENT_QUALITY → Chief 单轮 loop，返回决策轨迹和最终回复。"""
+    with patch(
+        "app.eval.system_calls.chief_think",
+        new=AsyncMock(
+            side_effect=[
+                {
+                    "chief_messages": [
+                        AIMessage(
+                            content="",
+                            tool_calls=[
+                                {"name": "evaluate_answer", "args": {}, "id": "eval"},
+                                {"name": "design_question", "args": {"focus": "dual"}, "id": "design"},
+                            ],
+                        )
+                    ],
+                    "chief_iteration": 0,
+                },
+                {
+                    "chief_messages": [AIMessage(content="直接回复")],
+                    "chief_iteration": 1,
+                    "chief_tool_results": [{"tool": "evaluate_answer"}, {"tool": "design_question"}],
+                },
+            ]
+        ),
+    ), patch(
+        "app.eval.system_calls.chief_execute",
+        new=AsyncMock(return_value={"chief_iteration": 1, "chief_tool_results": [{"tool": "evaluate_answer"}, {"tool": "design_question"}]}),
+    ), patch(
+        "app.eval.system_calls.chief_respond",
+        new=AsyncMock(return_value={"assistant_message": "请补充优化前后的延迟数据。", "stage": "interview"}),
+    ):
+        out = await dispatch_system_call(
+            TargetType.AGENT_QUALITY,
+            {
+                "messages": [{"role": "user", "content": "我做了缓存优化"}],
+                "target_role": "AI 工程师",
+                "question_count": 1,
+                "total_questions": 5,
+            },
+        )
+
+    assert out["assistant_message"].startswith("请补充")
+    assert out["chief_tool_results"] == [{"tool": "evaluate_answer"}, {"tool": "design_question"}]
+
+
+@pytest.mark.asyncio
 async def test_review_adapter_returns_review_text():
     """REVIEW → coach.review_node，返回 review_text。"""
     with patch(
@@ -196,11 +243,12 @@ async def test_dispatch_raises_for_unknown_target_type():
 
 
 def test_system_calls_dict_covers_all_target_types():
-    """SYSTEM_CALLS 必须覆盖全部 5 个 TargetType，防止后续新增 target_type 时漏接。"""
+    """SYSTEM_CALLS 必须覆盖全部 TargetType，防止后续新增 target_type 时漏接。"""
     expected = {
         TargetType.QUESTION,
         TargetType.SCORING,
         TargetType.FOLLOWUP,
+        TargetType.AGENT_QUALITY,
         TargetType.REVIEW,
         TargetType.PLAN,
     }

@@ -1240,7 +1240,7 @@ def _build_evaluator_context(state: InterviewState) -> str:
     for m in reversed(state.get("messages", [])):
         if not last_user and getattr(m, "type", "") == "human":
             last_user = str(getattr(m, "content", ""))[:600]
-        elif not last_ai and getattr(m, "type", "") == ".ai":
+        elif not last_ai and getattr(m, "type", "") == "ai":
             last_ai = str(getattr(m, "content", ""))[:300]
         if last_user and last_ai:
             break

@@ -5,34 +5,33 @@ from app.agents.prepare.state import PrepareState
 
 
 @pytest.mark.asyncio
-async def test_route_after_master_includes_jd_when_has_jd():
-    from app.agents.prepare.graph import route_after_master
+async def test_supervisor_router_routes_to_next_action():
+    from app.agents.prepare.graph import _supervisor_router
 
     state: PrepareState = {
-        "chain": ["memory_search", "jd_analysis", "question_gen"],
+        "next_action": "memory_search",
     }
-    assert route_after_master(state) == "memory_search"
+    assert _supervisor_router(state) == "memory_search"
 
 
 @pytest.mark.asyncio
-async def test_route_after_master_skips_to_question_gen():
-    from app.agents.prepare.graph import route_after_master
+async def test_supervisor_router_need_direction_returns_wait():
+    from app.agents.prepare.graph import _supervisor_router
 
     state: PrepareState = {
-        "chain": ["question_gen"],
+        "next_action": "need_direction",
     }
-    assert route_after_master(state) == "question_gen"
+    assert _supervisor_router(state) == "wait_direction"
 
 
 @pytest.mark.asyncio
-async def test_route_after_master_need_direction_returns_wait():
-    from app.agents.prepare.graph import route_after_master
+async def test_supervisor_router_end_returns_end():
+    from app.agents.prepare.graph import _supervisor_router
 
     state: PrepareState = {
-        "chain": [],
-        "need_direction": True,
+        "next_action": "END",
     }
-    assert route_after_master(state) == "wait_direction"
+    assert _supervisor_router(state) == "END"
 
 
 def test_memory_search_completion_trace_is_backend_generated():

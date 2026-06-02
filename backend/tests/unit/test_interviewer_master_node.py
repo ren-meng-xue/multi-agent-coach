@@ -36,6 +36,23 @@ async def test_master_exhausted_forces_closing():
 
 
 @pytest.mark.asyncio
+async def test_master_max_followups_forces_next_question_before_final_question():
+    """当前题追问达到上限但整场未结束时，必须推进到下一题。"""
+    fake_decision = MagicMock(chain=["evaluator", "followup"], reason="")
+    state = {
+        "question_count": 1,
+        "total_questions": 5,
+        "followup_count": 2,
+        "max_followups": 2,
+        "messages": [],
+    }
+    with patch("app.agents.interviewer.nodes._master_phase1_stream", new=AsyncMock(return_value=None)), \
+         patch("app.agents.interviewer.nodes._master_phase2_decide", new=AsyncMock(return_value=fake_decision)):
+        result = await master_node(state)
+    assert result["chain"] == ["evaluator", "ask_question"]
+
+
+@pytest.mark.asyncio
 async def test_master_normal_chain_passes_through():
     """中段轮次：LLM 的 chain 不被覆盖。"""
     fake_decision = MagicMock(chain=["evaluator", "followup"], reason="OK")

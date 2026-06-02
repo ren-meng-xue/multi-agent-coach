@@ -15,6 +15,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from app.agents.coach.nodes import plan_node as _coach_plan_node
 from app.agents.coach.nodes import review_node as _coach_review_node
 from app.agents.coach.state import CoachState
+from app.agents.interviewer.chief import chief_execute, chief_respond, chief_think
 from app.agents.interviewer.nodes import evaluator_node, followup_node
 from app.agents.interviewer.state import InterviewState
 from app.agents.prepare.nodes import question_gen_node
@@ -25,16 +26,16 @@ SystemCall = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
 
 
 def _messages_from_input(raw: list[dict[str, Any]] | None) -> list[BaseMessage]:
-    """把 eval benchmark 用的 [{"role": ".ai|user", "content": "..."}] 序列
+    """把 eval benchmark 用的 [{"role": "ai|user", "content": "..."}] 序列
     转成 LangChain 的 BaseMessage 列表。
 
-    role 大小写不敏感；".ai" / "assistant" 视为 AI，其余按用户处理。
+    role 大小写不敏感；"ai" / "assistant" 视为 AI，其余按用户处理。
     """
     msgs: list[BaseMessage] = []
     for m in raw or []:
         role = str(m.get("role") or "").lower()
         content = str(m.get("content", ""))
-        if role in (".ai", "assistant"):
+        if role in ("ai", "assistant"):
             msgs.append(AIMessage(content=content))
         else:
             msgs.append(HumanMessage(content=content))
@@ -99,6 +100,43 @@ async def _call_followup(input_json: dict[str, Any]) -> dict[str, Any]:
     return {"followup_text": out.get("assistant_message", "")}
 
 
+async def _call_agent_quality(input_json: dict[str, Any]) -> dict[str, Any]:
+    """评估 Chief + 子 agent 的单轮决策链。
+
+    为了让 benchmark 聚焦决策，不跑完整 checkpointer graph，而是执行最多 4 次
+    chief_think/chief_execute，再调用 chief_respond。
+    """
+    state = cast(InterviewState, {
+        **input_json,
+        "messages": _messages_from_input(input_json.get("messages")),
+        "chief_iteration": 0,
+        "chief_messages": [],
+        "chief_thoughts": [],
+        "chief_tool_results": [],
+        "evaluator_report": None,
+        "designer_output": None,
+        "designer_dual_output": None,
+    })
+    for _ in range(4):
+        state = cast(InterviewState, {**state, **await chief_think(state)})
+        msgs = state.get("chief_messages") or []
+        last = msgs[-1] if msgs else None
+        if isinstance(last, AIMessage) and last.tool_calls:
+            state = cast(InterviewState, {**state, **await chief_execute(state)})
+            continue
+        break
+    out = await chief_respond(state)
+    final = {**state, **out}
+    return {
+        "assistant_message": final.get("assistant_message", ""),
+        "chief_thoughts": final.get("chief_thoughts", []),
+        "chief_tool_results": final.get("chief_tool_results", []),
+        "evaluator_report": final.get("evaluator_report") or {},
+        "designer_output": final.get("designer_output") or {},
+        "stage": final.get("stage", ""),
+    }
+
+
 async def _call_review(input_json: dict[str, Any]) -> dict[str, Any]:
     """评估 coach.review_node 复盘质量。
 
@@ -127,6 +165,7 @@ SYSTEM_CALLS: dict[TargetType, SystemCall] = {
     TargetType.QUESTION: _call_question,
     TargetType.SCORING: _call_scoring,
     TargetType.FOLLOWUP: _call_followup,
+    TargetType.AGENT_QUALITY: _call_agent_quality,
     TargetType.REVIEW: _call_review,
     TargetType.PLAN: _call_plan,
 }

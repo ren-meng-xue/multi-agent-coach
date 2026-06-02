@@ -2,8 +2,8 @@ from app.eval.dimensions import DIMENSIONS, TargetType
 
 
 def test_dimensions_completeness():
-    # 验证 DIMENSIONS 包含全部 5 种 TargetType
-    assert len(DIMENSIONS) == 5
+    # 验证 DIMENSIONS 覆盖全部 TargetType
+    assert len(DIMENSIONS) == len(TargetType)
     for t in TargetType:
         assert t in DIMENSIONS
 

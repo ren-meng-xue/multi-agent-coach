@@ -34,6 +34,7 @@ export function AgentTrace({ nodes, nodeTitles, nodeLabels }: AgentTraceProps) {
             candidateLevel={node.candidateLevel}
             latentSignals={node.latentSignals}
             missingDimensions={node.missingDimensions}
+            chiefToolCalls={node.chiefToolCalls}
           />
         );
       })}

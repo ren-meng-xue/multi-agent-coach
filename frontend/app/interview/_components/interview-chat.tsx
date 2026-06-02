@@ -278,10 +278,22 @@ export function InterviewChat() {
                 const restoredMessages: InterviewChatMessage[] =
                   activeSession.messages
                     .filter((m) => m.content !== "__START__") // 隐藏内部协议 Token
-                    .map((m) => ({
-                      role: m.role as "user" | "assistant",
-                      content: m.content,
-                    }));
+                    .flatMap((m): InterviewChatMessage[] => {
+                      const base: InterviewChatMessage = {
+                        role: m.role as "user" | "assistant",
+                        content: m.content,
+                      };
+                      if (m.role === "assistant" && m.turn_trace) {
+                        const traceMsg: InterviewTurnTraceMessage = {
+                          role: "trace",
+                          kind: "turn",
+                          id: crypto.randomUUID(),
+                          payload: { ...m.turn_trace, status: "done" },
+                        };
+                        return [base, traceMsg];
+                      }
+                      return [base];
+                    });
                 if (activeSession.prepare_trace) {
                   restoredMessages.unshift({
                     role: "trace",
@@ -500,9 +512,9 @@ export function InterviewChat() {
         ),
       }));
 
-      // need_direction 由 master node_done 携带，在这里处理
+      // need_direction 由 prepare supervisor node_done 携带；兼容旧 master 命名。
       if (
-        data.node === "master" &&
+        (data.node === "supervisor" || data.node === "master") &&
         data.need_direction &&
         prepStatus !== "waiting_direction"
       ) {
@@ -731,6 +743,7 @@ export function InterviewChat() {
               latentSignals: ev.latentSignals,
               missingDimensions: ev.missingDimensions,
               followupFocus: ev.followupFocus,
+              chiefToolCalls: ev.chiefToolCalls,
               // ask_question/followup/closing 无 LLM token 流时，用 node_done 携带的
               // assistant_message 填充 tokens，让 trace 面板能显示对应内容
               tokens:
@@ -742,7 +755,7 @@ export function InterviewChat() {
         }
 
         const summaryScore =
-          ev.phase === "done" && ev.node === "evaluator"
+          ev.phase === "done" && (ev.node === "evaluator" || ev.node === "chief_think")
             ? (ev.summaryScore ?? m.payload.summaryScore)
             : m.payload.summaryScore;
         const chain =

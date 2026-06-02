@@ -79,11 +79,12 @@
 <div class="wrap">
 
   <h1>技能参考</h1>
-  <p class="sub">gstack 53 个 + superpowers 14 个。调用：<code>/技能名</code>，点击行复制</p>
+  <p class="sub">gstack 53 个 + superpowers 14 个 + 内置 13 个。调用：<code>/技能名</code>，点击行复制</p>
 
   <div class="switch">
     <button id="btng" class="on" onclick="showGstack()">gstack</button>
     <button id="btns" onclick="showSuper()">superpowers</button>
+    <button id="btnb" onclick="showBuiltin()">内置技能</button>
   </div>
 
   <div class="toc" id="toc-gstack">
@@ -102,6 +103,12 @@
     <a href="#sp-review">代码审查</a>
     <a href="#sp-exec">任务执行</a>
     <a href="#sp-meta">元技能</a>
+  </div>
+  <div class="toc" id="toc-builtin" style="display:none">
+    <a href="#bi-code">前端 & 代码</a>
+    <a href="#bi-config">配置管理</a>
+    <a href="#bi-md">CLAUDE.md</a>
+    <a href="#bi-ai">AI 开发 & 调度</a>
   </div>
 
   <!-- ========== GSTACK ========== -->
@@ -176,7 +183,7 @@
       <tr><td>gstack-health</td><td>项目健康度检查（类型/lint/测试综合评分）</td><td><span class="tag mid">常用</span></td><td>"代码质量怎么样"</td></tr>
       <tr><td>gstack-benchmark-models</td><td>跨模型基准测试（Claude vs GPT vs Gemini）</td><td><span class="tag low">低频</span></td><td>"对比一下模型"</td></tr>
       <tr><td>gstack-make-pdf</td><td>Markdown 转 PDF</td><td><span class="tag low">低频</span></td><td>"生成 PDF"</td></tr>
-      <tr><td>gstack-gstack-upgrade</td><td>升级 gstack 自身</td><td><span class="tag low">低频</span></td><td>"升级 gstack"</td></tr>
+      <tr><td>gstack-upgrade</td><td>升级 gstack 自身</td><td><span class="tag low">低频</span></td><td>"升级 gstack"</td></tr>
     </tbody>
   </table>
 
@@ -195,8 +202,7 @@
   <table>
     <thead><tr><th>Skill</th><th>用途</th><th>频度</th><th>触发方式</th></tr></thead>
     <tbody>
-      <tr><td>gstack-connect-chrome</td><td>启动 AI 控制的 Chromium，侧边栏实时活动流</td><td><span class="tag mid">常用</span></td><td>"打开浏览器""启动 Chrome"</td></tr>
-      <tr><td>gstack-open-gstack-browser</td><td>启动 GStack Browser</td><td><span class="tag mid">常用</span></td><td>"打开 gstack 浏览器"</td></tr>
+      <tr><td>gstack-open-gstack-browser</td><td>启动 AI 控制的 GStack Browser（Chromium + 侧边栏）</td><td><span class="tag mid">常用</span></td><td>"打开浏览器""启动 Chrome"</td></tr>
       <tr><td>gstack-pair-agent</td><td>配对远程 Agent 接入浏览器</td><td><span class="tag low">低频</span></td><td>"配对 agent""共享浏览器"</td></tr>
     </tbody>
   </table>
@@ -226,7 +232,7 @@
   </div><!-- /gstack-section -->
 
   <!-- ========== SUPERPOWERS ========== -->
-  <div id="super-section">
+  <div id="super-section" style="display:none">
 
   <h2 id="sp-dev">开发流程</h2>
   <table>
@@ -272,6 +278,52 @@
 
   </div><!-- /super-section -->
 
+  <!-- ========== BUILTIN ========== -->
+  <div id="builtin-section" style="display:none">
+
+  <h2 id="bi-code">前端 & 代码</h2>
+  <table>
+    <thead><tr><th>Skill</th><th>用途</th><th>频度</th><th>触发方式</th></tr></thead>
+    <tbody>
+      <tr><td>frontend-design</td><td>生成高品质、有设计感的前端界面（页面/组件）</td><td><span class="tag high">高频</span></td><td>"做个页面""写个组件""build UI"</td></tr>
+      <tr><td>code-review</td><td>Review 一个 PR——结构、安全、逻辑全维度</td><td><span class="tag high">高频</span></td><td>"review 这个 PR""帮我看代码"</td></tr>
+      <tr><td>security-review</td><td>安全专项审计（auth/注入/依赖/敏感数据）</td><td><span class="tag mid">常用</span></td><td>"安全 review""有没有漏洞"</td></tr>
+      <tr><td>simplify</td><td>检查改动代码的复用性、质量与效率并修复</td><td><span class="tag mid">常用</span></td><td>"精简一下""代码太啰嗦了"</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="bi-config">配置管理</h2>
+  <table>
+    <thead><tr><th>Skill</th><th>用途</th><th>频度</th><th>触发方式</th></tr></thead>
+    <tbody>
+      <tr><td>init</td><td>为当前代码库初始化 CLAUDE.md 文档</td><td><span class="tag mid">常用</span></td><td>"初始化文档""生成 CLAUDE.md"</td></tr>
+      <tr><td>update-config</td><td>配置 settings.json（hooks/权限/env var）</td><td><span class="tag mid">常用</span></td><td>"从现在开始每次…""允许 X 命令""设置 DEBUG=true"</td></tr>
+      <tr><td>keybindings-help</td><td>自定义键盘快捷键（重绑 / chord / 提交键）</td><td><span class="tag low">低频</span></td><td>"改一下快捷键""重绑 ctrl+s"</td></tr>
+      <tr><td>fewer-permission-prompts</td><td>扫描常用工具调用，批量加入权限白名单</td><td><span class="tag low">低频</span></td><td>"减少权限弹窗""太多确认了"</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="bi-md">CLAUDE.md 管理</h2>
+  <table>
+    <thead><tr><th>Skill</th><th>用途</th><th>频度</th><th>触发方式</th></tr></thead>
+    <tbody>
+      <tr><td>claude-md-management:revise-claude-md</td><td>修订 CLAUDE.md（根据对话反馈更新规范）</td><td><span class="tag mid">常用</span></td><td>"更新 CLAUDE.md""把这条加进规范"</td></tr>
+      <tr><td>claude-md-management:claude-md-improver</td><td>改进 CLAUDE.md 的表达与覆盖度</td><td><span class="tag low">低频</span></td><td>"优化 CLAUDE.md""规范写得不清楚"</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="bi-ai">AI 开发 & 调度</h2>
+  <table>
+    <thead><tr><th>Skill</th><th>用途</th><th>频度</th><th>触发方式</th></tr></thead>
+    <tbody>
+      <tr><td>claude-api</td><td>构建/调试 Claude API / Anthropic SDK 应用（含 prompt caching、tool use、模型迁移）</td><td><span class="tag high">高频</span></td><td>代码 import anthropic / 调用 Claude API / 问 SDK 用法</td></tr>
+      <tr><td>loop</td><td>以指定间隔周期性执行 prompt 或 slash command</td><td><span class="tag mid">常用</span></td><td>"每 5 分钟跑一次""持续监控""keep running /xxx"</td></tr>
+      <tr><td>schedule</td><td>创建/管理定时远程 Agent（cron 调度 / 一次性定时任务）</td><td><span class="tag mid">常用</span></td><td>"每天凌晨跑""设个定时任务""明天提醒我检查 X"</td></tr>
+    </tbody>
+  </table>
+
+  </div><!-- /builtin-section -->
+
   <!-- toast -->
   <div class="toast" id="toast"></div>
 
@@ -301,14 +353,13 @@ function showToast(msg) {
   t._t = setTimeout(() => t.classList.remove('show'), 1500);
 }
 
-// 默认显示 gstack
-document.getElementById('super-section').style.display = 'none';
-
 function showGstack() {
   document.getElementById('gstack-section').style.display = 'block';
   document.getElementById('super-section').style.display = 'none';
+  document.getElementById('builtin-section').style.display = 'none';
   document.getElementById('toc-gstack').style.display = '';
   document.getElementById('toc-super').style.display = 'none';
+  document.getElementById('toc-builtin').style.display = 'none';
   document.querySelectorAll('.switch button').forEach(b => b.classList.remove('on'));
   document.getElementById('btng').classList.add('on');
   window.scrollTo({ top: 0, behavior: 'instant' });
@@ -316,10 +367,23 @@ function showGstack() {
 function showSuper() {
   document.getElementById('gstack-section').style.display = 'none';
   document.getElementById('super-section').style.display = 'block';
+  document.getElementById('builtin-section').style.display = 'none';
   document.getElementById('toc-gstack').style.display = 'none';
   document.getElementById('toc-super').style.display = '';
+  document.getElementById('toc-builtin').style.display = 'none';
   document.querySelectorAll('.switch button').forEach(b => b.classList.remove('on'));
   document.getElementById('btns').classList.add('on');
+  window.scrollTo({ top: 0, behavior: 'instant' });
+}
+function showBuiltin() {
+  document.getElementById('gstack-section').style.display = 'none';
+  document.getElementById('super-section').style.display = 'none';
+  document.getElementById('builtin-section').style.display = 'block';
+  document.getElementById('toc-gstack').style.display = 'none';
+  document.getElementById('toc-super').style.display = 'none';
+  document.getElementById('toc-builtin').style.display = '';
+  document.querySelectorAll('.switch button').forEach(b => b.classList.remove('on'));
+  document.getElementById('btnb').classList.add('on');
   window.scrollTo({ top: 0, behavior: 'instant' });
 }
 

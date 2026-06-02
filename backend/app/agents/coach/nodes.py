@@ -13,7 +13,7 @@ from app.agents.coach.prompts import COACH_PLAN_SYSTEM_PROMPT, COACH_REVIEW_SYST
 from app.agents.coach.state import CoachState
 from app.core.config import get_settings
 from app.core.logging import get_logger
-from app.models.core import CandidateMemory, CoachPlan, InterviewSession
+from app.models.core import CandidateMemory, CoachPlan, InterviewSession, User
 
 log = get_logger("app.agents.coach.nodes")
 
@@ -54,12 +54,16 @@ async def _generate_review_text(state: CoachState) -> str:
         f"岗位：{state['target_role'] or '未指定'}\n"
         f"报告内容：{json.dumps(state['last_session_report'], ensure_ascii=False)}"
     )
-    
+    resume_ctx = (
+        f"\n\n【候选人简历摘要】\n{state['resume_summary']}"
+        if state.get("resume_summary") else ""
+    )
+
     # 模拟 astream 以便 SSE 捕获 tokens
     full_text = []
     messages = [
         SystemMessage(content=COACH_REVIEW_SYSTEM_PROMPT),
-        HumanMessage(content=f"{memory_ctx}\n\n{session_ctx}")
+        HumanMessage(content=f"{memory_ctx}\n\n{session_ctx}{resume_ctx}"),
     ]
     async for chunk in model.astream(messages):
         content = chunk.content
@@ -81,10 +85,14 @@ async def _generate_structured_plan(state: CoachState) -> CoachPlanSchema:
     review_ctx = f"【复盘总结】\n{state['review_text']}"
     memory_ctx = f"【候选人长期画像】\n{json.dumps(state['candidate_memory'], ensure_ascii=False)}"
     role_ctx = f"【本次练习岗位】\n{state['target_role'] or '未指定'}"
-    
+    resume_ctx = (
+        f"\n\n【候选人简历摘要】\n{state['resume_summary']}"
+        if state.get("resume_summary") else ""
+    )
+
     messages = [
         SystemMessage(content=COACH_PLAN_SYSTEM_PROMPT),
-        HumanMessage(content=f"{role_ctx}\n\n{review_ctx}\n\n{memory_ctx}")
+        HumanMessage(content=f"{role_ctx}\n\n{review_ctx}\n\n{memory_ctx}{resume_ctx}"),
     ]
     
     result = await model.ainvoke(messages)
@@ -142,11 +150,16 @@ async def load_memory_node(state: CoachState) -> dict[str, Any]:
     
     last_session_report = session_row.report_json if session_row else {}
     target_role = session_row.target_role if session_row else None
-    
+
+    stmt_user = select(User.resume_summary).where(User.id == user_id)
+    res_user = await db.execute(stmt_user)
+    resume_summary = res_user.scalar_one_or_none()
+
     return {
         "candidate_memory": candidate_memory,
         "last_session_report": last_session_report,
-        "target_role": target_role
+        "target_role": target_role,
+        "resume_summary": resume_summary,
     }
 
 async def review_node(state: CoachState) -> dict[str, Any]:

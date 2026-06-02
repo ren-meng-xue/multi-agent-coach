@@ -139,3 +139,22 @@ async def extract_target_role_from_resume(resume_text: str, filename: str | None
         log = logging.getLogger("app.services.resume_extractor")
         log.warning(f"Failed to extract role from resume: {e}")
         return ""
+
+
+async def summarize_resume(resume_text: str) -> str:
+    """将简历浓缩为 200 字以内的结构化中文摘要，供 Coach Agent 使用。"""
+    settings = get_settings()
+    model = ChatOpenAI(
+        model=settings.openai_model_chat_fast,
+        api_key=settings.openai_api_key,
+        temperature=0.1,
+        timeout=settings.llm_timeout_seconds,
+    )
+    prompt = f"""请将以下简历浓缩为一段 200 字以内的中文结构化摘要，供面试教练参考。
+摘要需包含：工作年限、核心技能栈、代表性项目经历（1-2 条）、求职意向岗位。
+只输出摘要正文，不要加标题或前缀。
+
+简历内容：
+{resume_text[:6000]}"""
+    result = await model.ainvoke([HumanMessage(content=prompt)])
+    return result.content.strip()

@@ -28,22 +28,44 @@ export function TracePanelShell({
   expandedClassName = "",
 }: TracePanelShellProps) {
   return (
-    <div className={`w-full bg-transparent transition-all duration-300 ${className}`}>
-      <div className="mb-1">
+    <div 
+      className={`w-full rounded-2xl border transition-all duration-300 p-4 ${
+        tone === "success"
+          ? "bg-[#E8F8F5]/30 border-emerald-500/20 dark:bg-emerald-950/5 dark:border-emerald-500/15 shadow-[0_4px_20px_-4px_rgba(16,185,129,0.06)]"
+          : tone === "error"
+          ? "bg-[#FDF2F4]/30 border-rose-500/20 dark:bg-rose-950/5 dark:border-rose-500/15 shadow-[0_4px_20px_-4px_rgba(244,63,94,0.06)]"
+          : "bg-[#534AB7]/[0.015] border-[#534AB7]/10 dark:bg-white/[0.01] dark:border-white/[0.06] shadow-[0_4px_24px_-4px_rgba(83,74,183,0.04)]"
+      } ${className}`}
+    >
+      <div className="flex items-center justify-between">
         <button
           type="button"
           onClick={onToggle}
-          className={`inline-flex items-center gap-2 px-1 py-1 text-[10px] font-bold transition-all hover:text-[#534AB7] hover:underline dark:hover:text-[#CECBF6] ${getButtonClass(tone)}`}
+          className={`group/btn inline-flex items-center gap-2 rounded-full px-3 py-1 text-[10px] font-extrabold tracking-tight transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] ${
+            tone === "success"
+              ? "bg-emerald-500/10 text-emerald-700 border border-emerald-500/15 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/15 hover:bg-emerald-500/20"
+              : tone === "error"
+              ? "bg-rose-500/10 text-rose-700 border border-rose-500/15 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/15 hover:bg-rose-500/20"
+              : "bg-[#534AB7]/8 text-[#534AB7] border border-[#534AB7]/12 dark:bg-[#CECBF6]/8 dark:text-[#CECBF6] dark:border-[#CECBF6]/12 hover:bg-[#534AB7]/15"
+          }`}
         >
-          <span className={`size-1.5 shrink-0 rounded-full ${getDotClass(tone)}`} />
-          <span className="tracking-tight">{title}</span>
+          <span className="relative flex size-1.5 items-center justify-center">
+            {/* 呼吸灯波纹动画 (当处于 active/default 状态时) */}
+            {tone === "default" && (
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#534AB7] opacity-60 dark:bg-[#CECBF6]" />
+            )}
+            <span className={`relative inline-flex size-1.5 rounded-full ${getDotClass(tone)}`} />
+          </span>
+          <span className="font-extrabold leading-none">{title}</span>
           {meta}
-          <span className="ml-1 text-[9px] font-medium opacity-40">({toggleText})</span>
+          <span className="ml-1 text-[9px] font-medium opacity-45 group-hover/btn:opacity-75 transition-opacity">
+            ({toggleText})
+          </span>
         </button>
       </div>
 
       {expanded && (
-        <div className={`bg-transparent pt-2 pb-1 transition-all duration-300 ${expandedClassName}`}>
+        <div className={`pt-3.5 pb-0.5 transition-all duration-300 ${expandedClassName}`}>
           {children}
         </div>
       )}
@@ -51,22 +73,14 @@ export function TracePanelShell({
   );
 }
 
-function getButtonClass(tone: TracePanelTone) {
-  if (tone === "error") {
-    return "text-rose-600 dark:text-rose-400";
-  }
-
-  return "text-black/35 dark:text-white/35";
-}
-
 function getDotClass(tone: TracePanelTone) {
   if (tone === "success") {
-    return "bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.4)]";
+    return "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.7)]";
   }
 
   if (tone === "error") {
-    return "bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.4)]";
+    return "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.7)]";
   }
 
-  return "bg-[#534AB7] shadow-[0_0_0_4px_rgba(83,74,183,0.10)] animate-pulse dark:bg-[#CECBF6] dark:shadow-[0_0_0_4px_rgba(206,203,246,0.12)]";
+  return "bg-[#534AB7] dark:bg-[#CECBF6] shadow-[0_0_6px_rgba(83,74,183,0.5)]";
 }

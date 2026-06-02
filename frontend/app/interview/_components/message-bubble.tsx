@@ -31,11 +31,11 @@ export const MessageBubble = memo(function MessageBubble({
     >
       <div className={cn(isUser ? "max-w-[72%]" : "max-w-[95%]")}>
         <div
-          className={cn(
-            "whitespace-pre-wrap px-6 py-4 text-base leading-relaxed shadow-sm transition-all duration-300",
+            className={cn(
+            "whitespace-pre-wrap text-base leading-relaxed transition-all duration-300",
             isUser
-              ? "rounded-[18px_18px_4px_18px] bg-gradient-to-br from-[#534AB7] to-[#7c3aed] text-white shadow-[#534AB7]/10"
-              : "rounded-[18px_18px_18px_4px] border border-black/[0.06] bg-[#fdfdfc] text-zinc-900 shadow-black/5 dark:border-white/[0.06] dark:bg-[#252523] dark:text-zinc-100",
+              ? "rounded-[18px_18px_4px_18px] bg-gradient-to-br from-[#534AB7] to-[#7c3aed] px-6 py-4 text-white shadow-sm shadow-[#534AB7]/10"
+              : "rounded-[20px_20px_20px_6px] bg-[#F7F8FC] border border-slate-100/90 dark:bg-zinc-900/40 dark:border-zinc-800/50 px-6 py-5 text-zinc-800 dark:text-zinc-200 shadow-[0_4px_20px_-4px_rgba(83,74,183,0.02)]",
           )}
         >
           {isPending && !message.content && !trace ? (

@@ -20,10 +20,10 @@ def _make_state(need_direction: bool = False) -> PrepareState:
 
 
 MOCK_PREPARE_EVENTS_NORMAL = [
-    {"event": "node_start", "data": {"node": "master", "label": "MASTER"}},
+    {"event": "node_start", "data": {"node": "supervisor", "label": "调度"}},
     {
         "event": "node_done",
-        "data": {"node": "master", "elapsed_ms": 100, "chain": ["question_gen"], "need_direction": False},
+        "data": {"node": "supervisor", "elapsed_ms": 100, "next_action": "question_gen", "need_direction": False},
     },
     {"event": "node_start", "data": {"node": "question_gen", "label": "出题"}},
     {"event": "node_done", "data": {"node": "question_gen", "elapsed_ms": 200}},
@@ -41,10 +41,10 @@ MOCK_PREPARE_EVENTS_NORMAL = [
 ]
 
 MOCK_PREPARE_EVENTS_NEED_DIRECTION = [
-    {"event": "node_start", "data": {"node": "master", "label": "MASTER"}},
+    {"event": "node_start", "data": {"node": "supervisor", "label": "调度"}},
     {
         "event": "node_done",
-        "data": {"node": "master", "elapsed_ms": 100, "chain": [], "need_direction": True},
+        "data": {"node": "supervisor", "elapsed_ms": 100, "next_action": "need_direction", "need_direction": True},
     },
 ]
 

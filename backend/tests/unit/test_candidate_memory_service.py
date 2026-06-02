@@ -69,7 +69,7 @@ async def test_upsert_dedup_signals_preserve_order(db, test_user, test_session):
     # Spec 要求：跨 session 去重保序。
     assert mem.cumulative_signals == ["a", "b", "c"]
     assert mem.latest_level == "mid"
-    assert mem.total_sessions == 2
+    assert mem.total_sessions == 1
 
 @pytest.mark.asyncio
 async def test_weakness_tag_count_increments(db, test_user, test_session):

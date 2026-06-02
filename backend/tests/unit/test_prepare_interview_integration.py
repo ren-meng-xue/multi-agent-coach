@@ -95,6 +95,43 @@ async def test_ask_question_with_prepared_question_does_not_call_llm(monkeypatch
 
 
 @pytest.mark.asyncio
+async def test_ask_question_uses_question_count_when_prepared_index_missing(monkeypatch):
+    """跨请求重建 state 时即使丢失 current_question_index，也应按已出题数取下一题。"""
+    from app.agents.interviewer.nodes import ask_question_node
+
+    async def fail_generate(*args, **kwargs):
+        raise RuntimeError("llm should not be called")
+
+    monkeypatch.setattr("app.agents.interviewer.nodes._generate_text", fail_generate)
+
+    result = await ask_question_node({
+        "target_role": "前端工程师",
+        "prepared_questions": [
+            {
+                "id": 1,
+                "question": "第一题：解释 this。",
+                "category": "technical",
+                "focus_area": "JavaScript",
+                "priority": 1,
+            },
+            {
+                "id": 2,
+                "question": "第二题：描述一次技术难题。",
+                "category": "behavioral",
+                "focus_area": "problem_solving",
+                "priority": 2,
+            },
+        ],
+        "question_count": 1,
+    })
+
+    assert result["question_count"] == 2
+    assert result["current_question_index"] == 2
+    assert "第二题：描述一次技术难题" in result["assistant_message"]
+    assert "第一题：解释 this" not in result["assistant_message"]
+
+
+@pytest.mark.asyncio
 async def test_end_to_end_one_turn_emits_full_event_sequence(monkeypatch, db):
     """模拟一次完整 turn：master + evaluator + followup 节点都跑。"""
     from uuid import uuid4

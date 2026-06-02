@@ -403,6 +403,15 @@ export function CoachDashboard() {
   const [loadError, setLoadError] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
 
+  const reviewAbortRef = useRef<AbortController | null>(null);
+
+  // 组件卸载时终止正在进行的复盘请求
+  useEffect(() => {
+    return () => {
+      reviewAbortRef.current?.abort();
+    };
+  }, []);
+
   useEffect(() => {
     const shouldProceed = isDevAuthBypassEnabled || (isLoaded && isSignedIn);
     if (!shouldProceed) return;
@@ -482,34 +491,68 @@ export function CoachDashboard() {
     const sessionId = contextData?.last_session_id;
     if (!token || !sessionId) return;
 
+    // 终止之前的请求
+    reviewAbortRef.current?.abort();
+    const controller = new AbortController();
+    reviewAbortRef.current = controller;
+
     setIsReviewStarted(true);
     setIsReviewing(true);
     setReviewText("");
 
-    const baseUrl = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
-    const response = await fetch(
-      `${baseUrl}/api/v1/coach/review?session_id=${sessionId}`,
-      {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    );
-    if (!response.body) return;
-    await readSseStream({
-      stream: response.body,
-      onEvent: ({ event, data }) => {
-        if (!data) return;
-        try {
-          const payload = JSON.parse(data);
-          if (event === "review_token")
-            setReviewText((prev) => prev + payload.token);
-          else if (event === "plan_done") setStreamingPlan(payload);
-          else if (event === "final") setIsReviewing(false);
-        } catch (e) {
-          console.warn("Parse SSE error", e);
-        }
-      },
-    });
+    try {
+      const baseUrl = (process.env.NEXT_PUBLIC_API_URL || "").replace(
+        /\/$/,
+        "",
+      );
+      const response = await fetch(
+        `${baseUrl}/api/v1/coach/review?session_id=${sessionId}`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        },
+      );
+
+      if (!response.ok || !response.body) {
+        throw new Error(`复盘请求失败 (${response.status})`);
+      }
+
+      await readSseStream({
+        stream: response.body,
+        onEvent: ({ event, data }) => {
+          if (!data) return;
+          if (event === "error") {
+            let message = "复盘失败";
+            try {
+              message =
+                (JSON.parse(data) as { message?: string }).message || message;
+            } catch {
+              /**/
+            }
+            throw new Error(message);
+          }
+          try {
+            const payload = JSON.parse(data);
+            if (event === "review_token")
+              setReviewText((prev) => prev + payload.token);
+            else if (event === "plan_done") setStreamingPlan(payload);
+            else if (event === "final") setIsReviewing(false);
+          } catch (e) {
+            console.warn("Parse SSE error", e);
+          }
+        },
+      });
+    } catch (err) {
+      if ((err as Error)?.name !== "AbortError") {
+        console.error("Coach review stream error", err);
+      }
+    } finally {
+      // 如果不是因为主动 abort 导致的结束，则关闭 loading
+      if (reviewAbortRef.current === controller) {
+        setIsReviewing(false);
+      }
+    }
   };
 
   const handleStartInterview = async (

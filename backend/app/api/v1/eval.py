@@ -89,7 +89,7 @@ async def trigger_eval(
     settings = get_settings()
     runner = EvalRunner(
         async_session_factory, judge, dispatch_system_call,
-        max_concurrency=settings.eval_max_concurrency,
+        max_concurrency=getattr(settings, "eval_max_concurrency", 5),
     )
 
     async def _safe_run():

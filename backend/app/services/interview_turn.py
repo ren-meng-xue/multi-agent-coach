@@ -13,6 +13,7 @@ from app.agents.interviewer.graph import stream_interviewer_turn_events
 from app.agents.interviewer.state import InterviewState
 from app.core.logging import get_logger
 from app.models.core import InterviewMessage, InterviewSession, User
+from app.services.candidate_memory import upsert_candidate_memory
 from app.services.coach_opening import invalidate_coach_opening_cache
 
 log = get_logger("app.services.interview_turn")
@@ -298,6 +299,7 @@ async def get_active_interview_session(
                 messages.append({
                     "role": m.role,
                     "content": m.content,
+                    "turn_trace": m.turn_trace_json,
                 })
 
         return {
@@ -315,6 +317,97 @@ async def get_active_interview_session(
         }
 
     return {}
+
+
+_NODE_TITLES: dict[str, str] = {
+    "chief_think": "选择下一步面试策略",
+    "chief_respond": "组织面试回复",
+    "master": "分析表现，规划下一步",
+    "evaluator": "多维深度评估",
+    "followup": "生成追问逻辑",
+    "ask_question": "抽取下一道题",
+    "closing": "收尾总结",
+}
+
+_PUBLIC_TRACE_NODES = set(_NODE_TITLES)
+
+
+def _is_public_trace_event(evt: str, data: dict[str, Any]) -> bool:
+    """Only expose user-level interviewer nodes; child-agent graph internals stay backend-only."""
+    if evt not in ("node_start", "node_token", "node_done"):
+        return False
+    node_id = data.get("node")
+    return isinstance(node_id, str) and node_id in _PUBLIC_TRACE_NODES
+
+
+def _build_turn_trace(
+    *,
+    node_events: list[dict],
+    question_count: int,
+    is_opening: bool,
+) -> dict[str, Any] | None:
+    """从节点流式事件聚合生成持久化用的 InterviewTurnTracePayload。"""
+    if not node_events:
+        return None
+
+    nodes_map: dict[str, dict[str, Any]] = {}
+    chain: list[str] = []
+    summary_score = 0.0
+
+    for event in node_events:
+        evt = event["evt"]
+        data = event["data"]
+        node_id = data.get("node")
+        if not node_id:
+            continue
+        if not _is_public_trace_event(evt, data):
+            continue
+
+        if evt == "node_start":
+            if node_id not in nodes_map:
+                nodes_map[node_id] = {
+                    "id": node_id,
+                    "label": data.get("label", node_id),
+                    "title": _NODE_TITLES.get(node_id, ""),
+                    "status": "running",
+                    "tokens": "",
+                    "elapsedMs": 0,
+                    "candidateLevel": None,
+                    "latentSignals": [],
+                    "missingDimensions": [],
+                    "followupFocus": None,
+                }
+                chain.append(node_id)
+            else:
+                nodes_map[node_id]["status"] = "running"
+
+        elif evt == "node_token":
+            if node_id in nodes_map:
+                nodes_map[node_id]["tokens"] += data.get("text", "")
+
+        elif evt == "node_done":
+            if node_id in nodes_map:
+                nodes_map[node_id].update({
+                    "status": "done",
+                    "elapsedMs": data.get("elapsed_ms", 0),
+                    "candidateLevel": data.get("candidate_level"),
+                    "latentSignals": data.get("latent_signals", []),
+                    "missingDimensions": data.get("missing_dimensions", []),
+                    "followupFocus": data.get("followup_focus"),
+                })
+
+            # 从评估节点或最后一个节点尝试提取 summaryScore
+            if "summary_score" in data:
+                summary_score = data["summary_score"]
+
+    return {
+        "status": "done",
+        "nodes": list(nodes_map.values()),
+        "chain": chain,
+        "summaryScore": summary_score,
+        "turnIndex": question_count,
+        "isOpening": is_opening,
+    }
 
 
 async def stream_interview_turn(
@@ -359,6 +452,7 @@ async def stream_interview_turn(
         state["use_qa_bank"] = True
 
     assistant_chunks: list[str] = []
+    node_events: list[dict] = []
     output: InterviewState | None = None
     async for graph_event in stream_interviewer_turn_events(state):
         evt = graph_event["event"]
@@ -370,7 +464,9 @@ async def stream_interview_turn(
                 yield {"event": "delta", "data": {"text": text}}
             continue
         if evt in ("node_start", "node_token", "node_done"):
-            yield {"event": evt, "data": data}
+            if _is_public_trace_event(evt, data):
+                node_events.append({"evt": evt, "data": data})
+                yield {"event": evt, "data": data}
             continue
         if evt == "final":
             output = data
@@ -384,6 +480,23 @@ async def stream_interview_turn(
         log.warning("interview_turn_empty_assistant_reply", user_id=user_id, session_id=str(session.id))
         raise RuntimeError("empty assistant reply")
 
+    # db 无法序列化进 LangGraph state，在 service 层拿到 output 后统一写候选人记忆
+    candidate_profile = output.get("candidate_profile") or {}
+    if candidate_profile.get("latest_level"):
+        try:
+            turn_evals: list[Any] = output.get("turn_evaluations") or []
+            last_eval: dict[str, Any] = turn_evals[-1] if turn_evals else {}
+            await upsert_candidate_memory(
+                db,
+                user_id,
+                latest_level=candidate_profile.get("latest_level"),
+                latent_signals=list(candidate_profile.get("latent_signals") or []),
+                weakness_tags=list(last_eval.get("missing_dimensions") or []),
+                session_id=session.id,
+            )
+        except Exception as exc:
+            log.warning("interview_turn_memory_sync_failed", error=str(exc), user_id=user_id)
+
     session.stage = output.get("stage", session.stage)
     session.target_role = output.get("target_role", session.target_role)
     session.target_company = output.get("target_company", session.target_company)
@@ -391,6 +504,14 @@ async def stream_interview_turn(
     session.question_count = output.get("question_count", session.question_count)
     session.followup_count = output.get("followup_count", session.followup_count)
     report_data = output.get("report")
+    
+    # 构造持久化用的 turn trace
+    turn_trace_json = _build_turn_trace(
+        node_events=node_events,
+        question_count=session.question_count,
+        is_opening=(output.get("stage") == "opening"),
+    )
+
     if session.stage == "closing":
         session.status = "completed"
         session.completed_at = datetime.now(UTC)
@@ -429,6 +550,7 @@ async def stream_interview_turn(
             role="assistant",
             content=assistant_content,
             question_number=session.question_count or None,
+            turn_trace_json=turn_trace_json,
         )
     ]
     if message != "__START__":

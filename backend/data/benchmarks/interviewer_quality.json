@@ -1,0 +1,153 @@
+{
+  "name": "interviewer_quality",
+  "version": "2026-06-02-agentic-v1",
+  "description": "Agentic interviewer benchmark: Chief decision quality, delegation quality, and evaluator signal coverage.",
+  "judge_mode": "rubric",
+  "cases": [
+    {
+      "id": "agentic-followup-quantification-001",
+      "target_type": "agent_quality",
+      "label": "缺少量化指标时应追问",
+      "description": "候选人回答覆盖了技术方案但没有给 QPS/延迟等效果数据。",
+      "difficulty": "medium",
+      "tags": ["interviewer", "followup", "quantification"],
+      "input_json": {
+        "session_id": "bench-agentic-001",
+        "target_role": "AI 后端工程师",
+        "question_count": 1,
+        "total_questions": 5,
+        "followup_count": 0,
+        "max_followups": 2,
+        "current_question_index": 1,
+        "candidate_profile": {},
+        "turn_evaluations": [],
+        "messages": [
+          {"role": "assistant", "content": "讲讲你做 RAG 系统时最关键的一次性能优化。"},
+          {"role": "user", "content": "我把检索和生成拆成两个链路，用 Redis 缓存了部分热门 query，也把向量检索参数调了一下，整体体验好了不少。"}
+        ]
+      },
+      "golden": {
+        "expected_followup_direction": "quantification",
+        "signals_in_answer": ["rag_system_experience", "caching"],
+        "weakness_in_answer": ["缺少量化指标", "缺少优化前后对比"],
+        "question_should_exist": true
+      }
+    },
+    {
+      "id": "agentic-next-question-002",
+      "target_type": "agent_quality",
+      "label": "回答充分时进入下一题",
+      "description": "候选人回答包含方案、权衡和量化结果，不应继续泛追同一题。",
+      "difficulty": "medium",
+      "tags": ["interviewer", "next_question"],
+      "input_json": {
+        "session_id": "bench-agentic-002",
+        "target_role": "平台工程师",
+        "question_count": 2,
+        "total_questions": 5,
+        "followup_count": 1,
+        "max_followups": 2,
+        "current_question_index": 2,
+        "candidate_profile": {"latest_level": "mid", "latent_signals": ["observability_mindset"]},
+        "turn_evaluations": [],
+        "messages": [
+          {"role": "assistant", "content": "你们当时如何定位线上延迟抖动？"},
+          {"role": "user", "content": "我先用 tracing 把 P95 延迟从入口到数据库拆开看，发现 70% 时间在一个批量写入事务。之后把写入拆成异步队列，并加了失败重试和幂等键，P95 从 1.8s 降到 420ms，错误率没有上升。"}
+        ]
+      },
+      "golden": {
+        "expected_followup_direction": "next_question",
+        "signals_in_answer": ["observability_mindset", "quantification", "failure_handling"],
+        "weakness_in_answer": [],
+        "question_should_exist": true
+      }
+    },
+    {
+      "id": "agentic-closing-003",
+      "target_type": "agent_quality",
+      "label": "用户要求结束时收尾",
+      "description": "候选人短句表达结束意图，Chief 应避免继续评估或出题。",
+      "difficulty": "easy",
+      "tags": ["interviewer", "closing", "termination"],
+      "input_json": {
+        "session_id": "bench-agentic-003",
+        "target_role": "后端工程师",
+        "question_count": 3,
+        "total_questions": 5,
+        "followup_count": 0,
+        "max_followups": 2,
+        "current_question_index": 3,
+        "candidate_profile": {},
+        "turn_evaluations": [],
+        "messages": [
+          {"role": "assistant", "content": "我们继续看一个系统设计问题。"},
+          {"role": "user", "content": "结束吧"}
+        ]
+      },
+      "golden": {
+        "expected_followup_direction": "closing",
+        "signals_in_answer": [],
+        "weakness_in_answer": [],
+        "question_should_exist": false
+      }
+    },
+    {
+      "id": "agentic-max-followup-004",
+      "target_type": "agent_quality",
+      "label": "追问达到上限后推进到下一题",
+      "description": "同一题已经追问两次，即使回答还有缺口，也应避免卡死在当前题。",
+      "difficulty": "medium",
+      "tags": ["interviewer", "max_followup", "next_question"],
+      "input_json": {
+        "session_id": "bench-agentic-004",
+        "target_role": "后端工程师",
+        "question_count": 2,
+        "total_questions": 5,
+        "followup_count": 2,
+        "max_followups": 2,
+        "current_question_index": 2,
+        "candidate_profile": {"latest_level": "junior", "latent_signals": ["basic_backend_experience"]},
+        "turn_evaluations": [],
+        "messages": [
+          {"role": "assistant", "content": "你如何保证异步任务不重复执行？"},
+          {"role": "user", "content": "我会加一个状态字段，任务开始就改成 running，完成后改成 done。"}
+        ]
+      },
+      "golden": {
+        "expected_followup_direction": "next_question",
+        "signals_in_answer": ["basic_backend_experience"],
+        "weakness_in_answer": ["缺少幂等键", "缺少失败恢复"],
+        "question_should_exist": true
+      }
+    },
+    {
+      "id": "agentic-first-question-005",
+      "target_type": "agent_quality",
+      "label": "首轮启动直接设计第一题",
+      "description": "没有候选人回答可评估时，Chief 应跳过 evaluate，直接委托 Designer 出第一题。",
+      "difficulty": "easy",
+      "tags": ["interviewer", "first_turn", "question"],
+      "input_json": {
+        "session_id": "bench-agentic-005",
+        "target_role": "AI 工程师",
+        "question_count": 0,
+        "total_questions": 5,
+        "followup_count": 0,
+        "max_followups": 2,
+        "current_question_index": 0,
+        "candidate_profile": {},
+        "turn_evaluations": [],
+        "prepared_questions": [
+          {"question": "请讲讲你最近做过的一个 AI 应用项目，以及你负责的核心模块。", "category": "project", "focus_area": "project_scope"}
+        ],
+        "messages": []
+      },
+      "golden": {
+        "expected_followup_direction": "first_question",
+        "signals_in_answer": [],
+        "weakness_in_answer": [],
+        "question_should_exist": true
+      }
+    }
+  ]
+}

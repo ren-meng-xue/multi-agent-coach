@@ -27,10 +27,12 @@ class PrepareState(TypedDict, total=False):
     user_background: str | None
     jd_raw: str | None           # 已提取的 JD 纯文本
 
-    # MASTER 决策输出
+    # SUPERVISOR 决策输出
     direction: str               # 识别出的方向，如"分布式系统"
-    chain: list[str]             # 调用链，如 ["memory_search", "jd_analysis", "question_gen"]
+    next_action: str             # supervisor 当前决策
     need_direction: bool         # True = 需要向用户追问方向
+    iteration_count: int         # supervisor 调用次数，防死循环
+    completed_tools: list[str]   # 已完成的 tool 名列表
 
     # 子 Agent 结果
     weak_areas: list[str]        # 来自历史面试表现

@@ -6,6 +6,7 @@ class TargetType(StrEnum):
     QUESTION = "question"
     SCORING = "scoring"
     FOLLOWUP = "followup"
+    AGENT_QUALITY = "agent_quality"
     REVIEW = "review"
     PLAN = "plan"
 
@@ -100,6 +101,26 @@ DIMENSIONS: dict[TargetType, list[Dimension]] = {
             "description": "深度追问：追问是否在引导候选人走向更深层的思考。",
             "rubric_text": "不仅是补充信息，而是要求解释底层逻辑或做更难的权衡。",
             "pass_threshold": 6.0,
+        },
+    ],
+    TargetType.AGENT_QUALITY: [
+        {
+            "name": "decision_quality",
+            "description": "Chief 决策质量：是否在该追问、出新题或收尾时做出正确选择。",
+            "rubric_text": "1-3: 明显误判流程；4-6: 大方向可接受但节奏不佳；7-10: 精准匹配回答质量、题数进度和候选人意图。",
+            "pass_threshold": 7.0,
+        },
+        {
+            "name": "delegation_quality",
+            "description": "委托质量：Chief 是否在合适时机调用 Evaluator 和 Designer。",
+            "rubric_text": "首轮可直接设计问题；非首轮应先评估再出题/追问；题满或终止意图应避免无意义工具调用。",
+            "pass_threshold": 7.0,
+        },
+        {
+            "name": "signal_coverage",
+            "description": "信号覆盖：Evaluator 报告是否覆盖 golden 中期望识别的信号和弱点。",
+            "rubric_text": "识别出的 signals/missing_dimensions 应与回答事实和 golden 方向一致。",
+            "pass_threshold": 7.0,
         },
     ],
     TargetType.REVIEW: [

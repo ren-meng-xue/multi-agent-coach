@@ -1,9 +1,0 @@
-#!/usr/bin/env bash
-# Agent OS Protocol Linter (bash wrapper)
-# 实际逻辑在 .ai/lib/python/protocol_linter.py
-
-set -euo pipefail
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-
-# 从 .ai/bin/ 指向 .ai/lib/python/protocol_linter.py
-exec python3 "$SCRIPT_DIR/../lib/python/protocol_linter.py" "$@"

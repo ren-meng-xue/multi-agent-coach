@@ -1,4 +1,5 @@
 """面试对话接口：以 SSE 流式返回面试官回复。"""
+import asyncio
 import json
 from collections.abc import AsyncIterator
 
@@ -44,11 +45,16 @@ async def chat(
             async for text in stream_interview_reply(req.messages, user_id=user_id):
                 yield {"event": "delta", "data": json.dumps({"text": text}, ensure_ascii=False)}
             yield {"event": "done", "data": "{}"}
-        except Exception:
+        except asyncio.CancelledError:
+            log.info("interview_chat_cancelled")
+            raise
+        except Exception as exc:
+            log.error("interview_chat_failed", error=str(exc), exc_info=True)
             yield {
                 "event": "error",
                 "data": json.dumps(
-                    {"message": "AI 暂时无法响应，请稍后重试"}, ensure_ascii=False
+                    {"message": "AI 暂时无法响应，请稍后重试", "code": "interview_error"},
+                    ensure_ascii=False,
                 ),
             }
 
@@ -85,12 +91,16 @@ async def turn(
                     "event": event["event"],
                     "data": json.dumps(event["data"], ensure_ascii=False),
                 }
+        except asyncio.CancelledError:
+            log.info("interview_turn_cancelled")
+            raise
         except Exception as exc:
             log.error("interview_turn_failed", error=str(exc), exc_info=True)
             yield {
                 "event": "error",
                 "data": json.dumps(
-                    {"message": "AI 暂时无法响应，请稍后重试"}, ensure_ascii=False
+                    {"message": "AI 暂时无法响应，请稍后重试", "code": "interview_error"},
+                    ensure_ascii=False,
                 ),
             }
 

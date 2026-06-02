@@ -117,6 +117,7 @@ class InterviewHistoryResponse(BaseModel):
 class ActiveMessageItem(BaseModel):
     role: str
     content: str
+    turn_trace: dict[str, Any] | None = None
 
 
 class ActiveSessionResponse(BaseModel):
