@@ -33,6 +33,7 @@ export interface PrepareSSEEvent {
     followup_focus?: string;
     chief_tool_calls?: string[];
     assistant_message?: string;
+    designed_question?: string;
     chain?: string[];
     need_direction?: boolean;
     prepared_questions?: PreparedQuestion[];

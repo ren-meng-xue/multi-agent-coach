@@ -607,6 +607,9 @@ export function InterviewChat() {
         missingDimensions: data.missing_dimensions,
         followupFocus: data.followup_focus,
         assistantMessage: data.assistant_message,
+        summaryScore: data.summary_score,
+        chiefToolCalls: data.chief_tool_calls,
+        designedQuestion: data.designed_question,
       });
     }
 
@@ -744,6 +747,7 @@ export function InterviewChat() {
               missingDimensions: ev.missingDimensions,
               followupFocus: ev.followupFocus,
               chiefToolCalls: ev.chiefToolCalls,
+              designedQuestion: ev.designedQuestion,
               // ask_question/followup/closing 无 LLM token 流时，用 node_done 携带的
               // assistant_message 填充 tokens，让 trace 面板能显示对应内容
               tokens:
