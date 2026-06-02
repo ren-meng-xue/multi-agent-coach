@@ -16,6 +16,7 @@ interface TraceNodeProps {
   latentSignals?: string[];
   missingDimensions?: string[];
   chiefToolCalls?: string[];
+  designedQuestion?: string;
 }
 
 export function TraceNode({
@@ -30,6 +31,7 @@ export function TraceNode({
   latentSignals,
   missingDimensions,
   chiefToolCalls,
+  designedQuestion,
 }: TraceNodeProps) {
   const badgeClass = getBadgeClass(id);
 
@@ -38,70 +40,68 @@ export function TraceNode({
       <div className="relative flex flex-col items-center pt-0.5 w-5 flex-shrink-0 self-stretch">
         {/* 垂直 Timeline 连接线 */}
         {!isLast && (
-          <div 
-            className={`absolute left-1/2 top-[10.5px] w-[1.5px] -translate-x-1/2 bottom-0 transition-all duration-700 ${
-              status === "running"
-                ? "bg-gradient-to-b from-[#534AB7] via-[#CECBF6]/50 to-transparent animate-pulse"
-                : status === "done"
-                ? "bg-emerald-500/40 dark:bg-emerald-500/30"
-                : "bg-black/[0.06] dark:bg-white/[0.06]"
-            }`} 
-          />
+          <div className="absolute top-7 bottom-[-10px] w-[1.5px] bg-gradient-to-b from-[#534AB7]/20 via-[#534AB7]/10 to-transparent dark:from-white/15 dark:via-white/5" />
         )}
-        
-        {/* 状态图标容器 */}
-        <div 
-          className="relative z-10 flex items-center justify-center" 
-          data-testid={`trace-status-${status}`}
+        {/* 节点状态 Icon/Dot */}
+        <div
+          className={`relative z-10 flex h-5 w-5 items-center justify-center rounded-full border-[1.5px] transition-all duration-500 shadow-sm ${
+            status === "running"
+              ? "animate-pulse border-[#534AB7] bg-white text-[#534AB7] ring-4 ring-[#534AB7]/10 dark:border-[#CECBF6] dark:bg-zinc-950"
+              : status === "done"
+              ? "border-emerald-500 bg-emerald-50 text-emerald-600 dark:border-emerald-500/50 dark:bg-emerald-500/10 dark:text-emerald-400"
+              : "border-[#534AB7]/20 bg-white text-[#534AB7]/30 dark:border-white/10 dark:bg-zinc-950"
+          }`}
         >
-          {status === "pending" && (
-            <div className="size-[18px] flex items-center justify-center rounded-full border border-black/10 bg-black/[0.02] dark:border-white/10 dark:bg-white/[0.02]">
-              <div className="size-1 rounded-full bg-black/20 dark:bg-white/30" />
-            </div>
-          )}
-          {status === "running" && (
-            <div className="relative size-[18px] flex items-center justify-center">
-              {/* 精致的双层发光呼吸涟漪 */}
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#534AB7]/25 opacity-75" />
-              <div className="relative size-3.5 flex items-center justify-center rounded-full border border-[#534AB7]/40 bg-[#534AB7]/10 shadow-[0_0_8px_rgba(83,74,183,0.3)]">
-                <div className="size-1 rounded-full bg-[#534AB7] dark:bg-[#CECBF6]" />
-              </div>
-            </div>
-          )}
-          {status === "done" && (
-            <div className="flex size-[18px] items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 shadow-[0_0_8px_rgba(16,185,129,0.25)]">
-              <svg className="size-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4.5} d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
+          {status === "done" ? (
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3.5"
+              className="h-2.5 w-2.5"
+            >
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          ) : (
+            <div
+              className={`h-1.5 w-1.5 rounded-full ${
+                status === "running" ? "bg-[#534AB7] dark:bg-[#CECBF6]" : "bg-[#534AB7]/20 dark:bg-white/10"
+              }`}
+            />
           )}
         </div>
       </div>
 
-      <div className="min-w-0 flex-1 pb-1">
-        <div className="flex flex-wrap items-center gap-2 h-[18px] mb-1.5">
-          <span className={`rounded px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-wider ${badgeClass}`}>
-            {label}
-          </span>
-          <span className="text-[11px] font-extrabold text-black/80 dark:text-white/90">{title}</span>
-          {elapsedMs !== undefined && (
-            <span className="ml-auto font-mono text-[8px] text-black/30 dark:text-white/30 font-bold">
+      <div className="flex-1 space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span
+              className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold tracking-tight transition-all duration-300 ${badgeClass}`}
+            >
+              {label}
+            </span>
+            <span className="text-[12px] font-semibold tracking-tight text-black/80 dark:text-white/90">
+              {title}
+            </span>
+          </div>
+          {elapsedMs !== undefined && elapsedMs > 0 && (
+            <span className="text-[10px] tabular-nums font-medium text-black/30 dark:text-white/20">
               {elapsedMs}ms
             </span>
           )}
         </div>
 
-        {/* 画像 + 信号区域 */}
-        {(id === "evaluator" || id === "chief_think") && status === "done" && (candidateLevel || latentSignals?.length || missingDimensions?.length) && (
-          <div className="mb-2.5 flex flex-wrap gap-1.5 pl-2.5 border-l-[1.5px] border-[#534AB7]/10 dark:border-white/10 animate-in fade-in slide-in-from-top-1 duration-500">
+        {/* 评估结果徽章：仅在 evaluator 或 chief_think 节点完成时展示 */}
+        {(id === "evaluator" || id === "chief_think") && status === "done" && (
+          <div className="flex flex-wrap gap-1.5 mb-2.5 animate-in fade-in slide-in-from-top-1 duration-500">
             {candidateLevel && (
-              <span className="rounded bg-teal-50 text-teal-700 border border-teal-100/50 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider dark:bg-teal-950/30 dark:text-teal-300">
-                {candidateLevel}
+              <span className="text-[9px] bg-[#534AB7]/5 text-[#534AB7]/70 border border-[#534AB7]/10 rounded px-1.5 py-0.5 font-bold uppercase tracking-wider dark:bg-white/5 dark:text-white/50">
+                {candidateLevel === "beginner" ? "初学者" : candidateLevel === "junior" ? "初级" : candidateLevel === "mid" ? "中级" : "高级"}
               </span>
             )}
-            {latentSignals?.map((sig) => (
-              <span key={sig} className="rounded bg-[#534AB7]/6 text-[#534AB7] border border-[#534AB7]/10 px-1.5 py-0.5 text-[9px] font-bold dark:bg-[#CECBF6]/6 dark:text-[#CECBF6]">
-                {sig}
+            {latentSignals && latentSignals.slice(0, 3).map(signal => (
+              <span key={signal} className="text-[9px] bg-emerald-50/50 text-emerald-600/70 border border-emerald-100/30 rounded px-1.5 py-0.5 font-bold dark:bg-emerald-500/5">
+                {signal}
               </span>
             ))}
             {missingDimensions && missingDimensions.length > 0 && (
@@ -125,64 +125,31 @@ export function TraceNode({
           </div>
         )}
 
-        {/* 出题节点：动态解析 JSON 令牌并展示题目列表 */}
+        {/* 出题信息展示：chief_think / chief_respond 节点显示 designer 输出的题目 */}
+        {(id === "chief_think" || id === "chief_respond") &&
+          status === "done" &&
+          designedQuestion && (
+            <div className="mb-2.5 pl-2.5 border-l-[1.5px] border-sky-200/50 dark:border-sky-800/30 animate-in fade-in slide-in-from-top-1 duration-500">
+              <div className="flex gap-2 items-start p-2 rounded-lg bg-sky-50/50 border border-sky-100/30 dark:bg-sky-950/20 dark:border-sky-900/20">
+                <span className="flex-shrink-0 text-[10px] mt-[1px]">📝</span>
+                <span className="text-[11px] leading-relaxed text-sky-800/80 dark:text-sky-300/80 font-medium">
+                  {designedQuestion}
+                </span>
+              </div>
+            </div>
+          )}
+
+        {/* 准备阶段出题节点：不渲染题目详情，仅显示完成提示 */}
         {id === "question_gen" && tokens && (
-          <div className="space-y-2 pl-2.5 border-l-[1.5px] border-[#534AB7]/10 dark:border-white/10 animate-in fade-in slide-in-from-top-1 duration-500">
-            {(() => {
-              // 极度鲁棒的解析逻辑：支持跨行匹配 ([\s\S]*?)
-              const robustPattern = /["']?question["']?\s*:\s*["']((?:[^"'\\]|\\?[\s\S])*?)(?:["']|$)/gi;
-              const matches = Array.from(tokens.matchAll(robustPattern));
-              
-              const questionItems = matches.map((match, i) => {
-                const rawText = match[1].replace(/\\"/g, '"').replace(/\\n/g, ' ').trim();
-                if (!rawText || rawText.length < 2) return null;
-
-                // 在当前题目附近寻找分类信息
-                const startSearch = Math.max(0, match.index! - 150);
-                const endSearch = Math.min(tokens.length, match.index! + match[0].length + 150);
-                const contextSnippet = tokens.substring(startSearch, endSearch);
-                const categoryMatch = /["']?category["']?\s*:\s*["']([^"']*?)["']/.exec(contextSnippet);
-                const category = categoryMatch?.[1];
-
-                return { text: rawText, category };
-              }).filter(Boolean);
-
-              if (questionItems.length === 0 && status === "running") {
-                return (
-                  <p className="text-[11px] text-[#534AB7]/60 animate-pulse dark:text-[#CECBF6]/60 font-medium">
-                    正在为你定制专属题目...
-                  </p>
-                );
-              }
-
-              return questionItems.map((item, i) => (
-                <div 
-                  key={i} 
-                  className="flex gap-2 items-start mt-2 p-2.5 rounded-xl bg-white border border-slate-100/90 shadow-[0_2px_8px_rgba(83,74,183,0.02)] hover:border-slate-200/80 hover:shadow-[0_4px_12px_rgba(83,74,183,0.04)] transition-all duration-300 dark:bg-zinc-900/30 dark:border-zinc-800/50 dark:hover:border-zinc-700/50 animate-in fade-in slide-in-from-left-2 duration-300"
-                >
-                  <span className="flex-shrink-0 select-none text-[#534AB7]/35 dark:text-[#CECBF6]/35 mt-[3px] font-mono text-[8px]">→</span>
-                  <div className="text-[11px] leading-relaxed break-words flex-1">
-                    {item!.category && (
-                      <span className={`mr-2 inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-tight border ${
-                        item!.category === "technical"
-                          ? "bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900/30"
-                          : item!.category === "behavioral"
-                          ? "bg-amber-50 text-amber-600 border-amber-100 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/30"
-                          : "bg-purple-50 text-purple-600 border-purple-100 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-900/30"
-                      }`}>
-                        {item!.category === "technical" ? "技术" : item!.category === "behavioral" ? "行为" : "系统设计"}
-                      </span>
-                    )}
-                    <span className="font-semibold text-black/75 dark:text-white/85">
-                      {item!.text}
-                    </span>
-                  </div>
-                </div>
-              ));
-            })()}
-            {/* 兜底：如果解析不到题目但有大量文本，显示提示 */}
-            {status === "done" && Array.from(tokens.matchAll(/question/g)).length === 0 && tokens.length > 50 && (
-              <p className="text-[11px] text-black/40 italic">题目已生成，请点击下方「先看题目列表」查看详情。</p>
+          <div className="space-y-1.5 pl-2.5 border-l-[1.5px] border-[#534AB7]/10 dark:border-white/10 animate-in fade-in slide-in-from-top-1 duration-500">
+            {status === "running" ? (
+              <p className="text-[11px] text-[#534AB7]/60 animate-pulse dark:text-[#CECBF6]/60 font-medium">
+                正在为你定制专属题目...
+              </p>
+            ) : (
+              <p className="text-[11px] text-emerald-600/80 dark:text-emerald-400/80 font-semibold">
+                已为你定制 5 道专属面试题，面试中将逐题呈现。
+              </p>
             )}
           </div>
         )}
