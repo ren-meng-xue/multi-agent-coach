@@ -514,8 +514,11 @@ def _report_output_to_dict(out: Any) -> dict[str, Any]:
 
 async def generate_prepared_question_reply(question_text: str, state: InterviewState) -> str:
     target_role = state.get("target_role")
-    prefix = f"我们先从「{target_role}」相关的一道题开始。" if target_role else "我们先从第一道题开始。"
-    return f"{prefix}\n\n{question_text}"
+    question_count = state.get("question_count", 0)
+    if question_count <= 1:
+        prefix = f"我们先从「{target_role}」相关的一道题开始。" if target_role else "我们先从第一道题开始。"
+        return f"{prefix}\n\n{question_text}"
+    return question_text
 
 
 async def ask_question_node(state: InterviewState) -> InterviewState:

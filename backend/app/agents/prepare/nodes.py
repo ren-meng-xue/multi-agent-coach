@@ -2,6 +2,7 @@
 """Node functions for the prepare pipeline."""
 from __future__ import annotations
 
+import json as _json
 from typing import Any, Literal, cast
 
 from langchain_core.messages import SystemMessage
@@ -9,7 +10,7 @@ from openai import APIConnectionError, APITimeoutError, InternalServerError, Rat
 from pydantic import BaseModel
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from app.agents.prepare.prompts import SUPERVISOR_DECISION_PROMPT, SUPERVISOR_REASONING_PROMPT
+from app.agents.prepare.prompts import SUPERVISOR_COMBINED_PROMPT
 from app.agents.prepare.state import PrepareState
 from app.core.logging import get_logger
 
@@ -272,24 +273,41 @@ async def supervisor_node(state: PrepareState) -> PrepareState:
 
     log.info("supervisor_node_start", iteration=iteration, completed=completed_tools)
 
-    # Phase 1: 流式推理（供 SSE 捕获）
-    reasoning_prompt = SUPERVISOR_REASONING_PROMPT.format(state_summary=state_summary)
-    model_stream = _llm(streaming=True).with_config(tags=["prepare_supervisor_stream"])
-    async for _ in model_stream.astream([SystemMessage(content=reasoning_prompt)]):
-        pass
-
-    # Phase 2: 结构化决策
-    decision_prompt = SUPERVISOR_DECISION_PROMPT.format(
+    # 单次流式调用：推理可见 token + 末行 JSON 决策，避免原两次串行 gpt-4o 调用的双倍延迟
+    combined_prompt = SUPERVISOR_COMBINED_PROMPT.format(
         state_summary=state_summary,
-        completed_tools=", ".join(completed_tools) if completed_tools else "无"
+        completed_tools=", ".join(completed_tools) if completed_tools else "无",
     )
-    model_decision = _llm().with_structured_output(SupervisorDecision)
+    model_stream = _llm(streaming=True).with_config(tags=["prepare_supervisor_stream"])
 
     @_retry_llm
-    async def _invoke_decision() -> SupervisorDecision:
-        return await model_decision.ainvoke([SystemMessage(content=decision_prompt)])  # type: ignore[return-value]
+    async def _stream_combined() -> str:
+        result = ""
+        async for chunk in model_stream.astream([SystemMessage(content=combined_prompt)]):
+            content = chunk.content if isinstance(chunk.content, str) else ""
+            result += content
+        return result
 
-    decision: SupervisorDecision = await _invoke_decision()
+    full_text = await _stream_combined()
+
+    # 逐行找 DECISION: {…} 行，避免贪婪 regex 误匹配推理文本中的花括号
+    decision = SupervisorDecision(next="END")
+    for line in full_text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("DECISION:"):
+            json_str = stripped[len("DECISION:"):].strip()
+            try:
+                raw = _json.loads(json_str)
+                decision = SupervisorDecision(
+                    next=raw.get("next", "END"),
+                    direction=raw.get("direction", ""),
+                    reasoning=raw.get("reasoning", ""),
+                )
+            except (_json.JSONDecodeError, ValueError, TypeError) as exc:
+                log.warning("supervisor_decision_parse_failed", error=str(exc), raw=json_str)
+            break
+    else:
+        log.warning("supervisor_decision_not_found", raw=full_text[-300:])
 
     # 强制防重复：如果 LLM 建议跑已跑过的工具，强制 END（除非是特殊状态）
     if decision.next in completed_tools:

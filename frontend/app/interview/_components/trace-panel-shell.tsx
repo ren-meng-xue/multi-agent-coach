@@ -28,44 +28,52 @@ export function TracePanelShell({
   expandedClassName = "",
 }: TracePanelShellProps) {
   return (
-    <div 
-      className={`w-full rounded-2xl border transition-all duration-300 p-4 ${
+    <div
+      className={`w-full rounded-2xl border transition-all duration-300 ${
         tone === "success"
           ? "bg-[#E8F8F5]/30 border-emerald-500/20 dark:bg-emerald-950/5 dark:border-emerald-500/15 shadow-[0_4px_20px_-4px_rgba(16,185,129,0.06)]"
           : tone === "error"
-          ? "bg-[#FDF2F4]/30 border-rose-500/20 dark:bg-rose-950/5 dark:border-rose-500/15 shadow-[0_4px_20px_-4px_rgba(244,63,94,0.06)]"
-          : "bg-[#534AB7]/[0.015] border-[#534AB7]/10 dark:bg-white/[0.01] dark:border-white/[0.06] shadow-[0_4px_24px_-4px_rgba(83,74,183,0.04)]"
+            ? "bg-[#FDF2F4]/30 border-rose-500/20 dark:bg-rose-950/5 dark:border-rose-500/15 shadow-[0_4px_20px_-4px_rgba(244,63,94,0.06)]"
+            : "bg-[#534AB7]/[0.015] border-[#534AB7]/10 dark:bg-white/[0.01] dark:border-white/[0.06] shadow-[0_4px_24px_-4px_rgba(83,74,183,0.04)]"
       } ${className}`}
     >
-      <div className="flex items-center justify-between">
-        <button
-          type="button"
-          onClick={onToggle}
-          className={`group/btn inline-flex items-center gap-2 rounded-full px-3 py-1 text-[10px] font-extrabold tracking-tight transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] ${
-            tone === "success"
-              ? "bg-emerald-500/10 text-emerald-700 border border-emerald-500/15 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/15 hover:bg-emerald-500/20"
-              : tone === "error"
-              ? "bg-rose-500/10 text-rose-700 border border-rose-500/15 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/15 hover:bg-rose-500/20"
-              : "bg-[#534AB7]/8 text-[#534AB7] border border-[#534AB7]/12 dark:bg-[#CECBF6]/8 dark:text-[#CECBF6] dark:border-[#CECBF6]/12 hover:bg-[#534AB7]/15"
-          }`}
+      {/* Header 行：可点击折叠/展开，动态显示题目结果 */}
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center gap-2 px-4 py-3 text-left hover:bg-black/[0.01] dark:hover:bg-white/[0.01] transition-colors duration-200 rounded-t-2xl"
+      >
+        <span className="relative flex size-1.5 flex-shrink-0 items-center justify-center">
+          {tone === "default" && (
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#534AB7] opacity-60 dark:bg-[#CECBF6]" />
+          )}
+          <span
+            className={`relative inline-flex size-1.5 rounded-full ${getDotClass(tone)}`}
+          />
+        </span>
+        <span className="flex-1 text-[10px] font-extrabold tracking-tight text-[#534AB7]/70 dark:text-[#CECBF6]/70 line-clamp-1">
+          {title}
+        </span>
+        {meta}
+        <span className="ml-1 flex-shrink-0 text-[9px] font-medium text-[#534AB7]/30 dark:text-[#CECBF6]/25">
+          ({toggleText})
+        </span>
+        <svg
+          className={`size-3 flex-shrink-0 text-[#534AB7]/30 dark:text-[#CECBF6]/25 transition-transform duration-300 ${expanded ? "rotate-180" : ""}`}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
         >
-          <span className="relative flex size-1.5 items-center justify-center">
-            {/* 呼吸灯波纹动画 (当处于 active/default 状态时) */}
-            {tone === "default" && (
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#534AB7] opacity-60 dark:bg-[#CECBF6]" />
-            )}
-            <span className={`relative inline-flex size-1.5 rounded-full ${getDotClass(tone)}`} />
-          </span>
-          <span className="font-extrabold leading-none">{title}</span>
-          {meta}
-          <span className="ml-1 text-[9px] font-medium opacity-45 group-hover/btn:opacity-75 transition-opacity">
-            ({toggleText})
-          </span>
-        </button>
-      </div>
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
 
+      {/* 内容区：默认展开 */}
       {expanded && (
-        <div className={`pt-3.5 pb-0.5 transition-all duration-300 ${expandedClassName}`}>
+        <div
+          className={`px-4 pb-4 transition-all duration-300 ${expandedClassName}`}
+        >
           {children}
         </div>
       )}

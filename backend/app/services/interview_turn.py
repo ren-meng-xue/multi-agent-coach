@@ -376,6 +376,8 @@ def _build_turn_trace(
                     "latentSignals": [],
                     "missingDimensions": [],
                     "followupFocus": None,
+                    "chiefToolCalls": [],
+                    "designedQuestion": None,
                 }
                 chain.append(node_id)
             else:
@@ -394,6 +396,8 @@ def _build_turn_trace(
                     "latentSignals": data.get("latent_signals", []),
                     "missingDimensions": data.get("missing_dimensions", []),
                     "followupFocus": data.get("followup_focus"),
+                    "chiefToolCalls": data.get("chief_tool_calls", []),
+                    "designedQuestion": data.get("designed_question"),
                 })
 
             # 从评估节点或最后一个节点尝试提取 summaryScore

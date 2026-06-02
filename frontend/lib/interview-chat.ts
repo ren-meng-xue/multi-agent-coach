@@ -339,6 +339,7 @@ function handleSseEvent(
       followup_focus?: string;
       chief_tool_calls?: string[];
       assistant_message?: string;
+      designed_question?: string;
     }>(data);
     const phase =
       event === "node_start"
@@ -360,6 +361,7 @@ function handleSseEvent(
       followupFocus: payload.followup_focus,
       chiefToolCalls: payload.chief_tool_calls,
       assistantMessage: payload.assistant_message,
+      designedQuestion: payload.designed_question,
     });
     return;
   }

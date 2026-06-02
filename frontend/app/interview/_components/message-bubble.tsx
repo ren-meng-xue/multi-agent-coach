@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useState } from "react";
 import { cn } from "@/lib/utils";
 import type {
   InterviewChatTextMessage,
@@ -21,6 +21,14 @@ export const MessageBubble = memo(function MessageBubble({
   trace,
 }: MessageBubbleProps) {
   const isUser = message.role === "user";
+  const [traceExpanded, setTraceExpanded] = useState(true);
+
+  const showScore =
+    !isUser &&
+    trace &&
+    typeof trace.payload.summaryScore === "number" &&
+    !trace.payload.isOpening &&
+    trace.payload.turnIndex > 1;
 
   return (
     <div
@@ -31,7 +39,7 @@ export const MessageBubble = memo(function MessageBubble({
     >
       <div className={cn(isUser ? "max-w-[72%]" : "max-w-[95%]")}>
         <div
-            className={cn(
+          className={cn(
             "whitespace-pre-wrap text-base leading-relaxed transition-all duration-300",
             isUser
               ? "rounded-[18px_18px_4px_18px] bg-gradient-to-br from-[#534AB7] to-[#7c3aed] px-6 py-4 text-white shadow-sm shadow-[#534AB7]/10"
@@ -46,6 +54,36 @@ export const MessageBubble = memo(function MessageBubble({
             )
           )}
 
+          {/* 分数 + 折叠按钮行，紧跟在消息内容下方 */}
+          {!isUser && trace && (
+            <div className="mt-2.5 flex items-center justify-end gap-2">
+              {showScore && (
+                <span className="rounded-full bg-[#534AB7]/10 px-2.5 py-0.5 font-extrabold text-[#534AB7] border border-[#534AB7]/15 dark:bg-[#cecbf6]/10 dark:text-[#cecbf6] dark:border-[#cecbf6]/15 text-[9px] shadow-sm">
+                  评分：{trace.payload.summaryScore!.toFixed(1)} / 10
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => setTraceExpanded((v) => !v)}
+                className="flex items-center gap-0.5 text-[9px] font-medium text-[#534AB7]/35 dark:text-[#CECBF6]/25 hover:text-[#534AB7]/60 dark:hover:text-[#CECBF6]/50 transition-colors duration-200"
+              >
+                ({traceExpanded ? "收起依据" : "查看依据"})
+                <svg
+                  className={cn(
+                    "size-3 transition-transform duration-300",
+                    traceExpanded ? "rotate-180" : "",
+                  )}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+            </div>
+          )}
+
           {!isUser && trace && (
             <TurnTraceCard
               status={trace.payload.status}
@@ -55,6 +93,8 @@ export const MessageBubble = memo(function MessageBubble({
               isOpening={trace.payload.isOpening}
               isEmbedded={true}
               hasContent={!!message.content}
+              expanded={traceExpanded}
+              onToggle={() => setTraceExpanded((v) => !v)}
             />
           )}
 
