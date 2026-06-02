@@ -64,13 +64,14 @@
 
 无需修改 `CLAUDE.md`。
 
-| Agent    | 职责                |
-| -------- | ----------------- |
-| Planner  | 需求分析、任务拆解、计划制定、归档 |
-| Backend  | 后端开发、数据库变更、接口实现   |
-| Frontend | 页面开发、组件实现、状态管理    |
-| Reviewer | Review、风险检查、质量评估  |
-| Tester   | 测试、验证、回归检查        |
+| Agent         | 职责                       |
+| ------------- | ------------------------ |
+| Spec-Planner  | 技术规格编写、执行计划拆解           |
+| Planner       | 需求分析、任务拆解、计划制定、归档        |
+| Backend       | 后端开发、数据库变更、接口实现          |
+| Frontend      | 页面开发、组件实现、状态管理           |
+| Reviewer      | Review、风险检查、质量评估         |
+| Tester        | 测试、验证、回归检查               |
 
 ---
 
@@ -79,8 +80,8 @@
 | Workflow Step         | Owner              |
 | --------------------- | ------------------ |
 | office-hours          | Planner            |
-| spec                  | Planner            |
-| plan                  | Planner            |
+| spec                  | Spec-Planner       |
+| plan                  | Spec-Planner       |
 | eng-review            | Reviewer           |
 | ceo-review            | Reviewer           |
 | design-review         | Reviewer           |
@@ -108,9 +109,10 @@
 
 下表为各角色职责的详细定义：
 
-| Agent    | 允许执行             |
-| -------- | ---------------- |
-| Planner  | 创建任务、制定计划、归档     |
+| Agent         | 允许执行                       |
+| ------------- | -------------------------- |
+| Spec-Planner  | 技术规格、计划、需求分析、方案拆解          |
+| Planner       | 创建任务、制定计划、归档               |
 | Backend  | 后端开发、数据库变更、接口实现  |
 | Frontend | UI、页面、状态管理       |
 | Reviewer | Review、质量评估、风险分析 |
@@ -120,9 +122,10 @@
 
 ## 6. Prohibited Actions
 
-| Agent    | 禁止            |
-| -------- | ------------- |
-| Planner  | 编写业务代码        |
+| Agent         | 禁止                    |
+| ------------- | --------------------- |
+| Spec-Planner  | 编写业务代码、Review、Testing |
+| Planner       | 编写业务代码                |
 | Backend  | 修改任务规划、编写前端代码 |
 | Frontend | 修改任务规划、编写后端代码 |
 | Reviewer | 修改业务代码        |

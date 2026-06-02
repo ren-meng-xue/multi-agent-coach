@@ -14,14 +14,14 @@ steps:
     next: spec
 
   spec:
-    owner: planner
+    owner: spec-planner
     min_depth: thorough
     outputs:
       - spec.md
     next: plan
 
   plan:
-    owner: planner
+    owner: spec-planner
     min_depth: quick
     outputs:
       - task.md
