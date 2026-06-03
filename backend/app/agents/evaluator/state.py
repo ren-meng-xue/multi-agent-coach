@@ -14,6 +14,7 @@ class EvaluatorState(TypedDict, total=False):
     question_index: int
     followup_index: int
     db: Any
+    job_intel: dict[str, Any] | None
 
     scoring: TurnEvaluation
     updated_profile: CandidateProfile

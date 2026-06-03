@@ -75,6 +75,13 @@ def _build_context(state: EvaluatorState) -> str:
     if state.get("latest_answer"):
         parts.append("【候选人最新回答】")
         parts.append(state["latest_answer"][:1200])
+
+    job_intel = state.get("job_intel") or {}
+    hard_reqs = (job_intel.get("job_interpretation") or {}).get("hard_requirements") or []
+    if hard_reqs:
+        parts.append("【岗位硬性要求（评分维度）】")
+        parts.append("- " + "\n- ".join(hard_reqs))
+
     return "\n".join(parts)
 
 
