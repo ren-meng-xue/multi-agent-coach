@@ -430,6 +430,7 @@ async def stream_interview_turn(
     db: AsyncSession,
     prepared_questions: list[dict[str, Any]] | None = None,
     jd_context: dict[str, Any] | None = None,
+    job_intel: dict[str, Any] | None = None,
     target_role: str | None = None,
     use_qa_bank: bool = False,
 ) -> AsyncIterator[dict[str, Any]]:
@@ -459,6 +460,8 @@ async def stream_interview_turn(
         state["prepared_questions"] = prepared_questions
     if jd_context:
         state["jd_context"] = jd_context
+    if job_intel:
+        state["job_intel"] = job_intel
     
     # 将题库模式注入 state
     if use_qa_bank:

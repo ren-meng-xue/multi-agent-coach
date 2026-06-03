@@ -56,6 +56,7 @@ class InterviewState(TypedDict, total=False):
 
     # 准备阶段产出（沿用 Phase 3）
     jd_context: dict[str, Any] | None
+    job_intel: dict | None         # 来自 PrepareState，跨阶段透传；MCP 不可用时为 None
     prepared_questions: list[dict[str, Any]]
     current_question_index: int
 

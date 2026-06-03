@@ -11,9 +11,9 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from typing import Any
+from typing import Any, cast
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
 from app.agents.prepare.research_prompts import RESEARCH_AGENT_SYSTEM_PROMPT
 from app.agents.prepare.state import PrepareState
@@ -35,7 +35,7 @@ def _chat_model() -> Any:
     settings = get_settings()
     return ChatOpenAI(
         model=settings.openai_model_chat,
-        api_key=settings.openai_api_key.get_secret_value(),
+        api_key=settings.openai_api_key,
         timeout=30,
     )
 
@@ -43,12 +43,15 @@ def _chat_model() -> Any:
 def _build_context(state: PrepareState) -> str:
     """把候选人本次备课上下文转成 prompt 块。"""
     parts = []
-    if state.get("user_direction"):
-        parts.append(f"候选人目标方向：{state['user_direction']}")
-    if state.get("user_background"):
-        parts.append(f"候选人背景/简历摘要：{state['user_background'][:1500]}")
-    if state.get("jd_raw"):
-        parts.append(f"目标岗位 JD 原文：{state['jd_raw'][:2000]}")
+    user_direction = state.get("user_direction")
+    if user_direction:
+        parts.append(f"候选人目标方向：{user_direction}")
+    user_background = state.get("user_background")
+    if user_background:
+        parts.append(f"候选人背景/简历摘要：{user_background[:1500]}")
+    jd_raw = state.get("jd_raw")
+    if jd_raw:
+        parts.append(f"目标岗位 JD 原文：{jd_raw[:2000]}")
     return "\n\n".join(parts) or "（候选人未提供详细上下文）"
 
 
@@ -172,7 +175,7 @@ async def research_agent_node(state: PrepareState) -> PrepareState:
                         content = json.dumps({"error": str(exc)})
 
                 messages.append(ToolMessage(content=content, tool_call_id=call_id, name=name))
-    except asyncio.TimeoutError:
+    except TimeoutError:
         log.warning("research_agent_iter_timeout")
 
     # 找最终报告：先看 messages 里有没有 generate_position_report 的结果，没有就强制兜底
@@ -202,4 +205,5 @@ async def research_agent_node(state: PrepareState) -> PrepareState:
         elapsed_ms=elapsed_ms,
         has_report=True,
     )
-    return {**state, "job_intel": job_intel, "completed_tools": completed + ["research_agent"]}
+    from app.agents.prepare.state import JobIntel
+    return {**state, "job_intel": cast(JobIntel, job_intel), "completed_tools": completed + ["research_agent"]}

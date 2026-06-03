@@ -19,6 +19,21 @@ class PreparedQuestion(TypedDict):
     priority: int  # 1=最高优先级，薄弱点相关题排前
 
 
+class JobIntel(TypedDict, total=False):
+    """research_agent 写入：目标岗位的 6 模块情报（来自 job-intel MCP）。
+
+    下游 Designer / Evaluator / Coach / Interviewer 各自读关心的字段。
+    interview_qa / salary_range 保留为字段但下游不消费（避免 LLM 自循环和假数据）。
+    """
+    job_interpretation: dict
+    resume_match: dict
+    company_profile: dict
+    interview_qa: list[dict]
+    salary_range: dict
+    prep_suggestions: list[dict]
+    _trace: dict  # research_agent 过程产物：tools_used / iterations / elapsed_ms / final_thought
+
+
 class PrepareState(TypedDict, total=False):
     # 输入
     session_id: str
@@ -37,6 +52,7 @@ class PrepareState(TypedDict, total=False):
     # 子 Agent 结果
     weak_areas: list[str]        # 来自历史面试表现
     jd_context: JDContext | None
+    job_intel: JobIntel | None    # research_agent 写入；MCP 不可用时为 None
     prepared_questions: list[PreparedQuestion]
     # 第五步「教练 Agent + 共享记忆层」预留：长期记忆/爱好记忆注入槽。本次不实现填充。
     long_memory: list[dict[str, Any]]

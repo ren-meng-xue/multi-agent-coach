@@ -49,6 +49,7 @@ class TurnRequest(BaseModel):
     message: str
     prepared_questions: list[dict[str, Any]] | None = None
     jd_context: dict[str, Any] | None = None
+    job_intel: dict[str, Any] | None = None
     target_role: str | None = None
     use_qa_bank: bool = False
 

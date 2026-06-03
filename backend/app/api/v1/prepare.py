@@ -224,6 +224,7 @@ def _apply_prepare_trace_event(payload: dict, ev: dict) -> None:
         payload["summary"] = data.get("summary", "") or ""
         payload["direction"] = data.get("direction")
         payload["jdContext"] = data.get("jd_context")
+        payload["jobIntel"] = data.get("job_intel")
 
 
 async def _persist_prepare_trace(
@@ -270,6 +271,7 @@ async def stream_prepare_and_launch(
     """
     prepared_questions: list[dict] = []
     jd_context: dict | None = None
+    job_intel: dict | None = None
     need_direction = False
     prepare_trace = _empty_prepare_trace()
 
@@ -282,6 +284,7 @@ async def stream_prepare_and_launch(
             data = ev.get("data", {})
             prepared_questions = data.get("prepared_questions", []) or []
             jd_context = data.get("jd_context")
+            job_intel = data.get("job_intel")
         if evt == "node_done" and ev.get("data", {}).get("need_direction"):
             need_direction = True
 
@@ -303,6 +306,7 @@ async def stream_prepare_and_launch(
         db=db,
         prepared_questions=prepared_questions or None,
         jd_context=jd_context,
+        job_intel=job_intel,
     ):
         turn_event = turn_ev.get("event", "")
         if turn_event == "done":
