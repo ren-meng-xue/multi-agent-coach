@@ -16,6 +16,7 @@ class CoachState(TypedDict):
     last_session_report: dict[str, Any] | None
     target_role: str | None
     resume_summary: str | None
+    job_intel: dict[str, Any] | None
     
     # 输出字段
     review_text: str

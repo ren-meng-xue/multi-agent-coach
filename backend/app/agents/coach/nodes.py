@@ -58,11 +58,25 @@ async def _generate_review_text(state: CoachState) -> str:
         if state.get("resume_summary") else ""
     )
 
+    job_intel = state.get("job_intel") or {}
+    rm = job_intel.get("resume_match") or {}
+    suggestions = job_intel.get("prep_suggestions") or []
+    intel_ctx = ""
+    if rm.get("gaps") or suggestions:
+        lines = []
+        if rm.get("gaps"):
+            lines.append("候选人对此岗位的 Gap：" + ", ".join(rm["gaps"]))
+        if suggestions:
+            lines.append("岗位针对性备战建议：")
+            for s in suggestions[:5]:
+                lines.append(f"- {s.get('title', '')}：{s.get('content', '')}")
+        intel_ctx = "\n\n【目标岗位调研情报】\n" + "\n".join(lines)
+
     # 模拟 astream 以便 SSE 捕获 tokens
     full_text = []
     messages = [
         SystemMessage(content=COACH_REVIEW_SYSTEM_PROMPT),
-        HumanMessage(content=f"{memory_ctx}\n\n{session_ctx}{resume_ctx}"),
+        HumanMessage(content=f"{memory_ctx}\n\n{session_ctx}{resume_ctx}{intel_ctx}"),
     ]
     async for chunk in model.astream(messages):
         content = chunk.content
@@ -89,9 +103,23 @@ async def _generate_structured_plan(state: CoachState) -> CoachPlanSchema:
         if state.get("resume_summary") else ""
     )
 
+    job_intel = state.get("job_intel") or {}
+    rm = job_intel.get("resume_match") or {}
+    suggestions = job_intel.get("prep_suggestions") or []
+    intel_ctx = ""
+    if rm.get("gaps") or suggestions:
+        lines = []
+        if rm.get("gaps"):
+            lines.append("候选人对此岗位的 Gap：" + ", ".join(rm["gaps"]))
+        if suggestions:
+            lines.append("岗位针对性备战建议：")
+            for s in suggestions[:5]:
+                lines.append(f"- {s.get('title', '')}：{s.get('content', '')}")
+        intel_ctx = "\n\n【目标岗位调研情报】\n" + "\n".join(lines)
+
     messages = [
         SystemMessage(content=COACH_PLAN_SYSTEM_PROMPT),
-        HumanMessage(content=f"{role_ctx}\n\n{review_ctx}\n\n{memory_ctx}{resume_ctx}"),
+        HumanMessage(content=f"{role_ctx}\n\n{review_ctx}\n\n{memory_ctx}{resume_ctx}{intel_ctx}"),
     ]
     
     result = await model.ainvoke(messages)
