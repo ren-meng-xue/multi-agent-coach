@@ -64,6 +64,23 @@ def _build_context(state: DesignerState) -> str:
     jd_context = state.get("jd_context") or {}
     if jd_context:
         parts.append(f"JD 上下文：{jd_context}")
+
+    job_intel = state.get("job_intel") or {}
+    ji = job_intel.get("job_interpretation") or {}
+    rm = job_intel.get("resume_match") or {}
+    if ji or rm:
+        sub = []
+        if ji.get("hard_requirements"):
+            sub.append(f"岗位硬要求（出题重点考察）：{', '.join(ji['hard_requirements'])}")
+        if ji.get("soft_requirements"):
+            sub.append(f"岗位软偏好：{', '.join(ji['soft_requirements'])}")
+        if rm.get("strengths"):
+            sub.append(f"候选人对此岗位的强项（可适度探深）：{', '.join(rm['strengths'])}")
+        if rm.get("gaps"):
+            sub.append(f"候选人对此岗位的 Gap（优先围绕这些出题）：{', '.join(rm['gaps'])}")
+        if sub:
+            parts.append("目标岗位情报：\n" + "\n".join(sub))
+
     return "\n".join(parts)
 
 

@@ -11,6 +11,7 @@ class DesignerState(TypedDict, total=False):
     user_background: str
     candidate_profile: CandidateProfile
     jd_context: dict[str, Any] | None
+    job_intel: dict[str, Any] | None
     previous_questions: list[str]
     prepared_questions: list[dict[str, Any]]
     current_question_index: int
