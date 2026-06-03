@@ -1,6 +1,7 @@
 "use client";
 
 import type { TraceNodeStatus } from "@/lib/prepare-types";
+import { ReactToolTree } from "./react-tool-tree";
 
 export type { TraceNodeStatus };
 
@@ -37,6 +38,8 @@ export function TraceNode({
   designedQuestion,
   designedCategory,
   summaryScore,
+  reactSteps,
+  reactStatus,
 }: TraceNodeProps) {
   const badgeClass = getBadgeClass(id);
 
@@ -208,6 +211,12 @@ export function TraceNode({
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {id === "research_agent" && reactSteps && reactSteps.length > 0 && (
+          <div className="ml-1">
+            <ReactToolTree steps={reactSteps} isFinished={reactStatus === "done"} />
           </div>
         )}
       </div>

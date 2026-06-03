@@ -58,3 +58,33 @@ test("点击按钮可切换展开/收起", () => {
   fireEvent.click(toggle);
   expect(screen.getByText(/展开专家组详情/)).toBeInTheDocument();
 });
+
+test("当节点包含 reactSteps 时，渲染 ReactToolTree 组件", () => {
+  render(
+    <PreparationCard
+      status="running"
+      nodes={[
+        {
+          id: "research_agent",
+          label: "调研",
+          title: "正在调研",
+          status: "running",
+          tokens: "",
+          reactStatus: "running",
+          reactSteps: [
+            {
+              index: 0,
+              thinkStatus: "running",
+              thinkContent: "正在思考",
+              toolCalls: [],
+            },
+          ],
+        },
+      ]}
+    />
+  );
+  
+  // 检查是否渲染了 ReactToolTree 里的特定文本
+  expect(screen.getByText(/第 1 步思考与执行/)).toBeInTheDocument();
+  expect(screen.getByText("正在思考")).toBeInTheDocument();
+});
