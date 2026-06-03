@@ -64,12 +64,103 @@ vi.mock("@/lib/interview-chat", () => ({
 }));
 
 import { fetchActiveInterviewSession } from "@/lib/interview-chat";
+import { aggregateReactSteps } from "./interview-chat";
+
 const mockStreamInterviewChat = vi.mocked(streamInterviewChat);
 const mockStartPrepareStreamFetch = vi.mocked(startPrepareStreamFetch);
 const mockStartPrepareAndLaunchStreamFetch = vi.mocked(
   startPrepareAndLaunchStreamFetch,
 );
 const mockFetchActiveSession = vi.mocked(fetchActiveInterviewSession);
+
+describe("aggregateReactSteps", () => {
+  it("creates a new iteration when tool_thinking_start arrives", () => {
+    const steps = aggregateReactSteps([], {
+      event: "tool_thinking_start",
+      data: { iteration: 0, step_id: "think-0" },
+    });
+    expect(steps).toHaveLength(1);
+    expect(steps[0]).toMatchObject({
+      index: 0,
+      thinkStatus: "running",
+      toolCalls: [],
+    });
+  });
+
+  it("appends streamed think tokens to thinkContent", () => {
+    let steps = aggregateReactSteps([], {
+      event: "tool_thinking_start",
+      data: { iteration: 0, step_id: "think-0" },
+    });
+    steps = aggregateReactSteps(steps, {
+      event: "tool_thinking_token",
+      data: { iteration: 0, step_id: "think-0", text: "我先" },
+    });
+    steps = aggregateReactSteps(steps, {
+      event: "tool_thinking_token",
+      data: { iteration: 0, step_id: "think-0", text: "调研" },
+    });
+    expect(steps[0].thinkContent).toBe("我先调研");
+  });
+
+  it("adds a running tool_call_start card and updates on tool_call_done", () => {
+    let steps = aggregateReactSteps([], {
+      event: "tool_thinking_start",
+      data: { iteration: 0, step_id: "think-0" },
+    });
+    steps = aggregateReactSteps(steps, {
+      event: "tool_call_start",
+      data: {
+        iteration: 0,
+        step_id: "tool-0-c1",
+        tool_name: "extract_jd_text",
+        tool_args_summary: 'text="..."',
+      },
+    });
+    expect(steps[0].toolCalls).toHaveLength(1);
+    expect(steps[0].toolCalls[0].status).toBe("running");
+
+    steps = aggregateReactSteps(steps, {
+      event: "tool_call_done",
+      data: {
+        iteration: 0,
+        step_id: "tool-0-c1",
+        tool_result_summary: "{title, company}",
+        tool_elapsed_ms: 1200,
+      },
+    });
+    expect(steps[0].toolCalls[0].status).toBe("done");
+    expect(steps[0].toolCalls[0].elapsedMs).toBe(1200);
+    expect(steps[0].toolCalls[0].resultSummary).toBe("{title, company}");
+  });
+
+  it("marks tool call as error when tool_error is present", () => {
+    let steps = aggregateReactSteps([], {
+      event: "tool_thinking_start",
+      data: { iteration: 0, step_id: "think-0" },
+    });
+    steps = aggregateReactSteps(steps, {
+      event: "tool_call_start",
+      data: {
+        iteration: 0,
+        step_id: "tool-0-c1",
+        tool_name: "web_search",
+        tool_args_summary: "",
+      },
+    });
+    steps = aggregateReactSteps(steps, {
+      event: "tool_call_done",
+      data: {
+        iteration: 0,
+        step_id: "tool-0-c1",
+        tool_error: "Tavily timeout",
+        tool_elapsed_ms: 30000,
+      },
+    });
+    expect(steps[0].toolCalls[0].status).toBe("error");
+    expect(steps[0].toolCalls[0].error).toBe("Tavily timeout");
+  });
+});
 
 describe("InterviewChat", () => {
   let writeTextMock: ReturnType<typeof vi.fn>;

@@ -35,7 +35,68 @@ import type {
   PrepareSSEEvent,
   TraceNodeData,
   InterviewTraceNodeEvent,
+  ReactIteration,
 } from "@/lib/prepare-types";
+
+export function aggregateReactSteps(
+  prev: ReactIteration[],
+  event: PrepareSSEEvent,
+): ReactIteration[] {
+  const { data } = event;
+  const iter = data.iteration ?? 0;
+  const next = [...prev];
+
+  while (next.length <= iter) {
+    next.push({
+      index: next.length,
+      thinkContent: "",
+      thinkStatus: "running",
+      toolCalls: [],
+    });
+  }
+
+  const slot = { ...next[iter], toolCalls: [...next[iter].toolCalls] };
+
+  switch (event.event) {
+    case "tool_thinking_start":
+      slot.thinkStatus = "running";
+      break;
+    case "tool_thinking_token":
+      slot.thinkContent = slot.thinkContent + (data.text ?? "");
+      break;
+    case "tool_thinking_done":
+      slot.thinkStatus = "done";
+      break;
+    case "tool_call_start": {
+      slot.toolCalls.push({
+        stepId: data.step_id ?? `tool-${iter}-${slot.toolCalls.length}`,
+        toolName: data.tool_name ?? "unknown",
+        argsSummary: data.tool_args_summary ?? "",
+        status: "running",
+      });
+      break;
+    }
+    case "tool_call_done": {
+      const idx = slot.toolCalls.findIndex((t) => t.stepId === data.step_id);
+      if (idx >= 0) {
+        const isError = !!data.tool_error;
+        slot.toolCalls[idx] = {
+          ...slot.toolCalls[idx],
+          resultSummary: data.tool_result_summary,
+          elapsedMs: data.tool_elapsed_ms,
+          error: data.tool_error,
+          status: isError ? "error" : "done",
+        };
+      }
+      break;
+    }
+    default:
+      return prev;
+  }
+
+  next[iter] = slot;
+  return next;
+}
 
 function buildOpeningMessage(
   context: { target_role?: string; user_background?: string } | null,
@@ -484,6 +545,23 @@ export function InterviewChat() {
       return;
     }
 
+    if (
+      event.startsWith("tool_thinking") ||
+      event.startsWith("tool_call")
+    ) {
+      updatePrepareTraceMessage((payload) => ({
+        ...payload,
+        nodes: payload.nodes.map((n) => {
+          if (n.id !== "research_agent") return n;
+          return {
+            ...n,
+            reactSteps: aggregateReactSteps(n.reactSteps ?? [], ev),
+            reactStatus: "running" as const,
+          };
+        }),
+      }));
+    }
+
     if (event === "node_start") {
       updatePrepareTraceMessage((payload) => {
         const nodes = [...payload.nodes];
@@ -527,7 +605,7 @@ export function InterviewChat() {
         ...payload,
         nodes: payload.nodes.map((n) =>
           n.id === data.node
-            ? { ...n, status: "done" as const, elapsedMs: data.elapsed_ms }
+            ? { ...n, status: "done" as const, elapsedMs: data.elapsed_ms, ...(n.id === "research_agent" ? { reactStatus: "done" as const } : {}) }
             : n,
         ),
       }));

@@ -19,7 +19,9 @@ export interface PrepareSSEEvent {
     | "node_start" | "node_token" | "node_done" | "done" | "error"
     | "phase_change"
     | "turn_node_start" | "turn_node_token" | "turn_node_done"
-    | "turn_delta" | "turn_state" | "turn_report" | "turn_done";
+    | "turn_delta" | "turn_state" | "turn_report" | "turn_done"
+    | "tool_thinking_start" | "tool_thinking_token" | "tool_thinking_done"
+    | "tool_call_start" | "tool_call_done";
   data: {
     node?: string;
     label?: string;
@@ -55,6 +57,13 @@ export interface PrepareSSEEvent {
     structure?: number;
     highlights?: string[];
     improvements?: string[];
+    iteration?: number;
+    step_id?: string;
+    tool_name?: string;
+    tool_args_summary?: string;
+    tool_result_summary?: string;
+    tool_elapsed_ms?: number;
+    tool_error?: string;
   };
 }
 
@@ -77,6 +86,10 @@ export interface TraceNodeData {
   designedQuestion?: string;
   designedCategory?: string;
   designedSource?: string;
+  /** research_agent 节点专属：工具思考步骤树 */
+  reactSteps?: ReactIteration[];
+  /** research_agent 节点专属：ReAct loop 整体状态 */
+  reactStatus?: "running" | "done";
 }
 
 export interface InterviewTraceNodeEvent {
@@ -98,4 +111,21 @@ export interface InterviewTraceNodeEvent {
   designedQuestion?: string;
   designedCategory?: string;
   designedSource?: string;
+}
+
+export interface ToolCallStep {
+  stepId: string;
+  toolName: string;
+  argsSummary: string;
+  resultSummary?: string;
+  elapsedMs?: number;
+  error?: string;
+  status: "running" | "done" | "error";
+}
+
+export interface ReactIteration {
+  index: number;
+  thinkContent: string;
+  thinkStatus: "running" | "done";
+  toolCalls: ToolCallStep[];
 }
