@@ -142,7 +142,7 @@ TraceNode
 **QuestionContent**
 
 - running：`"正在为你定制专属题目..."`（现有）
-- done：`"已定制 {questionTotal} 道"` + 分类 badge：`技术 ×{n}` `行为 ×{n}` `系统设计 ×{n}`
+- done：单行内联文案 `"已定制 {questionTotal} 道，面试中逐题呈现 · 技术 ×{n} · 行为 ×{n} · 系统设计 ×{n}"`（仅存在的分类显示，零项跳过）；`text-xs text-slate-600`
 
 **EvaluatorContent**（现有逻辑移入，行为不变）
 
@@ -208,8 +208,8 @@ AI 消息渲染
 
 ```
 PrepareCard (TracePanelShell)
-  ├─ 虚线分隔线（summary 有值时渲染）
   ├─ AgentTrace（现有）
+  ├─ 虚线分隔线（summary 有值时渲染）
   └─ SummaryBlock（summary 有值时渲染）
        ├─ AI 黑圆点（w-4 h-4 rounded-full bg-[#1e293b]）+ "准备完成 · AI 综合判断"（text-[10px] font-bold text-[#44403c]）
        └─ summary 正文（text-xs text-[#57534e] leading-relaxed）
