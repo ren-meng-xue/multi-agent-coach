@@ -176,6 +176,17 @@ def _chief_context(state: InterviewState) -> str:
     ]
     if state.get("target_role"):
         parts.append(f"目标岗位：{state['target_role']}")
+
+    job_intel = state.get("job_intel") or {}
+    cp = job_intel.get("company_profile") or {}
+    if cp.get("summary"):
+        tags = cp.get("tags") or []
+        tags_str = f"（关键词：{', '.join(tags)}）" if tags else ""
+        parts.append(
+            f"面试官 persona 提示：你正在以 {state.get('target_company') or '本公司'} 的风格主持面试。"
+            f"公司画像：{cp['summary']}{tags_str}"
+        )
+
     evaluator_report = state.get("evaluator_report") or {}
     if evaluator_report:
         raw_report = str(evaluator_report.get("report_text", ""))[:200]
