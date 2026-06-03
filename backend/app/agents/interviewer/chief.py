@@ -327,6 +327,7 @@ async def _execute_evaluate(state: InterviewState) -> dict[str, Any]:
             "question_index": state.get("current_question_index", state.get("question_count", 0)),
             "followup_index": state.get("followup_count", 0),
             "db": state.get("db"),
+            "job_intel": state.get("job_intel"),
         }
     )
     return report
@@ -341,6 +342,7 @@ async def _execute_design(state: InterviewState, focus: str = "new_question") ->
             "user_background": state.get("user_background", ""),
             "candidate_profile": state.get("candidate_profile") or {},
             "jd_context": state.get("jd_context"),
+            "job_intel": state.get("job_intel"),
             "previous_questions": _previous_questions(state),
             "prepared_questions": state.get("prepared_questions") or [],
             "current_question_index": state.get("current_question_index", state.get("question_count", 0)),
@@ -371,6 +373,7 @@ async def _execute_design_dual(state: InterviewState) -> dict[str, Any]:
             "user_background": state.get("user_background", ""),
             "candidate_profile": state.get("candidate_profile") or {},
             "jd_context": state.get("jd_context"),
+            "job_intel": state.get("job_intel"),
             "previous_questions": _previous_questions(state),
             "prepared_questions": state.get("prepared_questions") or [],
             "current_question_index": state.get("current_question_index", state.get("question_count", 0)),

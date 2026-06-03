@@ -1,7 +1,6 @@
 """research_agent ReAct loop 单测（mock MCP 工具）。"""
 from __future__ import annotations
 
-import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -128,5 +127,90 @@ async def test_research_agent_skips_when_no_jd():
         result = await research_agent_node(state)
 
     mock_get.assert_not_awaited()
+    assert result["job_intel"] is None
+    assert "research_agent" in result["completed_tools"]
+
+
+@pytest.mark.asyncio
+async def test_research_agent_tool_timeout_uses_remaining_budget():
+    """剩余预算低于 30 秒时，tool 调用 timeout 使用剩余总预算。"""
+    from app.agents.prepare.research_agent import research_agent_node
+
+    tool = _mock_tool("web_search", [{"title": "result"}])
+    report_tool = _mock_tool("generate_position_report", None)
+    msg = AIMessage(content="", tool_calls=[{"name": "web_search", "args": {"query": "x"}, "id": "c1"}])
+
+    mock_model = MagicMock()
+    mock_model.bind_tools = MagicMock(return_value=mock_model)
+    mock_model.ainvoke = AsyncMock(return_value=msg)
+
+    time_values = iter([0, 70, 89, 90, 90, 90, 90])
+    wait_for_timeouts: list[float] = []
+
+    async def fake_wait_for(awaitable, timeout):
+        wait_for_timeouts.append(timeout)
+        return await awaitable
+
+    with (
+        patch("app.agents.prepare.research_agent.get_mcp_tools", new_callable=AsyncMock, return_value=[tool, report_tool]),
+        patch("app.agents.prepare.research_agent._chat_model", return_value=mock_model),
+        patch("app.agents.prepare.research_agent.time.time", side_effect=lambda: next(time_values)),
+        patch("app.agents.prepare.research_agent.asyncio.wait_for", side_effect=fake_wait_for),
+    ):
+        await research_agent_node({"user_id": "u1", "jd_raw": "JD..."})
+
+    assert wait_for_timeouts[0] == 20
+    assert wait_for_timeouts[1] == 1
+    assert all(timeout <= 20 for timeout in wait_for_timeouts)
+
+
+@pytest.mark.asyncio
+async def test_research_agent_does_not_finalize_when_budget_exhausted():
+    """预算耗尽后不再额外等待 generate_position_report。"""
+    from app.agents.prepare.research_agent import research_agent_node
+
+    report_tool = _mock_tool("generate_position_report", {"job_interpretation": {}})
+    msg = AIMessage(content="", tool_calls=[])
+
+    mock_model = MagicMock()
+    mock_model.bind_tools = MagicMock(return_value=mock_model)
+    mock_model.ainvoke = AsyncMock(return_value=msg)
+
+    time_values = iter([0, 90, 90, 90, 90])
+
+    with (
+        patch("app.agents.prepare.research_agent.get_mcp_tools", new_callable=AsyncMock, return_value=[report_tool]),
+        patch("app.agents.prepare.research_agent._chat_model", return_value=mock_model),
+        patch("app.agents.prepare.research_agent.time.time", side_effect=lambda: next(time_values)),
+    ):
+        result = await research_agent_node({"user_id": "u1", "jd_raw": "JD..."})
+
+    report_tool.ainvoke.assert_not_awaited()
+    assert result["job_intel"] is None
+    assert "research_agent" in result["completed_tools"]
+
+
+@pytest.mark.asyncio
+async def test_research_agent_model_exception_falls_back_without_raising():
+    """LLM 非超时异常不会冒泡，节点返回 job_intel=None 并标记完成。"""
+    from app.agents.prepare.research_agent import research_agent_node
+
+    mock_model = MagicMock()
+    mock_model.bind_tools = MagicMock(return_value=mock_model)
+    mock_model.ainvoke = AsyncMock(side_effect=RuntimeError("connection dropped"))
+
+    with (
+        patch("app.agents.prepare.research_agent.get_mcp_tools", new_callable=AsyncMock, return_value=[]),
+    ):
+        no_tool_result = await research_agent_node({"user_id": "u1", "jd_raw": "JD..."})
+
+    assert no_tool_result["job_intel"] is None
+
+    with (
+        patch("app.agents.prepare.research_agent.get_mcp_tools", new_callable=AsyncMock, return_value=[_mock_tool("web_search", [])]),
+        patch("app.agents.prepare.research_agent._chat_model", return_value=mock_model),
+    ):
+        result = await research_agent_node({"user_id": "u1", "jd_raw": "JD..."})
+
     assert result["job_intel"] is None
     assert "research_agent" in result["completed_tools"]

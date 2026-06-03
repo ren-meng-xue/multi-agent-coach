@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Any, cast
 
 from langgraph.graph import END, StateGraph
 
@@ -14,10 +14,30 @@ from app.core.logging import get_logger
 
 log = get_logger("app.agents.prepare.graph")
 
+
+_MISSING = object()
+
+
+def _state_delta(before: PrepareState, after: PrepareState) -> PrepareState:
+    """只返回节点实际改动，避免并行分支写回旧 state 覆盖彼此结果。"""
+    delta: dict[str, Any] = {}
+    before_dict = dict(before)
+    for key, value in dict(after).items():
+        if key == "completed_tools" or before_dict.get(key, _MISSING) != value:
+            delta[key] = value
+    return cast(PrepareState, delta)
+
+
+async def _memory_search_delta(state: PrepareState) -> PrepareState:
+    result = await nodes.memory_search_node(state)
+    return _state_delta(state, result)
+
+
 async def _research_agent_lazy(state):
     """延迟导入 research_agent，避免模块加载期触发 MCP 连接。"""
     from app.agents.prepare.research_agent import research_agent_node
-    return await research_agent_node(state)
+    result = await research_agent_node(state)
+    return _state_delta(state, result)
 
 
 _NODE_MAP = {
@@ -107,18 +127,35 @@ def _node_completion_trace(ev_node: str, state: dict[str, Any]) -> list[str]:
     return []
 
 
-def _supervisor_router(state: PrepareState) -> str:
+def _has_jd(state: PrepareState) -> bool:
+    return bool(state.get("jd_raw") or state.get("jd_url"))
+
+
+def _supervisor_router(state: PrepareState) -> str | list[str]:
     """读取 supervisor 的决策，路由到下一节点。"""
     action = state.get("next_action", "END")
     if action == "need_direction":
         return "wait_direction"
+    if action in {"memory_search", "research_agent"}:
+        completed = state.get("completed_tools", [])
+        should_search_memory = "memory_search" not in completed
+        should_research = _has_jd(state) and "research_agent" not in completed
+        targets = []
+        if should_search_memory:
+            targets.append("memory_search")
+        if should_research:
+            targets.append("research_agent")
+        if len(targets) > 1:
+            return targets
+        if targets:
+            return targets[0]
     return action
 
 
 def _build_graph() -> Any:
     g = StateGraph(PrepareState)
     g.add_node("supervisor", nodes.supervisor_node)
-    g.add_node("memory_search", nodes.memory_search_node)
+    g.add_node("memory_search", _memory_search_delta)
     g.add_node("research_agent", _research_agent_lazy)
     g.add_node("jd_analysis", nodes.jd_analysis_node)
     g.add_node("question_gen", nodes.question_gen_node)
@@ -240,7 +277,6 @@ async def stream_prepare_events(state: PrepareState) -> AsyncIterator[dict[str, 
 
         # 全图结束
         if ev_name == "on_chain_end" and event.get("name") == "LangGraph":
-            from typing import cast
             final = cast(PrepareState, event.get("data", {}).get("output") or {})
             
             # 将最新的 weak_areas 写入 Redis 缓存，防止二次重定向时状态丢失

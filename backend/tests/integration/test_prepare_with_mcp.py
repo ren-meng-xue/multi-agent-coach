@@ -7,7 +7,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.messages import AIMessage
 
 
 @pytest.mark.asyncio
@@ -27,10 +27,9 @@ async def test_prepare_full_flow_with_mcp_success():
         "prep_suggestions": [{"title": "3 天补分布式", "content": "DDIA"}],
     }
 
-    # Mock supervisor LLM：先 → research_agent，再 → memory_search，再 → question_gen，再 → END
+    # Mock supervisor LLM：先触发 memory_search + research_agent fan-out，再 → question_gen，再 → END
     sup_responses = iter([
         AIMessage(content='DECISION: {"next": "research_agent", "direction": "AI Agent 工程师", "reasoning": "有 JD"}'),
-        AIMessage(content='DECISION: {"next": "memory_search", "direction": "AI Agent 工程师", "reasoning": ""}'),
         AIMessage(content='DECISION: {"next": "question_gen", "direction": "AI Agent 工程师", "reasoning": ""}'),
         AIMessage(content='DECISION: {"next": "END", "direction": "AI Agent 工程师", "reasoning": ""}'),
     ])
@@ -39,10 +38,13 @@ async def test_prepare_full_flow_with_mcp_success():
     report_msg = AIMessage(content="", tool_calls=[{"name": "generate_position_report", "args": {"title": "x", "company": "y", "jd_summary": "", "requirements": [], "search_results": {}, "directions": ["x"]}, "id": "c1"}])
     stop_msg = AIMessage(content="完成")
 
-    report_tool = MagicMock(); report_tool.name = "generate_position_report"; report_tool.ainvoke = AsyncMock(return_value=fake_report)
+    report_tool = MagicMock()
+    report_tool.name = "generate_position_report"
+    report_tool.ainvoke = AsyncMock(return_value=fake_report)
 
     # question_gen mock 输出 1 道题
-    qg_chunk = MagicMock(); qg_chunk.content = '[{"id":1,"question":"Q1","category":"technical","focus_area":"分布式","priority":1}]'
+    qg_chunk = MagicMock()
+    qg_chunk.content = '[{"id":1,"question":"Q1","category":"technical","focus_area":"分布式","priority":1}]'
 
     async def qg_astream(messages):
         yield qg_chunk
@@ -102,7 +104,6 @@ async def test_prepare_falls_back_to_jd_analysis_when_mcp_down():
 
     sup_responses = iter([
         AIMessage(content='DECISION: {"next": "research_agent", "direction": "AI Agent 工程师", "reasoning": ""}'),
-        AIMessage(content='DECISION: {"next": "memory_search", "direction": "AI Agent 工程师", "reasoning": ""}'),
         AIMessage(content='DECISION: {"next": "jd_analysis", "direction": "AI Agent 工程师", "reasoning": ""}'),
         AIMessage(content='DECISION: {"next": "question_gen", "direction": "AI Agent 工程师", "reasoning": ""}'),
         AIMessage(content='DECISION: {"next": "END", "direction": "AI Agent 工程师", "reasoning": ""}'),
@@ -110,10 +111,15 @@ async def test_prepare_falls_back_to_jd_analysis_when_mcp_down():
 
     # jd_analysis 结果
     class JDOut:
-        company = "字节"; role = "后端"; key_skills = ["Python"]; focus_areas = ["分布式"]; difficulty = "medium"
+        company = "字节"
+        role = "后端"
+        key_skills = ["Python"]
+        focus_areas = ["分布式"]
+        difficulty = "medium"
 
     # question_gen 结果
-    qg_chunk = MagicMock(); qg_chunk.content = '[{"id":1,"question":"Q1","category":"technical","focus_area":"x","priority":1}]'
+    qg_chunk = MagicMock()
+    qg_chunk.content = '[{"id":1,"question":"Q1","category":"technical","focus_area":"x","priority":1}]'
 
     with (
         patch("app.agents.prepare.nodes._llm") as mock_llm,

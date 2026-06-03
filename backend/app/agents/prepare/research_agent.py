@@ -70,8 +70,21 @@ def _extract_final_report(messages: list) -> dict | None:
     return None
 
 
-async def _force_finalize(tools_by_name: dict, partial_state: dict) -> dict | None:
+def _remaining_budget_seconds(started: float) -> float:
+    """返回 research_agent 本轮总预算剩余秒数。"""
+    return max(0.0, TOTAL_TIMEOUT_SECONDS - (time.time() - started))
+
+
+async def _force_finalize(
+    tools_by_name: dict,
+    partial_state: dict,
+    timeout_seconds: float,
+) -> dict | None:
     """兜底：超轮次/超时时，用已有数据强制调 generate_position_report 收尾。"""
+    if timeout_seconds <= 0:
+        log.warning("research_agent_force_finalize_budget_exhausted")
+        return None
+
     report_tool = tools_by_name.get("generate_position_report")
     if report_tool is None:
         return None
@@ -85,7 +98,7 @@ async def _force_finalize(tools_by_name: dict, partial_state: dict) -> dict | No
         "resume_content": partial_state.get("resume_content"),
     }
     try:
-        result = await report_tool.ainvoke(args)
+        result = await asyncio.wait_for(report_tool.ainvoke(args), timeout=timeout_seconds)
         if isinstance(result, str):
             return json.loads(result)
         return result
@@ -106,7 +119,13 @@ async def research_agent_node(state: PrepareState) -> PrepareState:
     started = time.time()
 
     # 拉 MCP 工具
-    tools = await get_mcp_tools()
+    try:
+        tools = await get_mcp_tools()
+    except Exception as exc:
+        elapsed_ms = int((time.time() - started) * 1000)
+        log.warning("research_agent_get_mcp_tools_failed", error=str(exc), elapsed_ms=elapsed_ms)
+        return {**state, "job_intel": None, "completed_tools": completed + ["research_agent"]}
+
     if not tools:
         log.warning("research_agent_no_mcp_tools_fallback")
         return {**state, "job_intel": None, "completed_tools": completed + ["research_agent"]}
@@ -127,14 +146,14 @@ async def research_agent_node(state: PrepareState) -> PrepareState:
 
     try:
         for iteration in range(1, MAX_ITERATIONS + 1):
-            elapsed = time.time() - started
-            if elapsed > TOTAL_TIMEOUT_SECONDS:
-                log.warning("research_agent_total_timeout", elapsed=elapsed)
+            remaining = _remaining_budget_seconds(started)
+            if remaining <= 0:
+                log.warning("research_agent_total_timeout", elapsed_ms=int((time.time() - started) * 1000))
                 break
 
             response = await asyncio.wait_for(
                 model.ainvoke(messages),
-                timeout=max(5, TOTAL_TIMEOUT_SECONDS - elapsed),
+                timeout=remaining,
             )
             messages.append(response)
 
@@ -147,6 +166,15 @@ async def research_agent_node(state: PrepareState) -> PrepareState:
                 break
 
             for tc in tool_calls:
+                remaining = _remaining_budget_seconds(started)
+                if remaining <= 0:
+                    log.warning(
+                        "research_agent_budget_exhausted_before_tool",
+                        tool=tc.get("name", ""),
+                        elapsed_ms=int((time.time() - started) * 1000),
+                    )
+                    break
+
                 name = tc.get("name", "")
                 args = tc.get("args", {}) or {}
                 call_id = tc.get("id", name)
@@ -155,7 +183,7 @@ async def research_agent_node(state: PrepareState) -> PrepareState:
                     content = json.dumps({"error": f"unknown tool: {name}"})
                 else:
                     try:
-                        result = await asyncio.wait_for(tool.ainvoke(args), timeout=30)
+                        result = await asyncio.wait_for(tool.ainvoke(args), timeout=min(30, remaining))
                         content = result if isinstance(result, str) else json.dumps(result, ensure_ascii=False)
                         tools_used.append(name)
                         # 累积关键中间产物，便于兜底
@@ -175,14 +203,25 @@ async def research_agent_node(state: PrepareState) -> PrepareState:
                         content = json.dumps({"error": str(exc)})
 
                 messages.append(ToolMessage(content=content, tool_call_id=call_id, name=name))
-    except TimeoutError:
-        log.warning("research_agent_iter_timeout")
+    except TimeoutError as exc:
+        log.warning(
+            "research_agent_iter_timeout",
+            error=str(exc),
+            elapsed_ms=int((time.time() - started) * 1000),
+        )
+    except Exception as exc:
+        log.warning(
+            "research_agent_loop_failed",
+            error=str(exc),
+            elapsed_ms=int((time.time() - started) * 1000),
+        )
 
     # 找最终报告：先看 messages 里有没有 generate_position_report 的结果，没有就强制兜底
     job_intel = _extract_final_report(messages)
     if job_intel is None:
-        log.info("research_agent_no_final_report_force_finalize")
-        job_intel = await _force_finalize(tools_by_name, partial)
+        remaining = _remaining_budget_seconds(started)
+        log.info("research_agent_no_final_report_force_finalize", remaining_seconds=remaining)
+        job_intel = await _force_finalize(tools_by_name, partial, timeout_seconds=remaining)
 
     elapsed_ms = int((time.time() - started) * 1000)
 

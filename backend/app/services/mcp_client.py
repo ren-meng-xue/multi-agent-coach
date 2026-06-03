@@ -51,10 +51,11 @@ async def get_mcp_tools() -> list[Any]:
             url=settings.mcp_job_intel_url,
             error=str(exc),
         )
-        _tools_cache = []
+        # 不缓存失败状态：保持 None 让下次调用自动重试（MCP server 重启后可自愈）
+        _tools_cache = None
         _client = None
 
-    return _tools_cache
+    return _tools_cache or []
 
 
 async def get_tool(name: str) -> Any | None:

@@ -1,4 +1,6 @@
 # backend/tests/unit/test_prepare_graph.py
+import asyncio
+
 import pytest
 
 from app.agents.prepare.state import PrepareState
@@ -12,6 +14,20 @@ async def test_supervisor_router_routes_to_next_action():
         "next_action": "memory_search",
     }
     assert _supervisor_router(state) == "memory_search"
+
+
+@pytest.mark.asyncio
+async def test_supervisor_router_fans_out_memory_and_research_when_both_ready():
+    from app.agents.prepare.graph import _supervisor_router
+
+    state: PrepareState = {
+        "next_action": "memory_search",
+        "user_direction": "AI Agent 工程师",
+        "jd_raw": "JD...",
+        "completed_tools": [],
+    }
+
+    assert _supervisor_router(state) == ["memory_search", "research_agent"]
 
 
 @pytest.mark.asyncio
@@ -54,3 +70,150 @@ def test_jd_analysis_completion_trace_handles_missing_jd():
     assert _node_completion_trace("jd_analysis", {"jd_context": None}) == [
         "未提供具体的职位描述（JD）。"
     ]
+
+
+@pytest.mark.asyncio
+async def test_prepare_graph_fans_out_and_merges_parallel_state(monkeypatch):
+    """同时有用户方向和 JD 时，memory_search 与 research_agent 同轮启动并合并 state。"""
+    from app.agents.prepare import graph as graph_module
+
+    memory_started = asyncio.Event()
+    research_started = asyncio.Event()
+    starts: list[str] = []
+
+    async def fake_supervisor(state: PrepareState) -> PrepareState:
+        completed = state.get("completed_tools", [])
+        if "question_gen" in completed:
+            return {**state, "next_action": "END", "iteration_count": state.get("iteration_count", 0) + 1}
+        if "memory_search" in completed and "research_agent" in completed:
+            return {**state, "next_action": "question_gen", "direction": "AI Agent 工程师"}
+        return {**state, "next_action": "memory_search", "direction": "AI Agent 工程师"}
+
+    async def fake_memory_search(state: PrepareState) -> PrepareState:
+        starts.append("memory_search")
+        memory_started.set()
+        await asyncio.wait_for(research_started.wait(), timeout=1)
+        return {
+            **state,
+            "user_background": "简历摘要",
+            "weak_areas": ["技术深度不足"],
+            "completed_tools": state.get("completed_tools", []) + ["memory_search"],
+        }
+
+    async def fake_research_agent(state: PrepareState) -> PrepareState:
+        starts.append("research_agent")
+        research_started.set()
+        await asyncio.wait_for(memory_started.wait(), timeout=1)
+        return {
+            "job_intel": {"resume_match": {"gaps": ["缺分布式"]}},
+            "completed_tools": ["research_agent"],
+        }
+
+    async def fake_question_gen(state: PrepareState) -> PrepareState:
+        return {
+            **state,
+            "prepared_questions": [],
+            "summary": "done",
+            "completed_tools": state.get("completed_tools", []) + ["question_gen"],
+        }
+
+    monkeypatch.setattr(graph_module.nodes, "supervisor_node", fake_supervisor)
+    monkeypatch.setattr(graph_module.nodes, "memory_search_node", fake_memory_search)
+    monkeypatch.setattr(graph_module.nodes, "question_gen_node", fake_question_gen)
+    monkeypatch.setattr(graph_module, "_research_agent_lazy", fake_research_agent)
+
+    graph = graph_module._build_graph()
+    final = await asyncio.wait_for(
+        graph.ainvoke(
+            {
+                "session_id": "s1",
+                "user_id": "u1",
+                "user_direction": "AI Agent 工程师",
+                "jd_raw": "JD...",
+                "completed_tools": [],
+            }
+        ),
+        timeout=1,
+    )
+
+    assert set(starts) == {"memory_search", "research_agent"}
+    assert final["weak_areas"] == ["技术深度不足"]
+    assert final["user_background"] == "简历摘要"
+    assert final["job_intel"]["resume_match"]["gaps"] == ["缺分布式"]
+    assert final["completed_tools"] == ["memory_search", "research_agent", "question_gen"]
+
+
+@pytest.mark.asyncio
+async def test_prepare_graph_runs_jd_analysis_after_research_fallback(monkeypatch):
+    """research_agent 返回 job_intel=None 后，Supervisor 继续进入 jd_analysis 兜底。"""
+    from app.agents.prepare import graph as graph_module
+
+    visited: list[str] = []
+
+    async def fake_supervisor(state: PrepareState) -> PrepareState:
+        completed = state.get("completed_tools", [])
+        if "question_gen" in completed:
+            return {**state, "next_action": "END"}
+        if "research_agent" in completed and state.get("job_intel") is None and "jd_analysis" not in completed:
+            return {**state, "next_action": "jd_analysis", "direction": "AI Agent 工程师"}
+        if "jd_analysis" in completed:
+            return {**state, "next_action": "question_gen", "direction": "AI Agent 工程师"}
+        return {**state, "next_action": "memory_search", "direction": "AI Agent 工程师"}
+
+    async def fake_memory_search(state: PrepareState) -> PrepareState:
+        visited.append("memory_search")
+        return {
+            **state,
+            "weak_areas": ["表达结构不清晰"],
+            "completed_tools": state.get("completed_tools", []) + ["memory_search"],
+        }
+
+    async def fake_research_agent(state: PrepareState) -> PrepareState:
+        visited.append("research_agent")
+        return {"job_intel": None, "completed_tools": ["research_agent"]}
+
+    async def fake_jd_analysis(state: PrepareState) -> PrepareState:
+        visited.append("jd_analysis")
+        return {
+            **state,
+            "jd_context": {
+                "company": "Acme",
+                "role": "AI Agent 工程师",
+                "key_skills": ["LangGraph"],
+                "focus_areas": ["Agent 编排"],
+                "difficulty": "medium",
+            },
+            "completed_tools": state.get("completed_tools", []) + ["jd_analysis"],
+        }
+
+    async def fake_question_gen(state: PrepareState) -> PrepareState:
+        visited.append("question_gen")
+        return {
+            **state,
+            "prepared_questions": [],
+            "summary": "done",
+            "completed_tools": state.get("completed_tools", []) + ["question_gen"],
+        }
+
+    monkeypatch.setattr(graph_module.nodes, "supervisor_node", fake_supervisor)
+    monkeypatch.setattr(graph_module.nodes, "memory_search_node", fake_memory_search)
+    monkeypatch.setattr(graph_module.nodes, "jd_analysis_node", fake_jd_analysis)
+    monkeypatch.setattr(graph_module.nodes, "question_gen_node", fake_question_gen)
+    monkeypatch.setattr(graph_module, "_research_agent_lazy", fake_research_agent)
+
+    graph = graph_module._build_graph()
+    final = await graph.ainvoke(
+        {
+            "session_id": "s1",
+            "user_id": "u1",
+            "user_direction": "AI Agent 工程师",
+            "jd_raw": "JD...",
+            "completed_tools": [],
+        }
+    )
+
+    assert "research_agent" in visited
+    assert "jd_analysis" in visited
+    assert visited.index("research_agent") < visited.index("jd_analysis")
+    assert final["job_intel"] is None
+    assert final["jd_context"]["role"] == "AI Agent 工程师"
