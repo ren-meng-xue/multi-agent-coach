@@ -14,9 +14,16 @@ from app.core.logging import get_logger
 
 log = get_logger("app.agents.prepare.graph")
 
+async def _research_agent_lazy(state):
+    """延迟导入 research_agent，避免模块加载期触发 MCP 连接。"""
+    from app.agents.prepare.research_agent import research_agent_node
+    return await research_agent_node(state)
+
+
 _NODE_MAP = {
     "supervisor": nodes.supervisor_node,
     "memory_search": nodes.memory_search_node,
+    "research_agent": _research_agent_lazy,
     "jd_analysis": nodes.jd_analysis_node,
     "question_gen": nodes.question_gen_node,
 }
@@ -24,6 +31,7 @@ _NODE_MAP = {
 _NODE_LABELS = {
     "supervisor": "调度",
     "memory_search": "记忆检索",
+    "research_agent": "岗位调研",
     "jd_analysis": "JD分析",
     "question_gen": "出题",
 }
@@ -31,6 +39,7 @@ _NODE_LABELS = {
 _NODE_TITLES = {
     "supervisor": "识别方向，启动准备",
     "memory_search": "读取历史表现",
+    "research_agent": "通过 MCP 调研目标岗位",
     "jd_analysis": "构建岗位考点地图",
     "question_gen": "定制专属题目",
 }
@@ -68,9 +77,31 @@ def _format_jd_analysis_trace(state: dict[str, Any]) -> list[str]:
     return lines
 
 
+def _format_research_agent_trace(state: dict[str, Any]) -> list[str]:
+    job_intel = state.get("job_intel")
+    if not job_intel:
+        return ["岗位调研未启动或失败，已回退到 JD 浅分析。"]
+
+    trace = job_intel.get("_trace", {})
+    tools = trace.get("tools_used", [])
+    iters = trace.get("iterations", 0)
+    elapsed = trace.get("elapsed_ms", 0)
+
+    lines = [f"调研完成，{iters} 轮、用了 {len(tools)} 次工具调用，耗时 {elapsed} 毫秒。"]
+    company = (job_intel.get("company_profile") or {}).get("summary", "")
+    if company:
+        lines.append(f"公司画像：{company[:120]}")
+    gaps = (job_intel.get("resume_match") or {}).get("gaps", [])
+    if gaps:
+        lines.append(f"针对此岗位的 Gap：{', '.join(gaps[:5])}")
+    return lines
+
+
 def _node_completion_trace(ev_node: str, state: dict[str, Any]) -> list[str]:
     if ev_node == "memory_search":
         return _format_memory_search_trace(state)
+    if ev_node == "research_agent":
+        return _format_research_agent_trace(state)
     if ev_node == "jd_analysis":
         return _format_jd_analysis_trace(state)
     return []
@@ -88,6 +119,7 @@ def _build_graph() -> Any:
     g = StateGraph(PrepareState)
     g.add_node("supervisor", nodes.supervisor_node)
     g.add_node("memory_search", nodes.memory_search_node)
+    g.add_node("research_agent", _research_agent_lazy)
     g.add_node("jd_analysis", nodes.jd_analysis_node)
     g.add_node("question_gen", nodes.question_gen_node)
 
@@ -99,6 +131,7 @@ def _build_graph() -> Any:
         _supervisor_router,
         {
             "memory_search": "memory_search",
+            "research_agent": "research_agent",
             "jd_analysis": "jd_analysis",
             "question_gen": "question_gen",
             "wait_direction": END,
@@ -108,6 +141,7 @@ def _build_graph() -> Any:
 
     # 各子节点完成后回流到 supervisor
     g.add_edge("memory_search", "supervisor")
+    g.add_edge("research_agent", "supervisor")
     g.add_edge("jd_analysis", "supervisor")
     g.add_edge("question_gen", "supervisor")
 
@@ -235,6 +269,7 @@ async def stream_prepare_events(state: PrepareState) -> AsyncIterator[dict[str, 
                     "event": "done",
                     "data": {
                         "jd_context": final.get("jd_context"),
+                        "job_intel": final.get("job_intel"),
                         "prepared_questions": final.get("prepared_questions", []),
                         "summary": final.get("summary", ""),
                         "direction": final.get("direction", ""),
