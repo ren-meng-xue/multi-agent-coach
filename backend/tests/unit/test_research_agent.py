@@ -144,7 +144,7 @@ async def test_research_agent_tool_timeout_uses_remaining_budget():
     mock_model.bind_tools = MagicMock(return_value=mock_model)
     mock_model.ainvoke = AsyncMock(return_value=msg)
 
-    time_values = iter([0, 70, 89, 90, 90, 90, 90])
+    time_values = iter([0, 70, 89] + [90] * 20)
     wait_for_timeouts: list[float] = []
 
     async def fake_wait_for(awaitable, timeout):
