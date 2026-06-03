@@ -181,7 +181,7 @@ describe("CoachDashboard", () => {
     ).toBeInTheDocument();
   });
 
-  it("当 stage 为 coach 时显示开始复盘按钮，点击后触发 SSE", async () => {
+  it("当 stage 为 coach 时显示开始面试练习按钮，点击后触发面试房间跳转", async () => {
     mockFetchUserStage.mockResolvedValue("coach");
     mockFetch.mockResolvedValue({
       is_returning: true,
@@ -193,36 +193,21 @@ describe("CoachDashboard", () => {
       resume_filename: "resume.pdf",
     });
 
-    // Mock 全局 fetch 用于 SSE
-    const mockResponse = {
-      ok: true,
-      body: {
-        getReader: () => ({
-          read: vi.fn().mockResolvedValueOnce({ done: true }),
-        }),
-      },
-    };
-    global.fetch = vi.fn().mockResolvedValue(mockResponse as any);
+    render(<CoachDashboard />);
 
-    const { getByText } = render(<CoachDashboard />);
-
-    // 1. 等待加载完成并显示按钮
+    // 1. 等待加载完成并显示结束页
     await waitFor(() => {
       expect(screen.getByText("面试已圆满结束")).toBeInTheDocument();
     });
 
-    // 2. 点击开始复盘
-    const startBtn = screen.getByRole("button", { name: /开始深度复盘/ });
+    // 2. 点击开始面试练习
+    const startBtn = screen.getByRole("button", { name: /开始面试练习/ });
     fireEvent.click(startBtn);
 
-    // 3. 验证 SSE 触发
+    // 3. 验证跳转到面试房间
     await waitFor(() => {
-      expect(screen.getByText(/正在深度复盘本次面试/)).toBeInTheDocument();
+      expect(mockEnterInterviewRoom).toHaveBeenCalled();
     });
-    expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining("/api/v1/coach/review?session_id=session-123"),
-      expect.anything(),
-    );
   });
 
   describe("from=interview 软提示", () => {
