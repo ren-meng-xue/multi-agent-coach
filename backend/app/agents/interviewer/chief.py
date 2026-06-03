@@ -99,6 +99,11 @@ def _missing_dimensions(report: dict[str, Any] | None) -> list[str]:
 
 
 def _answer_is_sufficient(report: dict[str, Any] | None) -> bool:
+    scoring = (report or {}).get("scoring") or {}
+    if scoring.get("is_repeated_answer"):
+        return True
+    if not scoring.get("followup_would_help", True):
+        return True
     return _score(report) >= 7.0 and not _missing_dimensions(report)
 
 
@@ -191,14 +196,37 @@ def _chief_context(state: InterviewState) -> str:
     return "\n".join(parts)
 
 
-async def _chief_reason_stream(state: InterviewState) -> None:
-    try:
-        model = _chat_model(fast=True, streaming=True).with_config(tags=["chief_think_token_stream"])
-        prompt = CHIEF_SYSTEM_PROMPT.format(context=_chief_context(state))
-        async for _ in model.astream([SystemMessage(content=prompt)]):
-            pass
-    except Exception as exc:
-        log.warning("chief_reason_stream_failed", error=str(exc))
+def _pick_from_dual_output(state: InterviewState) -> dict[str, Any]:
+    """从 designer_dual_output 中规则选题，不调 LLM。返回 next_state 补丁。"""
+    eval_report = state.get("evaluator_report")
+    dual = state.get("designer_dual_output") or {}
+    answer_sufficient = _answer_is_sufficient(eval_report)
+    if state.get("question_count", 0) >= state.get("total_questions", 5) and (
+        answer_sufficient or state.get("followup_count", 0) >= state.get("max_followups", 2)
+    ):
+        return {"designer_dual_output": None}
+
+    picked = _pick_question(
+        eval_report,
+        dual,
+        state.get("followup_count", 0),
+        state.get("max_followups", 2),
+    )
+    is_followup = not answer_sufficient and state.get("followup_count", 0) < state.get("max_followups", 2)
+    picked_source = (
+        dual.get("followup_source", "llm")
+        if is_followup
+        else dual.get("new_question_source", dual.get("source", "llm"))
+    )
+    return {
+        "designer_output": {
+            "question_text": picked,
+            "question_category": dual.get("question_category", "technical"),
+            "focus_area": dual.get("focus_area", "dual"),
+            "source": picked_source,
+        },
+        "designer_dual_output": None,
+    }
 
 
 async def chief_think(state: InterviewState) -> InterviewState:
@@ -207,6 +235,17 @@ async def chief_think(state: InterviewState) -> InterviewState:
     if iteration >= MAX_CHIEF_ITERATIONS:
         thoughts.append("Chief loop 达到上限，降级为直接回复。")
         return cast(InterviewState, {**dict(state), "chief_thoughts": thoughts})
+
+    # 已有 eval+design 结果时直接选题，跳过本轮 LLM 调用
+    if iteration > 0 and state.get("evaluator_report") and state.get("designer_dual_output"):
+        chief_messages = list(state.get("chief_messages") or [])
+        chief_messages.append(AIMessage(content="已收集评估和出题结果，直接进入回复。"))
+        return cast(InterviewState, {
+            **dict(state),
+            **_pick_from_dual_output(state),
+            "chief_messages": chief_messages,
+            "chief_thoughts": thoughts,
+        })
 
     chief_messages = list(state.get("chief_messages") or [])
     if not chief_messages:
@@ -218,8 +257,18 @@ async def chief_think(state: InterviewState) -> InterviewState:
     partial: dict[str, Any] = {}
     tools = _make_chief_tools(state, partial)
     try:
-        model = _chat_model(fast=True).bind_tools(tools).with_config(tags=["chief_think_token_stream"])
-        response = await model.ainvoke(chief_messages)
+        model = _chat_model(fast=True, streaming=True).bind_tools(tools).with_config(tags=["chief_think_token_stream"])
+        chunks = []
+        response: Any
+        async for chunk in model.astream(chief_messages):
+            chunks.append(chunk)
+        if chunks:
+            response = chunks[0]
+            for chunk in chunks[1:]:
+                response += chunk
+        else:
+            response = AIMessage(content="")
+        
         if not isinstance(response, AIMessage):
             response = AIMessage(content=_message_content_text(cast(BaseMessage, response)))
     except Exception as exc:
@@ -251,33 +300,7 @@ async def chief_think(state: InterviewState) -> InterviewState:
         "chief_thoughts": thoughts,
     }
     if not response.tool_calls and state.get("evaluator_report") and state.get("designer_dual_output"):
-        eval_report = state.get("evaluator_report")
-        dual = state.get("designer_dual_output") or {}
-        answer_sufficient = _answer_is_sufficient(eval_report)
-        if state.get("question_count", 0) >= state.get("total_questions", 5) and (
-            answer_sufficient or state.get("followup_count", 0) >= state.get("max_followups", 2)
-        ):
-            next_state["designer_dual_output"] = None
-        else:
-            picked = _pick_question(
-                eval_report,
-                dual,
-                state.get("followup_count", 0),
-                state.get("max_followups", 2),
-            )
-            is_followup = not answer_sufficient and state.get("followup_count", 0) < state.get("max_followups", 2)
-            picked_source = (
-                dual.get("followup_source", "llm")
-                if is_followup
-                else dual.get("new_question_source", dual.get("source", "llm"))
-            )
-            next_state["designer_output"] = {
-                "question_text": picked,
-                "question_category": dual.get("question_category", "technical"),
-                "focus_area": dual.get("focus_area", "dual"),
-                "source": picked_source,
-            }
-            next_state["designer_dual_output"] = None
+        next_state.update(_pick_from_dual_output(state))
     return cast(InterviewState, next_state)
 
 

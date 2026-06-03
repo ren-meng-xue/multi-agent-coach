@@ -15,6 +15,15 @@
 - AI 协作流程 / artifact / review / synthesis → `docs/protocols/*.md`
 - MCP 配置 → `docs/claude-mcp.md`
 
+### 业务背景层（`docs/business/`）
+
+接到新任务或不熟悉产品流程时，先读这两份文档建立全局理解。
+
+| 文档                                                                             | 说明                                                                                       |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| [docs/business/overview.md](docs/business/overview.md)                           | 产品全景：五阶段流程（Prepare → Interview → Evaluate → Coach → 画像积累）及核心 Agent 职责 |
+| [docs/business/multi-agent-interview.md](docs/business/multi-agent-interview.md) | 多 Agent 面试架构：Chief Interviewer ReAct Loop、Evaluator / Designer 子 Agent 协作细节    |
+
 ### 业务逻辑层（🟢=当前真相 必读 ｜ 📜=历史背景 看似奇怪时再读）
 
 | 任务关键词                       | 🟢 当前真相                                                                                                                                                                                                      | 📜 历史背景                                                                                                                     |

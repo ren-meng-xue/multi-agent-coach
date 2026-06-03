@@ -150,19 +150,20 @@ async def stream_prepare_events(state: PrepareState) -> AsyncIterator[dict[str, 
         ev_node = event.get("metadata", {}).get("langgraph_node", "")
 
         # 节点开始
-        if ev_name == "on_chain_start" and ev_node:
-            # 对于 supervisor，允许重复触发；对于其他节点，只触发一次且避免重复 yield 同一节点
-            if ev_node == "supervisor" or (ev_node != current_node and ev_node not in finished_nodes):
-                current_node = ev_node
-                elapsed_tracker[ev_node] = time.time()
-                yield {
-                    "event": "node_start",
-                    "data": {
-                        "node": ev_node,
-                        "label": _NODE_LABELS.get(ev_node, ev_node),
-                        "title": _NODE_TITLES.get(ev_node, ev_node),
-                    },
-                }
+        # 对于 supervisor，允许重复触发；对于其他节点，只触发一次且避免重复 yield 同一节点
+        if ev_name == "on_chain_start" and ev_node and (
+            ev_node == "supervisor" or (ev_node != current_node and ev_node not in finished_nodes)
+        ):
+            current_node = ev_node
+            elapsed_tracker[ev_node] = time.time()
+            yield {
+                "event": "node_start",
+                "data": {
+                    "node": ev_node,
+                    "label": _NODE_LABELS.get(ev_node, ev_node),
+                    "title": _NODE_TITLES.get(ev_node, ev_node),
+                },
+            }
 
         # 流式 token（supervisor + question_gen）
         token = _extract_token(event)

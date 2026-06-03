@@ -90,7 +90,7 @@ async def design(state: DesignerState) -> DesignerState:
 
     context = _build_context(state)
     try:
-        model = _chat_model().with_structured_output(_DesignedQuestion)
+        model = _chat_model(fast=True).with_structured_output(_DesignedQuestion)
         out = await model.ainvoke(
             [
                 SystemMessage(content=DESIGNER_SYSTEM_PROMPT.format(context=context)),
@@ -179,7 +179,7 @@ async def design_dual(state: DesignerState) -> DesignerState:
     new_question = str((prepared or {}).get("question_text") or "")
     new_question_source = "prepared" if prepared else "llm"
     try:
-        model = _chat_model().with_structured_output(_DesignerDualOutput)
+        model = _chat_model(fast=True).with_structured_output(_DesignerDualOutput)
         out = await model.ainvoke(
             [
                 SystemMessage(content=DESIGNER_DUAL_SYSTEM_PROMPT.format(context=context)),

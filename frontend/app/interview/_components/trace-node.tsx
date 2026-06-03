@@ -17,6 +17,9 @@ interface TraceNodeProps {
   missingDimensions?: string[];
   chiefToolCalls?: string[];
   designedQuestion?: string;
+  designedCategory?: string;
+  designedSource?: string;
+  summaryScore?: number;
 }
 
 export function TraceNode({
@@ -32,6 +35,8 @@ export function TraceNode({
   missingDimensions,
   chiefToolCalls,
   designedQuestion,
+  designedCategory,
+  summaryScore,
 }: TraceNodeProps) {
   const badgeClass = getBadgeClass(id);
 
@@ -40,17 +45,17 @@ export function TraceNode({
       <div className="relative flex flex-col items-center pt-0.5 w-5 flex-shrink-0 self-stretch">
         {/* 垂直 Timeline 连接线 */}
         {!isLast && (
-          <div className="absolute top-7 bottom-[-10px] w-[1.5px] bg-gradient-to-b from-[#534AB7]/40 via-[#534AB7]/20 to-transparent dark:from-white/30 dark:via-white/12" />
+          <div className="absolute top-7 bottom-[-10px] w-[2px] bg-gradient-to-b from-[#534AB7]/60 via-[#534AB7]/25 to-transparent dark:from-[#CECBF6]/45 dark:via-[#CECBF6]/15 dark:to-transparent" />
         )}
         {/* 节点状态 Icon/Dot */}
         <div
           data-testid={`trace-status-${status}`}
           className={`relative z-10 flex h-5 w-5 items-center justify-center rounded-full border-[1.5px] transition-all duration-500 shadow-sm ${
             status === "running"
-              ? "animate-pulse border-[#534AB7] bg-white text-[#534AB7] ring-4 ring-[#534AB7]/15 dark:border-[#CECBF6] dark:bg-zinc-950"
+              ? "animate-pulse border-[#534AB7] bg-white text-[#534AB7] ring-4 ring-[#534AB7]/20 dark:border-[#CECBF6] dark:bg-zinc-950 shadow-[0_0_12px_rgba(83,74,183,0.35)] dark:shadow-[0_0_12px_rgba(206,203,246,0.3)]"
               : status === "done"
-                ? "border-emerald-500 bg-emerald-50 text-emerald-600 dark:border-emerald-500/60 dark:bg-emerald-500/15 dark:text-emerald-400"
-                : "border-[#534AB7]/35 bg-white text-[#534AB7]/50 dark:border-white/20 dark:bg-zinc-950"
+                ? "border-emerald-500 bg-emerald-50 text-emerald-600 dark:border-emerald-500/70 dark:bg-emerald-500/20 dark:text-emerald-400"
+                : "border-[#534AB7]/45 bg-white text-[#534AB7]/60 dark:border-white/30 dark:bg-zinc-950"
           }`}
         >
           {status === "done" ? (
@@ -68,7 +73,7 @@ export function TraceNode({
               className={`h-1.5 w-1.5 rounded-full ${
                 status === "running"
                   ? "bg-[#534AB7] dark:bg-[#CECBF6]"
-                  : "bg-[#534AB7]/40 dark:bg-white/20"
+                  : "bg-[#534AB7]/50 dark:bg-white/30"
               }`}
             />
           )}
@@ -79,16 +84,16 @@ export function TraceNode({
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">
             <span
-              className={`flex-shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold tracking-tight transition-all duration-300 ${badgeClass}`}
+              className={`flex-shrink-0 rounded px-1.5 py-0.5 text-[10px] font-extrabold tracking-wide uppercase transition-all duration-300 shadow-sm ${badgeClass}`}
             >
               {label}
             </span>
-            <span className="text-[12px] font-semibold tracking-tight text-black/85 dark:text-white/90 truncate">
+            <span className="text-xs font-bold tracking-tight text-slate-900 dark:text-slate-100 truncate">
               {title}
             </span>
           </div>
           {elapsedMs !== undefined && elapsedMs > 0 && (
-            <span className="flex-shrink-0 text-[10px] tabular-nums font-medium text-black/50 dark:text-white/35">
+            <span className="flex-shrink-0 text-[11px] tabular-nums font-semibold text-slate-500 dark:text-zinc-400">
               {elapsedMs}ms
             </span>
           )}
@@ -97,6 +102,11 @@ export function TraceNode({
         {/* 评估结果徽章：仅在 evaluator 或 chief_think 节点完成时展示 */}
         {(id === "evaluator" || id === "chief_think") && status === "done" && (
           <div className="flex flex-wrap gap-1.5 mb-2.5 animate-in fade-in slide-in-from-top-1 duration-500">
+            {typeof summaryScore === "number" && (
+              <span className="text-[9px] bg-violet-100 text-violet-700/85 border border-violet-200/60 rounded px-1.5 py-0.5 font-extrabold dark:bg-violet-950/20 dark:text-violet-300 dark:border-[#CECBF6]/25">
+                评分：{summaryScore.toFixed(1)} / 10
+              </span>
+            )}
             {candidateLevel && (
               <span className="text-[9px] bg-[#534AB7]/10 text-[#534AB7]/85 border border-[#534AB7]/20 rounded px-1.5 py-0.5 font-bold uppercase tracking-wider dark:bg-white/8 dark:text-white/65 dark:border-white/20">
                 {candidateLevel === "beginner"
@@ -145,10 +155,11 @@ export function TraceNode({
         {(id === "chief_think" || id === "chief_respond") &&
           status === "done" &&
           designedQuestion && (
-            <div className="mb-2.5 pl-2.5 border-l-[1.5px] border-sky-300/50 dark:border-sky-700/40 animate-in fade-in slide-in-from-top-1 duration-500">
-              <div className="flex gap-2 items-start p-2 rounded-lg bg-sky-50/70 border border-sky-200/50 dark:bg-sky-950/25 dark:border-sky-800/40">
-                <span className="flex-shrink-0 text-[10px] mt-[1px]">📝</span>
-                <span className="text-[11px] leading-relaxed text-sky-900/80 dark:text-sky-300/85 font-medium">
+            <div className="mb-3 ml-1 animate-in fade-in slide-in-from-top-1 duration-500">
+              <div className="flex gap-2 items-start p-3 rounded-xl bg-gradient-to-r from-sky-500/10 to-blue-500/5 border border-sky-200/60 dark:from-sky-500/15 dark:to-blue-500/10 dark:border-sky-500/35 shadow-sm">
+                <span className="flex-shrink-0 text-xs mt-[1px]">📝</span>
+                <span className="text-xs leading-relaxed text-sky-950 dark:text-sky-200 font-bold">
+                  下一题：{designedCategory ? `[${formatQuestionCategory(designedCategory)}] ` : ""}
                   {designedQuestion}
                 </span>
               </div>
@@ -156,14 +167,14 @@ export function TraceNode({
           )}
 
         {/* 准备阶段出题节点：不渲染题目详情，仅显示完成提示 */}
-        {id === "question_gen" && tokens && (
-          <div className="space-y-1.5 pl-2.5 border-l-[1.5px] border-[#534AB7]/20 dark:border-white/15 animate-in fade-in slide-in-from-top-1 duration-500">
+        {id === "question_gen" && (
+          <div className={`space-y-1.5 ml-1 p-3 rounded-xl border animate-in fade-in slide-in-from-top-1 duration-500 ${getChainCardClass(id)}`}>
             {status === "running" ? (
-              <p className="text-[11px] text-[#534AB7]/65 animate-pulse dark:text-[#CECBF6]/65 font-medium">
+              <p className="text-[11px] opacity-75 animate-pulse font-medium">
                 正在为你定制专属题目...
               </p>
             ) : (
-              <p className="text-[11px] text-emerald-700/85 dark:text-emerald-400/85 font-semibold">
+              <p className="text-[11px] font-semibold">
                 已为你定制 5 道专属面试题，面试中将逐题呈现。
               </p>
             )}
@@ -172,7 +183,7 @@ export function TraceNode({
 
         {/* 其他节点（如 Master）：展示流式思维链文本，过滤 JSON 特征 */}
         {id !== "question_gen" && tokens && (
-          <div className="space-y-1.5 whitespace-pre-wrap pl-2.5 border-l-[1.5px] border-[#534AB7]/20 dark:border-white/15 text-[11px] font-normal leading-relaxed text-black/70 dark:text-white/75 animate-in fade-in slide-in-from-top-1 duration-500">
+          <div className={`space-y-1.5 whitespace-pre-wrap ml-1 p-3 rounded-xl border text-xs font-medium leading-relaxed animate-in fade-in slide-in-from-top-1 duration-500 ${getChainCardClass(id)}`}>
             {tokens.split("\n").map((line, i) => {
               const trimmed = line.trim();
               if (!trimmed) return null;
@@ -188,10 +199,10 @@ export function TraceNode({
                   key={i}
                   className="flex gap-2 items-start mt-1.5 animate-in fade-in slide-in-from-left-2 duration-300"
                 >
-                  <span className="flex-shrink-0 select-none text-[#534AB7]/55 dark:text-[#CECBF6]/55 mt-[3px] font-mono text-[8px]">
+                  <span className={`flex-shrink-0 select-none mt-[3px] font-mono text-[8px] font-bold ${getArrowColor(id)}`}>
                     →
                   </span>
-                  <span className="break-words font-medium">
+                  <span className="break-words">
                     {trimmed.replace(/^[•\-]\s*/, "")}
                   </span>
                 </div>
@@ -209,6 +220,13 @@ function formatChiefToolName(tool: string) {
   if (tool === "design_question") return "设计题目";
   if (tool === "query_profile") return "读取画像";
   return tool;
+}
+
+function formatQuestionCategory(category: string) {
+  if (category === "technical") return "技术";
+  if (category === "behavioral") return "行为";
+  if (category === "system_design") return "系统设计";
+  return category;
 }
 
 function getBadgeClass(id: string) {
@@ -253,4 +271,64 @@ function getBadgeClass(id: string) {
 
   // 兜底样式
   return "border border-slate-200 bg-slate-100/80 text-slate-600 dark:border-zinc-700 dark:bg-zinc-800/40 dark:text-zinc-400";
+}
+
+function getChainCardClass(id: string) {
+  // 1. 核心调度 (Master / chief_think) - 幽静紫渐变
+  if (id === "master" || id === "chief_think") {
+    return "bg-gradient-to-r from-violet-500/10 to-indigo-500/5 border-violet-200/70 text-violet-950 dark:from-violet-950/20 dark:to-indigo-950/10 dark:border-violet-800/40 dark:text-violet-200 shadow-sm";
+  }
+
+  // 2. 出题专家 (Question Gen / Ask Question / chief_respond) - 天空蓝渐变
+  if (
+    id === "question_gen" ||
+    id === "ask_question" ||
+    id === "chief_respond"
+  ) {
+    return "bg-gradient-to-r from-sky-500/10 to-blue-500/5 border-sky-200/70 text-sky-950 dark:from-sky-950/20 dark:to-blue-950/10 dark:border-sky-800/40 dark:text-sky-200 shadow-sm";
+  }
+
+  // 3. 评估专家 (Evaluator) - 薄荷绿渐变
+  if (id === "evaluator") {
+    return "bg-gradient-to-r from-emerald-500/10 to-teal-500/5 border-emerald-250/70 text-emerald-950 dark:from-emerald-950/20 dark:to-teal-950/10 dark:border-emerald-800/40 dark:text-emerald-200 shadow-sm";
+  }
+
+  // 4. 面试专家/追问 (Followup) - 蔷薇粉渐变
+  if (id === "followup") {
+    return "bg-gradient-to-r from-pink-500/10 to-rose-500/5 border-pink-200/70 text-pink-950 dark:from-pink-950/20 dark:to-rose-950/10 dark:border-pink-800/40 dark:text-pink-200 shadow-sm";
+  }
+
+  // 5. 记忆检索 (Memory Search) - 翡翠绿/青色渐变
+  if (id === "memory_search") {
+    return "bg-gradient-to-r from-cyan-500/10 to-emerald-500/5 border-cyan-200/70 text-cyan-950 dark:from-cyan-950/20 dark:to-emerald-950/10 dark:border-cyan-800/40 dark:text-cyan-200 shadow-sm";
+  }
+
+  // 6. JD分析 (JD Analysis) - 琥珀橙渐变
+  if (id === "jd_analysis") {
+    return "bg-gradient-to-r from-amber-500/10 to-orange-500/5 border-amber-250/70 text-amber-950 dark:from-amber-950/20 dark:to-orange-950/10 dark:border-amber-800/40 dark:text-amber-200 shadow-sm";
+  }
+
+  // 7. 流程收尾 (Closing) - 中性灰渐变
+  if (id === "closing") {
+    return "bg-gradient-to-r from-slate-500/10 to-zinc-500/5 border-slate-300 text-slate-800 dark:from-zinc-800/20 dark:to-slate-800/10 dark:border-zinc-700/60 dark:text-zinc-300 shadow-sm";
+  }
+
+  // 兜底样式
+  return "bg-gradient-to-r from-slate-500/10 to-zinc-500/5 border-slate-200/70 text-slate-800 dark:from-zinc-800/20 dark:to-slate-800/10 dark:border-zinc-700/60 dark:text-zinc-300 shadow-sm";
+}
+
+function getArrowColor(id: string) {
+  if (id === "master" || id === "chief_think") return "text-violet-500/80 dark:text-indigo-400/80";
+  if (
+    id === "question_gen" ||
+    id === "ask_question" ||
+    id === "chief_respond"
+  ) {
+    return "text-blue-500/80 dark:text-sky-400/80";
+  }
+  if (id === "evaluator") return "text-teal-500/80 dark:text-emerald-400/80";
+  if (id === "followup") return "text-pink-500/80 dark:text-rose-400/80";
+  if (id === "memory_search") return "text-cyan-500/80 dark:text-cyan-400/80";
+  if (id === "jd_analysis") return "text-amber-500/80 dark:text-orange-400/80";
+  return "text-slate-400 dark:text-zinc-500";
 }

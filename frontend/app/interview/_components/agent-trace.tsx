@@ -11,9 +11,10 @@ interface AgentTraceProps {
   nodes: TraceNodeData[];
   nodeTitles?: Record<string, string>;
   nodeLabels?: Record<string, string>;
+  summaryScore?: number;
 }
 
-export function AgentTrace({ nodes, nodeTitles, nodeLabels }: AgentTraceProps) {
+export function AgentTrace({ nodes, nodeTitles, nodeLabels, summaryScore }: AgentTraceProps) {
   return (
     <div className="px-1 py-1">
       {nodes.map((node, index) => {
@@ -36,6 +37,9 @@ export function AgentTrace({ nodes, nodeTitles, nodeLabels }: AgentTraceProps) {
             missingDimensions={node.missingDimensions}
             chiefToolCalls={node.chiefToolCalls}
             designedQuestion={node.designedQuestion}
+            designedCategory={node.designedCategory}
+            designedSource={node.designedSource}
+            summaryScore={node.summaryScore ?? (node.id === "evaluator" ? summaryScore : undefined)}
           />
         );
       })}

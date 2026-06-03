@@ -340,6 +340,8 @@ function handleSseEvent(
       chief_tool_calls?: string[];
       assistant_message?: string;
       designed_question?: string;
+      designed_category?: string;
+      designed_source?: string;
     }>(data);
     const phase =
       event === "node_start"
@@ -362,6 +364,8 @@ function handleSseEvent(
       chiefToolCalls: payload.chief_tool_calls,
       assistantMessage: payload.assistant_message,
       designedQuestion: payload.designed_question,
+      designedCategory: payload.designed_category,
+      designedSource: payload.designed_source,
     });
     return;
   }

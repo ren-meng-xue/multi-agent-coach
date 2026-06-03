@@ -75,5 +75,5 @@ def test_prepare_start_stream_error_returns_sse_error_event():
     assert resp.status_code == 200
     assert "text/event-stream" in resp.headers["content-type"]
     assert "node_start" in resp.text
-    assert '"event": "error"' in resp.text
+    assert "event: error" in resp.text
     assert "准备流水线失败" in resp.text

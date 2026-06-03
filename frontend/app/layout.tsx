@@ -25,10 +25,10 @@ export const metadata: Metadata = {
 };
 
 /** 扩展中文包，补全漏掉的错误提示。 */
-const customLocalization = {
+const customLocalization: any = {
   ...zhCN,
-  errors: {
-    ...zhCN.errors,
+  unstable__errors: {
+    ...(zhCN as any).unstable__errors,
     form_identifier_exists: "该电子邮件地址已被占用。请尝试另一个。",
     form_password_pwned: "这个密码在数据泄露中被发现，不能使用，请换一个密码试试。",
   }
@@ -60,7 +60,7 @@ export default function RootLayout({
       signInUrl="/login"
       signUpUrl="/sign-up"
       afterSignOutUrl="/login"
-      localization={customLocalization}
+      localization={customLocalization as any}
       telemetry={false}
     >
       <html

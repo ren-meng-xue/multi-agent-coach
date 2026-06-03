@@ -41,7 +41,6 @@ test("done 状态有节点时默认展开准备阶段思考过程", () => {
       ]}
     />
   );
-  expect(screen.getByText("AI 思考过程 - 准备阶段")).toBeInTheDocument();
   expect(screen.getByText("调度")).toBeInTheDocument();
   expect(screen.getByText("用户目标是Senior Developer岗位。")).toBeInTheDocument();
   expect(screen.getByText(/收起专家组详情/)).toBeInTheDocument();
@@ -58,15 +57,4 @@ test("点击按钮可切换展开/收起", () => {
   expect(screen.getByText(/收起专家组详情/)).toBeInTheDocument();
   fireEvent.click(toggle);
   expect(screen.getByText(/展开专家组详情/)).toBeInTheDocument();
-});
-
-test("direction 显示在标题行", () => {
-  render(
-    <PreparationCard
-      status="done"
-      nodes={[]}
-      direction="前端工程师"
-    />
-  );
-  expect(screen.getByText("前端工程师")).toBeInTheDocument();
 });

@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 type MarkdownMessageProps = {
   content: string;
   isUser: boolean;
+  suffix?: ReactNode;
 };
 
 type Block =
@@ -17,12 +18,39 @@ type Block =
   | { type: "thematic-break" };
 
 /** 渲染面试回复常见 Markdown 子集，不使用 HTML 注入，避免模型输出变成可执行内容。 */
-export function MarkdownMessage({ content, isUser }: MarkdownMessageProps) {
+export function MarkdownMessage({
+  content,
+  isUser,
+  suffix,
+}: MarkdownMessageProps) {
   const blocks = parseMarkdownBlocks(content);
+
+  const lastBlock = blocks[blocks.length - 1];
+  const supportsInlineSuffix =
+    lastBlock &&
+    [
+      "paragraph",
+      "unordered-list",
+      "ordered-list",
+      "todo-list",
+      "blockquote",
+    ].includes(lastBlock.type);
 
   return (
     <div className="space-y-3">
-      {blocks.map((block, index) => renderBlock(block, index, isUser))}
+      {blocks.map((block, index) => {
+        const isLastBlock = index === blocks.length - 1;
+        const rendered = renderBlock(block, index, isUser, isLastBlock, suffix);
+        if (isLastBlock && !supportsInlineSuffix && suffix) {
+          return (
+            <div key={index} className="space-y-3">
+              {rendered}
+              <div className="mt-1 flex justify-end">{suffix}</div>
+            </div>
+          );
+        }
+        return rendered;
+      })}
     </div>
   );
 }
@@ -32,7 +60,12 @@ function parseMarkdownBlocks(content: string): Block[] {
   const blocks: Block[] = [];
   let paragraph: string[] = [];
   let listItems: string[] = [];
-  let listType: "unordered-list" | "ordered-list" | "todo-list" | "blockquote" | null = null;
+  let listType:
+    | "unordered-list"
+    | "ordered-list"
+    | "todo-list"
+    | "blockquote"
+    | null = null;
   let codeLines: string[] = [];
   let codeLanguage = "";
   let inCodeBlock = false;
@@ -66,7 +99,11 @@ function parseMarkdownBlocks(content: string): Block[] {
   }
 
   function flushCode() {
-    blocks.push({ type: "code", language: codeLanguage, content: codeLines.join("\n") });
+    blocks.push({
+      type: "code",
+      language: codeLanguage,
+      content: codeLines.join("\n"),
+    });
     codeLines = [];
     codeLanguage = "";
   }
@@ -193,17 +230,24 @@ function smartJoinParagraphLines(lines: string[]): string {
         result += "\n";
       } else {
         // 如果当前行以中文或英文句号、感叹号、问号、冒号、分号、收尾括号、引号等结束，说明是故意换行，应保留换行
-        const isSentenceEnd = /[。！？：；”）”〉》】\]\.\?!\:;\)"]$/.test(trimmedCurrent);
+        const isSentenceEnd = /[。！？：；”）”〉》】\]\.\?!\:;\)"]$/.test(
+          trimmedCurrent,
+        );
         if (isSentenceEnd) {
           result += "\n";
         } else {
           // 两个都是非空行，且当前行不是句子结尾，说明这是一个硬折行，必须进行智能合并
-          const hasChinese = /[\u4e00-\u9fa5]/.test(trimmedCurrent) || /[\u4e00-\u9fa5]/.test(trimmedNext);
+          const hasChinese =
+            /[\u4e00-\u9fa5]/.test(trimmedCurrent) ||
+            /[\u4e00-\u9fa5]/.test(trimmedNext);
           if (hasChinese) {
             // 只要有任意一方是中文，直接拼接消除换行
           } else {
             // 纯英文或西文字符相连，用空格连接
-            if (/[a-zA-Z0-9,\.\?!]$/.test(trimmedCurrent) && /^[a-zA-Z0-9]/.test(trimmedNext)) {
+            if (
+              /[a-zA-Z0-9,\.\?!]$/.test(trimmedCurrent) &&
+              /^[a-zA-Z0-9]/.test(trimmedNext)
+            ) {
               result += " ";
             } else {
               // 其他符号拼接，保留紧凑
@@ -216,7 +260,13 @@ function smartJoinParagraphLines(lines: string[]): string {
   return result;
 }
 
-function renderBlock(block: Block, index: number, isUser: boolean): ReactNode {
+function renderBlock(
+  block: Block,
+  index: number,
+  isUser: boolean,
+  isLastBlock?: boolean,
+  suffix?: ReactNode,
+): ReactNode {
   if (block.type === "heading") {
     const Tag = `h${block.level}` as "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
     const sizeClass = {
@@ -241,30 +291,50 @@ function renderBlock(block: Block, index: number, isUser: boolean): ReactNode {
         key={index}
         className={cn(
           "my-4 border-t border-black/10 dark:border-white/10",
-          isUser && "border-white/20"
+          isUser && "border-white/20",
         )}
       />
     );
   }
 
   if (block.type === "paragraph") {
+    const text = smartJoinParagraphLines(block.lines).replace(/\n+$/, "");
     return (
       <p key={index} className="whitespace-pre-wrap">
-        {renderInline(smartJoinParagraphLines(block.lines), isUser)}
+        {renderInline(text, isUser)}
+        {isLastBlock && suffix && (
+          <span
+            className="inline-flex ml-2 items-center select-none align-middle"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {suffix}
+          </span>
+        )}
       </p>
     );
   }
 
   if (block.type === "blockquote") {
+    const text = smartJoinParagraphLines(block.lines).replace(/\n+$/, "");
     return (
       <blockquote
         key={index}
         className={cn(
           "border-l-3 border-[#534AB7]/40 bg-zinc-100/50 dark:bg-zinc-800/30 pl-3.5 py-1.5 pr-2 my-2 rounded-r-lg text-sm leading-relaxed",
-          isUser ? "text-white/90 border-white/40 bg-white/10" : "text-zinc-700 dark:text-zinc-300",
+          isUser
+            ? "text-white/90 border-white/40 bg-white/10"
+            : "text-zinc-700 dark:text-zinc-300",
         )}
       >
-        {renderInline(smartJoinParagraphLines(block.lines), isUser)}
+        {renderInline(text, isUser)}
+        {isLastBlock && suffix && (
+          <span
+            className="inline-flex ml-2 items-center select-none align-middle"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {suffix}
+          </span>
+        )}
       </blockquote>
     );
   }
@@ -272,25 +342,36 @@ function renderBlock(block: Block, index: number, isUser: boolean): ReactNode {
   if (block.type === "todo-list") {
     return (
       <ul key={index} className="space-y-2 my-2 pl-1">
-        {block.items.map((item, itemIndex) => (
-          <li key={itemIndex} className="flex items-start gap-2.5 text-sm">
-            <input
-              type="checkbox"
-              checked={item.checked}
-              readOnly
-              className="mt-1 size-3.5 shrink-0 rounded border-black/10 accent-[#534AB7] dark:border-white/10"
-            />
-            <span
-              className={cn(
-                item.checked
-                  ? "text-zinc-400 line-through decoration-zinc-400/50"
-                  : "text-zinc-800 dark:text-zinc-200",
-              )}
-            >
-              {renderInline(item.text, isUser)}
-            </span>
-          </li>
-        ))}
+        {block.items.map((item, itemIndex) => {
+          const isLastItem = itemIndex === block.items.length - 1;
+          return (
+            <li key={itemIndex} className="flex items-start gap-2.5 text-sm">
+              <input
+                type="checkbox"
+                checked={item.checked}
+                readOnly
+                className="mt-1 size-3.5 shrink-0 rounded border-black/10 accent-[#534AB7] dark:border-white/10"
+              />
+              <span
+                className={cn(
+                  item.checked
+                    ? "text-zinc-400 line-through decoration-zinc-400/50"
+                    : "text-zinc-800 dark:text-zinc-200",
+                )}
+              >
+                {renderInline(item.text, isUser)}
+                {isLastBlock && isLastItem && suffix && (
+                  <span
+                    className="inline-flex ml-2 items-center select-none align-middle"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {suffix}
+                  </span>
+                )}
+              </span>
+            </li>
+          );
+        })}
       </ul>
     );
   }
@@ -298,9 +379,22 @@ function renderBlock(block: Block, index: number, isUser: boolean): ReactNode {
   if (block.type === "unordered-list") {
     return (
       <ul key={index} className="list-disc space-y-1 pl-5">
-        {block.items.map((item, itemIndex) => (
-          <li key={itemIndex}>{renderInline(item, isUser)}</li>
-        ))}
+        {block.items.map((item, itemIndex) => {
+          const isLastItem = itemIndex === block.items.length - 1;
+          return (
+            <li key={itemIndex}>
+              {renderInline(item, isUser)}
+              {isLastBlock && isLastItem && suffix && (
+                <span
+                  className="inline-flex ml-2 items-center select-none align-middle"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {suffix}
+                </span>
+              )}
+            </li>
+          );
+        })}
       </ul>
     );
   }
@@ -308,9 +402,22 @@ function renderBlock(block: Block, index: number, isUser: boolean): ReactNode {
   if (block.type === "ordered-list") {
     return (
       <ol key={index} className="list-decimal space-y-1 pl-5">
-        {block.items.map((item, itemIndex) => (
-          <li key={itemIndex}>{renderInline(item, isUser)}</li>
-        ))}
+        {block.items.map((item, itemIndex) => {
+          const isLastItem = itemIndex === block.items.length - 1;
+          return (
+            <li key={itemIndex}>
+              {renderInline(item, isUser)}
+              {isLastBlock && isLastItem && suffix && (
+                <span
+                  className="inline-flex ml-2 items-center select-none align-middle"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {suffix}
+                </span>
+              )}
+            </li>
+          );
+        })}
       </ol>
     );
   }
@@ -320,7 +427,9 @@ function renderBlock(block: Block, index: number, isUser: boolean): ReactNode {
       key={index}
       className={cn(
         "overflow-x-auto rounded-md px-3 py-2 text-xs leading-relaxed",
-        isUser ? "bg-black/20 text-white" : "bg-black/5 text-zinc-900 dark:bg-white/10 dark:text-zinc-100",
+        isUser
+          ? "bg-black/20 text-white"
+          : "bg-black/5 text-zinc-900 dark:bg-white/10 dark:text-zinc-100",
       )}
     >
       <code data-language={block.language || undefined}>{block.content}</code>
@@ -347,7 +456,9 @@ function renderInline(text: string, isUser: boolean): ReactNode[] {
           key={key}
           className={cn(
             "rounded px-1 py-0.5 text-[0.92em]",
-            isUser ? "bg-white/15 text-white" : "bg-black/5 text-zinc-900 dark:bg-white/10 dark:text-zinc-100",
+            isUser
+              ? "bg-white/15 text-white"
+              : "bg-black/5 text-zinc-900 dark:bg-white/10 dark:text-zinc-100",
           )}
         >
           {value.slice(1, -1)}

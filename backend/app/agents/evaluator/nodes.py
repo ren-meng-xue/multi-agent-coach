@@ -39,6 +39,8 @@ def _turn_evaluation_from_scoring(
         "candidate_level": scoring.candidate_level,
         "latent_signals": list(scoring.latent_signals),
         "missing_dimensions": list(scoring.missing_dimensions),
+        "followup_would_help": scoring.followup_would_help,
+        "is_repeated_answer": scoring.is_repeated_answer,
     }
 
 

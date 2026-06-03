@@ -34,6 +34,8 @@ export interface PrepareSSEEvent {
     chief_tool_calls?: string[];
     assistant_message?: string;
     designed_question?: string;
+    designed_category?: string;
+    designed_source?: string;
     chain?: string[];
     need_direction?: boolean;
     prepared_questions?: PreparedQuestion[];
@@ -70,8 +72,11 @@ export interface TraceNodeData {
   missingDimensions?: string[];
   followupFocus?: string;
   chiefToolCalls?: string[];
+  summaryScore?: number;
   /** designer agent 出题结果，在 chief_think/chief_respond 节点展示 */
   designedQuestion?: string;
+  designedCategory?: string;
+  designedSource?: string;
 }
 
 export interface InterviewTraceNodeEvent {
@@ -91,4 +96,6 @@ export interface InterviewTraceNodeEvent {
   assistantMessage?: string;
   /** designer agent 出题结果 */
   designedQuestion?: string;
+  designedCategory?: string;
+  designedSource?: string;
 }

@@ -45,19 +45,7 @@ export function PreparationCard({
         tone={status === "done" ? "success" : "default"}
         toggleText={expanded ? "收起专家组详情" : "展开专家组详情"}
         onToggle={() => setExpanded((v) => !v)}
-        meta={
-          direction && (
-            <span className="inline-flex items-center gap-0.5 rounded-full bg-[#534AB7]/10 px-2 py-0.5 text-[9px] font-extrabold text-[#534AB7] border border-[#534AB7]/12 dark:bg-[#CECBF6]/10 dark:text-[#CECBF6] dark:border-[#CECBF6]/12">
-              <span className="opacity-40 select-none">#</span>
-              <span>{direction}</span>
-            </span>
-          )
-        }
       >
-        <div className="mb-2.5 px-1 text-[11px] font-extrabold text-[#534AB7] dark:text-[#CECBF6] flex items-center gap-1.5">
-          <span className="inline-block size-1.5 bg-[#534AB7] rounded-full dark:bg-[#CECBF6] animate-pulse" />
-          <span>AI 思考过程 - 准备阶段</span>
-        </div>
         <AgentTrace nodes={nodes} />
       </TracePanelShell>
     </div>

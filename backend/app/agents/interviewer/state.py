@@ -24,6 +24,8 @@ class TurnEvaluation(TypedDict, total=False):
     candidate_level: CandidateLevel
     latent_signals: list[str]
     missing_dimensions: list[str]
+    followup_would_help: bool
+    is_repeated_answer: bool
 
 
 class CandidateProfile(TypedDict, total=False):

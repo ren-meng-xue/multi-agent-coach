@@ -5,8 +5,7 @@ from typing import Any
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
-from sqlalchemy import select, func
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import func, select
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.agents.coach.prompts import COACH_PLAN_SYSTEM_PROMPT, COACH_REVIEW_SYSTEM_PROMPT

@@ -1,7 +1,8 @@
 """Node functions for the multi-agent interviewer LangGraph."""
 from __future__ import annotations
 
-from typing import Any, Literal
+import asyncio
+from typing import Any, Literal, cast
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
@@ -110,7 +111,7 @@ def _state_messages(state: InterviewState) -> list[BaseMessage]:
 
 async def _generate_text(system_prompt: str, state: InterviewState) -> str:
     chunks: list[str] = []
-    model = _chat_model().with_config(tags=["interviewer_answer_stream"])
+    model = _chat_model(streaming=True).with_config(tags=["interviewer_answer_stream"])
     messages = _state_messages(state) + [SystemMessage(content=system_prompt)]
     async for chunk in model.astream(messages):
         chunks.append(_content_to_text(chunk.content))
@@ -271,19 +272,27 @@ async def master_node(state: InterviewState) -> InterviewState:
     context = _build_master_context(state)
 
     try:
-        await _master_phase1_stream(context)
-    except Exception as exc:
-        log.warning("master_phase1_failed", error=str(exc))
-
-    try:
-        decision = await _master_phase2_decide(context)
+        # 并行执行：Phase 1 负责流式推送 bullet，Phase 2 负责结构化输出
+        # 虽然这会消耗 2x token，但能显著降低 master 节点的总延迟
+        results = await asyncio.gather(
+            _master_phase1_stream(context),
+            _master_phase2_decide(context),
+            return_exceptions=True
+        )
+        
+        if isinstance(results[1], Exception):
+            log.error("master_phase2_failed", error=str(results[1]))
+            decision = _InterviewMasterDecision(chain=[], reason="Phase 2 failed")
+        else:
+            decision = cast(_InterviewMasterDecision, results[1])
+        
         chain = list(decision.chain)
         reason = decision.reason
         followup_focus = decision.followup_focus
     except Exception as exc:
-        log.error("master_phase2_failed", error=str(exc))
+        log.error("master_node_unexpected_failure", error=str(exc))
         chain = []
-        reason = "Phase 2 fallback"
+        reason = "Master fallback"
         followup_focus = ""
 
     final_chain = _enforce_chain(chain, state)
@@ -308,6 +317,8 @@ class _EvaluatorScoring(BaseModel):
     candidate_level: Literal["beginner", "junior", "mid", "senior"] = "junior"
     latent_signals: list[str] = []
     missing_dimensions: list[str] = []
+    followup_would_help: bool = True
+    is_repeated_answer: bool = False
 
 
 def _build_evaluator_context(state: InterviewState) -> str:
@@ -342,7 +353,7 @@ async def _evaluator_reason_stream(context: str) -> None:
 
 @_retry_llm
 async def _evaluator_score(context: str) -> _EvaluatorScoring:
-    model = _chat_model().with_structured_output(_EvaluatorScoring)
+    model = _chat_model(fast=True).with_structured_output(_EvaluatorScoring)
     prompt = EVALUATOR_SCORING_PROMPT.format(context=context)
     out = await model.ainvoke([SystemMessage(content=prompt)])
     if isinstance(out, _EvaluatorScoring):
@@ -353,14 +364,19 @@ async def _evaluator_score(context: str) -> _EvaluatorScoring:
 async def evaluator_node(state: InterviewState) -> InterviewState:
     context = _build_evaluator_context(state)
     try:
-        await _evaluator_reason_stream(context)
+        # 并行执行：流式推送点评 bullet 和 深度打分
+        results = await asyncio.gather(
+            _evaluator_reason_stream(context),
+            _evaluator_score(context),
+            return_exceptions=True
+        )
+        
+        if isinstance(results[1], Exception):
+            log.error("evaluator_score_failed", error=str(results[1]))
+            return {**state, "turn_evaluations": list(state.get("turn_evaluations", []))}
+        scoring = cast(_EvaluatorScoring, results[1])
     except Exception as exc:
-        log.warning("evaluator_reason_failed", error=str(exc))
-
-    try:
-        scoring = await _evaluator_score(context)
-    except Exception as exc:
-        log.error("evaluator_score_failed", error=str(exc))
+        log.error("evaluator_node_unexpected_failure", error=str(exc))
         return {**state, "turn_evaluations": list(state.get("turn_evaluations", []))}
 
     entry: TurnEvaluation = {
@@ -376,6 +392,8 @@ async def evaluator_node(state: InterviewState) -> InterviewState:
         "candidate_level": scoring.candidate_level,
         "latent_signals": list(scoring.latent_signals),
         "missing_dimensions": list(scoring.missing_dimensions),
+        "followup_would_help": scoring.followup_would_help,
+        "is_repeated_answer": scoring.is_repeated_answer,
     }
     updated = list(state.get("turn_evaluations", []))
     updated.append(entry)

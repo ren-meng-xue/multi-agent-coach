@@ -45,27 +45,21 @@ export function TurnTraceCard({
 
   const isDone = status === "done";
 
-  // 嵌入模式：无 header，content 直接渲染，外层气泡已显示题目
+  // 嵌入模式：无 header，包裹与独立面板完全相同的底色、边框背景，完美解决看板颜色不一致问题
   if (isEmbedded) {
+    if (!expanded) return null; // 展开状态关闭时，直接不渲染任何内容，避免留下空的背景和边框占位符
     return (
       <div
         className={cn(
-          "w-full transition-all duration-300 animate-in fade-in slide-in-from-bottom-2 mt-3.5",
+          "w-full transition-all duration-300 animate-in fade-in slide-in-from-bottom-2 mt-3 rounded-xl border bg-slate-100/90 border-slate-300/80 dark:bg-zinc-900/65 dark:border-zinc-700/80 px-4 py-3 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.02)]",
         )}
       >
-        {hasContent && (
-          <div
-            className="mb-3.5 border-t border-black/[0.05] dark:border-white/[0.05]"
-            aria-hidden="true"
-          />
-        )}
-        {expanded && (
-          <AgentTrace
-            nodes={nodes}
-            nodeTitles={INTERVIEW_NODE_TITLES}
-            nodeLabels={INTERVIEW_NODE_LABELS}
-          />
-        )}
+        <AgentTrace
+          nodes={nodes}
+          nodeTitles={INTERVIEW_NODE_TITLES}
+          nodeLabels={INTERVIEW_NODE_LABELS}
+          summaryScore={summaryScore}
+        />
       </div>
     );
   }
@@ -96,22 +90,12 @@ export function TurnTraceCard({
         tone={error ? "error" : isDone ? "success" : "default"}
         toggleText={expanded ? "收起依据" : "查看依据"}
         onToggle={onToggle}
-        meta={
-          <span className="flex shrink-0 items-center gap-2">
-            {typeof summaryScore === "number" &&
-              !isOpening &&
-              turnIndex > 1 && (
-                <span className="rounded-full bg-[#534AB7]/10 px-2.5 py-0.5 font-extrabold text-[#534AB7] border border-[#534AB7]/15 dark:bg-[#cecbf6]/10 dark:text-[#cecbf6] dark:border-[#cecbf6]/15 text-[9px] shadow-sm">
-                  评分：{summaryScore.toFixed(1)} / 10
-                </span>
-              )}
-          </span>
-        }
       >
         <AgentTrace
           nodes={nodes}
           nodeTitles={INTERVIEW_NODE_TITLES}
           nodeLabels={INTERVIEW_NODE_LABELS}
+          summaryScore={summaryScore}
         />
       </TracePanelShell>
     </div>

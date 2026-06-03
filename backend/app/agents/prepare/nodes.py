@@ -308,6 +308,12 @@ async def supervisor_node(state: PrepareState) -> PrepareState:
             break
     else:
         log.warning("supervisor_decision_not_found", raw=full_text[-300:])
+        try:
+            model_structured = _llm().with_structured_output(SupervisorDecision)
+            decision = await model_structured.ainvoke([SystemMessage(content=combined_prompt)])
+        except Exception as exc:
+            log.warning("supervisor_structured_fallback_failed", error=str(exc))
+            decision = SupervisorDecision(next="END")
 
     # 强制防重复：如果 LLM 建议跑已跑过的工具，强制 END（除非是特殊状态）
     if decision.next in completed_tools:
@@ -329,4 +335,3 @@ async def supervisor_node(state: PrepareState) -> PrepareState:
         reasoning=decision.reasoning
     )
     return cast(PrepareState, {**dict(state), **updates})
-

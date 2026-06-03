@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useMemo } from "react";
+import { Fragment, useEffect, useRef, useState, useMemo } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import {
@@ -51,7 +51,7 @@ function buildOpeningMessage(
       `准备好了吗？发消息「开始」我们立即进入第一题。`
     );
   }
-  return "你好！我还没有读取到本场面试的目标岗位。请直接输入你想练习的岗位或面试方向，我们将立即开始。";
+  return "";
 }
 
 const INITIAL_PROGRESS: InterviewProgressState = {
@@ -133,11 +133,11 @@ export function InterviewChat() {
       if (ctx.target_role || ctx.jd_text || ctx.jd_url) {
         return [];
       }
-      if (isTest) {
+      if (isTest && ctx.target_role) {
         return [{ role: "assistant", content: buildOpeningMessage(ctx) }];
       }
     }
-    return [{ role: "assistant", content: buildOpeningMessage(null) }];
+    return [];
   });
 
   const [isInitialLoading, setIsInitialLoading] = useState(true);
@@ -153,14 +153,26 @@ export function InterviewChat() {
         // 客户端首屏成功挂载后，如果带有开始意图，在网络请求加载前保持 messages 为 []，由 isInitialLoading 渲染精美微光加载，
         // 彻底根治一挂载就一闪而逝“专家组正在工作”占位卡片的假闪烁。
         setMessages([]);
-      } else {
+      } else if (ctx.target_role) {
         setMessages([{ role: "assistant", content: buildOpeningMessage(ctx) }]);
+      } else {
+        setMessages([]);
       }
     }
   }, []);
 
   const [progress, setProgress] =
     useState<InterviewProgressState>(INITIAL_PROGRESS);
+  const [targetRole, setTargetRole] = useState<string>(
+    () => initialContextRef.current?.target_role || "",
+  );
+
+  useEffect(() => {
+    if (initialContextRef.current?.target_role) {
+      setTargetRole(initialContextRef.current.target_role);
+    }
+  }, []);
+
   const [isStreaming, setIsStreaming] = useState(false);
   const [report, setReport] = useState<InterviewReport | null>(null);
   const [showReportDelayed, setShowReportDelayed] = useState(false);
@@ -273,6 +285,9 @@ export function InterviewChat() {
           try {
             const activeSession = await fetchActiveInterviewSession({ token });
             if (activeSession.session_id) {
+              if (activeSession.target_role) {
+                setTargetRole(activeSession.target_role);
+              }
               // 成功拉取到活动会话，恢复历史消息、进度和评估报告
               if (activeSession.messages && activeSession.messages.length > 0) {
                 const restoredMessages: InterviewChatMessage[] =
@@ -336,6 +351,9 @@ export function InterviewChat() {
                         user_background:
                           userContext.user_background ?? undefined,
                       };
+                      if (userContext.target_role) {
+                        setTargetRole(userContext.target_role);
+                      }
                     } catch (err) {
                       console.warn(
                         "Failed to load interview context for active session",
@@ -356,13 +374,15 @@ export function InterviewChat() {
                       },
                     ]);
                     runPrepare(openingContext, { autoLaunch: true });
-                  } else {
+                  } else if (openingContext?.target_role) {
                     setMessages([
                       {
                         role: "assistant",
                         content: buildOpeningMessage(openingContext),
                       },
                     ]);
+                  } else {
+                    setMessages([]);
                   }
                 }
               }
@@ -610,6 +630,8 @@ export function InterviewChat() {
         summaryScore: data.summary_score,
         chiefToolCalls: data.chief_tool_calls,
         designedQuestion: data.designed_question,
+        designedCategory: data.designed_category,
+        designedSource: data.designed_source,
       });
     }
 
@@ -675,9 +697,10 @@ export function InterviewChat() {
       const withoutPrepare = prev.filter(
         (message) => !isPrepareTraceMessage(message),
       );
-      return withoutPrepare.length > 0
-        ? withoutPrepare
-        : [{ role: "assistant", content: buildOpeningMessage(ctx) }];
+      if (withoutPrepare.length > 0) return withoutPrepare;
+      return ctx?.target_role
+        ? [{ role: "assistant", content: buildOpeningMessage(ctx) }]
+        : [];
     });
   }
 
@@ -747,7 +770,10 @@ export function InterviewChat() {
               missingDimensions: ev.missingDimensions,
               followupFocus: ev.followupFocus,
               chiefToolCalls: ev.chiefToolCalls,
+              summaryScore: ev.summaryScore,
               designedQuestion: ev.designedQuestion,
+              designedCategory: ev.designedCategory,
+              designedSource: ev.designedSource,
               // ask_question/followup/closing 无 LLM token 流时，用 node_done 携带的
               // assistant_message 填充 tokens，让 trace 面板能显示对应内容
               tokens:
@@ -759,7 +785,8 @@ export function InterviewChat() {
         }
 
         const summaryScore =
-          ev.phase === "done" && (ev.node === "evaluator" || ev.node === "chief_think")
+          ev.phase === "done" &&
+          (ev.node === "evaluator" || ev.node === "chief_think")
             ? (ev.summaryScore ?? m.payload.summaryScore)
             : m.payload.summaryScore;
         const chain =
@@ -969,7 +996,7 @@ export function InterviewChat() {
   function handleNewRound() {
     abortRef.current?.abort();
     discardBufferedDelta();
-    setMessages([{ role: "assistant", content: buildOpeningMessage(null) }]);
+    setMessages([]);
     setReport(null);
     setProgress(INITIAL_PROGRESS);
     setPrepStatus(null);
@@ -1250,7 +1277,7 @@ export function InterviewChat() {
         <header className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-black/10 px-6 py-3 dark:border-white/10">
           <div>
             <h1 className="bg-gradient-to-br from-[#534AB7] to-rose-600 bg-clip-text text-sm font-bold tracking-[-0.02em] text-transparent">
-              AI 模拟面试舱 · Agent Cabin
+              {targetRole ? `岗位：${targetRole}` : "AI 模拟面试舱"}
             </h1>
             <p className="mt-1 text-xs text-black/45 dark:text-white/45">
               {formatStageLabel(progress.stage)}
@@ -1375,12 +1402,47 @@ export function InterviewChat() {
             ) {
               return null;
             }
+            if (associatedTrace) {
+              // 题目已出现在看版 header，不再单独渲染气泡避免重复
+              const hasDesignedQuestion = associatedTrace.payload.nodes.some(
+                (n) => n.designedQuestion,
+              );
+              if (hasDesignedQuestion) {
+                return (
+                  <TurnTraceCard
+                    key={`${message.role}-${index}`}
+                    status={associatedTrace.payload.status}
+                    nodes={associatedTrace.payload.nodes}
+                    turnIndex={associatedTrace.payload.turnIndex}
+                    summaryScore={associatedTrace.payload.summaryScore}
+                    isOpening={associatedTrace.payload.isOpening}
+                    isEmbedded={false}
+                  />
+                );
+              }
+              // 追问等无 designedQuestion 的轮次：气泡 + 看版并列
+              return (
+                <Fragment key={`${message.role}-${index}`}>
+                  <MessageBubble
+                    message={message}
+                    isPending={isStreaming && index === messages.length - 1}
+                  />
+                  <TurnTraceCard
+                    status={associatedTrace.payload.status}
+                    nodes={associatedTrace.payload.nodes}
+                    turnIndex={associatedTrace.payload.turnIndex}
+                    summaryScore={associatedTrace.payload.summaryScore}
+                    isOpening={associatedTrace.payload.isOpening}
+                    isEmbedded={false}
+                  />
+                </Fragment>
+              );
+            }
             return (
               <MessageBubble
                 key={`${message.role}-${index}`}
                 message={message}
                 isPending={isStreaming && index === messages.length - 1}
-                trace={associatedTrace}
               />
             );
           })}

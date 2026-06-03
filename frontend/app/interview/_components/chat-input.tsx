@@ -304,8 +304,8 @@ export function ChatInput({ onSend, isStreaming, onUploadFile }: ChatInputProps)
         className="sticky bottom-0 z-20 flex shrink-0 flex-col border-t border-zinc-200/50 bg-zinc-50/60 px-5 py-4 backdrop-blur-md dark:border-zinc-800/40 dark:bg-[#121212]/60"
         onSubmit={handleSubmit}
       >
-        {/* 复合高级输入框容器 - 转型为极致弱化的“隐形无界美学”设计，边框降为 40% 微透明，聚焦时呈现极其克制的虚光淡晕 */}
-        <div className="relative flex flex-col w-full rounded-2xl border border-zinc-200/40 bg-white/95 p-2 shadow-[0_8px_30px_rgb(0,0,0,0.03)] focus-within:border-[#534AB7]/30 focus-within:ring-4 focus-within:ring-[#534AB7]/8 dark:border-zinc-800/30 dark:bg-zinc-900/95 dark:shadow-[0_8px_30px_rgb(0,0,0,0.20)] transition-all duration-200">
+        {/* 复合高级输入框容器 - 增加常驻的轻微品牌色边框（#534AB7/25）与背景调性，确保非聚焦时也具备色彩辨识度 */}
+        <div className="relative flex flex-col w-full rounded-2xl border border-[#534AB7]/25 bg-white shadow-[0_8px_30px_rgba(83,74,183,0.06)] focus-within:border-[#534AB7]/60 focus-within:ring-4 focus-within:ring-[#534AB7]/10 dark:border-[#534AB7]/30 dark:bg-[#1a1a1a] dark:shadow-[0_8px_40px_rgba(0,0,0,0.4)] transition-all duration-300 p-2">
           
           {/* 完全对齐 ChatGPT 的附件卡片预览列表 - 支持单行横向滚动与极细美化滚动条 */}
           {attachments.length > 0 && (

@@ -52,3 +52,23 @@ def test_build_turn_trace_no_done():
     )
     assert result["nodes"][0]["status"] == "running"
     assert result["nodes"][0]["tokens"] == "思考"
+
+def test_build_turn_trace_assistant_message_fallback():
+    node_events = [
+        {"evt": "node_start", "data": {"node": "chief_think", "label": "思考"}},
+        {"evt": "node_done", "data": {"node": "chief_think", "assistant_message": "已评价回答", "elapsed_ms": 50}},
+        {"evt": "node_start", "data": {"node": "chief_respond", "label": "回复"}},
+        {"evt": "node_done", "data": {"node": "chief_respond", "assistant_message": "请问您...", "elapsed_ms": 30}},
+    ]
+    result = _build_turn_trace(
+        node_events=node_events,
+        question_count=1,
+        is_opening=False
+    )
+    
+    think_node = next(n for n in result["nodes"] if n["id"] == "chief_think")
+    assert think_node["tokens"] == "已评价回答"
+    
+    respond_node = next(n for n in result["nodes"] if n["id"] == "chief_respond")
+    assert respond_node["tokens"] == "请问您..."
+    assert respond_node["status"] == "done"

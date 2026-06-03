@@ -161,7 +161,7 @@ def _build_state(
         "question_count": session.question_count,
         "total_questions": session.total_questions,
         "followup_count": session.followup_count,
-        "max_followups": 2,
+        "max_followups": 3,
     }
 
 
@@ -377,7 +377,10 @@ def _build_turn_trace(
                     "missingDimensions": [],
                     "followupFocus": None,
                     "chiefToolCalls": [],
+                    "summaryScore": None,
                     "designedQuestion": None,
+                    "designedCategory": None,
+                    "designedSource": None,
                 }
                 chain.append(node_id)
             else:
@@ -397,8 +400,14 @@ def _build_turn_trace(
                     "missingDimensions": data.get("missing_dimensions", []),
                     "followupFocus": data.get("followup_focus"),
                     "chiefToolCalls": data.get("chief_tool_calls", []),
+                    "summaryScore": data.get("summary_score"),
                     "designedQuestion": data.get("designed_question"),
+                    "designedCategory": data.get("designed_category"),
+                    "designedSource": data.get("designed_source"),
                 })
+                # ask_question/followup/closing/chief_think 无 LLM token 流时，用 node_done 携带的 assistant_message 填充 tokens
+                if data.get("assistant_message") and not nodes_map[node_id]["tokens"]:
+                    nodes_map[node_id]["tokens"] = data["assistant_message"]
 
             # 从评估节点或最后一个节点尝试提取 summaryScore
             if "summary_score" in data:

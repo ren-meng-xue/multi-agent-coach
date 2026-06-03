@@ -258,17 +258,32 @@ async def stream_interviewer_turn_events(state: InterviewState) -> AsyncIterator
                 last = msgs[-1] if msgs else None
                 tool_calls = [tc["name"] for tc in (getattr(last, "tool_calls", None) or [])]
                 payload["chief_tool_calls"] = tool_calls
-                payload["chief_thoughts"] = node_dict.get("chief_thoughts", [])
+                
+                # 提取思考过程：优先用流式 thoughts，没有则根据工具调用生成
+                thoughts = node_dict.get("chief_thoughts", [])
+                if thoughts:
+                    payload["assistant_message"] = "\n".join([f"• {t}" for t in thoughts])
+                elif tool_calls:
+                    tool_map = {
+                        "evaluate_answer": "评价候选人回答",
+                        "design_question": "生成面试题目",
+                        "query_profile": "查询能力画像",
+                    }
+                    actions = [tool_map.get(tc, tc) for tc in tool_calls]
+                    payload["assistant_message"] = f"→ 决定执行以下操作：{ '、'.join(actions)}。"
+                
                 # 补上 designer 出题结果，供前端展示
                 designer = node_dict.get("designer_output") or {}
                 if designer.get("question_text"):
                     payload["designed_question"] = designer.get("question_text", "")
+                    payload["designed_category"] = designer.get("question_category", "technical")
+                    payload["designed_source"] = designer.get("source", "llm")
             if isinstance(node_dict, dict):
                 payload.update(_latest_evaluation_payload(node_dict))
             # 对于 ask_question/followup/closing 节点，将 assistant_message 附在 node_done
             # 里，供前端在没有 LLM token 流时（如有备题路径）填充 trace 面板内容
-            if ev_node in ("ask_question", "followup", "closing", "chief_respond") and isinstance(node_dict, dict):
-                am = node_dict.get("assistant_message", "")
+            if ev_node in ("ask_question", "followup", "closing", "chief_respond", "chief_think") and isinstance(node_dict, dict):
+                am = payload.get("assistant_message") or node_dict.get("assistant_message", "")
                 if am:
                     payload["assistant_message"] = am
             yield {"event": "node_done", "data": payload}

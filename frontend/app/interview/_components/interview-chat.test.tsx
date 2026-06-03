@@ -195,7 +195,7 @@ describe("InterviewChat", () => {
       }),
     );
     expect(mockStreamInterviewChat).not.toHaveBeenCalled();
-    expect(screen.getByText("分布式系统")).toBeInTheDocument();
+    expect(screen.getByText("调度中心：准备就绪")).toBeInTheDocument();
   });
 
   it("将一帧内的多个 delta 合并后再渲染", async () => {
@@ -257,10 +257,10 @@ describe("InterviewChat", () => {
     expect(input).not.toBeDisabled();
   });
 
-  it("初始渲染时复制按钮已启用（有开场引导消息）", () => {
+  it("初始渲染时没有会话内容，复制按钮禁用", () => {
     render(<InterviewChat />);
     const copyButton = screen.getByRole("button", { name: /复制会话/i });
-    expect(copyButton).not.toBeDisabled();
+    expect(copyButton).toBeDisabled();
   });
 
   it("有会话内容时，点击复制会话按钮可以将当前会话格式化并复制到剪贴板，显示已复制状态，2秒后恢复", async () => {
@@ -304,7 +304,7 @@ describe("InterviewChat", () => {
 
     // 检查复制的内容是否符合预期
     expect(writeTextMock).toHaveBeenCalledWith(
-      "【面试官】：你好！我还没有读取到本场面试的目标岗位。请直接输入你想练习的岗位或面试方向，我们将立即开始。\n\n【求职者】：练分布式系统\n\n【面试官】：请先介绍一个项目。",
+      "【求职者】：练分布式系统\n\n【面试官】：请先介绍一个项目。",
     );
 
     // 检查状态更新为“已复制”
@@ -428,9 +428,10 @@ describe("InterviewChat", () => {
     });
   });
 
-  it("初始渲染时显示 AI 开场引导消息，不为空白", () => {
+  it("初始渲染时不显示无目标岗位开场卡片", () => {
     render(<InterviewChat />);
-    expect(screen.getByText(/目标岗位/)).toBeInTheDocument();
+    expect(screen.queryByText(/目标岗位/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText("输入面试练习内容")).toBeInTheDocument();
   });
 
   it("closing 阶段显示「开启下一场模拟面试」按钮，输入框仍可使用", async () => {
@@ -462,7 +463,7 @@ describe("InterviewChat", () => {
     expect(screen.getByLabelText("输入面试练习内容")).not.toBeDisabled();
   });
 
-  it("点击「开启下一场模拟面试」后，消息重置为开场消息，报告消失", async () => {
+  it("点击「开启下一场模拟面试」后，消息清空，报告消失", async () => {
     mockPrepareDone();
     mockStreamInterviewChat.mockImplementation(
       async ({ onState, onReport }) => {
@@ -494,7 +495,7 @@ describe("InterviewChat", () => {
     await waitFor(() => {
       expect(screen.queryByText("本轮面试报告")).not.toBeInTheDocument();
     });
-    expect(screen.getByText(/目标岗位/)).toBeInTheDocument();
+    expect(screen.queryByText(/目标岗位/)).not.toBeInTheDocument();
   });
 
   it("收到 report 事件后，ReportCard 在聊天流末尾渲染", async () => {
@@ -616,7 +617,7 @@ describe("InterviewChat", () => {
     render(<InterviewChat />);
 
     // Phase 3: 有 target_role 时走多 Agent 准备流，首屏消息为空，不显示旧的开场消息
-    expect(screen.queryByText(/前端工程师/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/今天练/)).not.toBeInTheDocument();
     // 通用开场白也不显示（由 PreparationCard 接管）
     expect(screen.queryByText(/目标岗位/)).not.toBeInTheDocument();
   });
@@ -638,16 +639,16 @@ describe("InterviewChat", () => {
     await waitFor(() => {
       expect(screen.getByText(/今天练/)).toBeInTheDocument();
     });
-    expect(screen.getByText(/AI Agent 工程师/)).toBeInTheDocument();
+    expect(screen.getAllByText(/AI Agent 工程师/).length).toBeGreaterThan(0);
     expect(screen.getByLabelText("输入面试练习内容")).not.toBeDisabled();
   });
 
-  it("没有 sessionStorage 上下文时显示通用开场白", () => {
+  it("没有 sessionStorage 上下文时不显示通用开场白", () => {
     sessionStorage.removeItem("interview_context");
 
     render(<InterviewChat />);
 
-    expect(screen.getByText(/目标岗位/)).toBeInTheDocument();
+    expect(screen.queryByText(/目标岗位/)).not.toBeInTheDocument();
   });
 
   it("在用户发送回答后，渲染 TurnTraceCard，并通过 onTraceNode 事件更新卡片状态与评分", async () => {
@@ -745,7 +746,7 @@ describe("InterviewChat", () => {
     // 断言 TurnTraceCard 在聊天流中正确展现，包含评估分数与面试追问
     // 嵌入模式下 header 已移除（题目在气泡上方已显示），改为断言节点内容
     await waitFor(() => {
-      expect(screen.getByText(/评估/)).toBeInTheDocument();
+      expect(screen.getByText(/^评估$/)).toBeInTheDocument();
       expect(screen.getByText(/你提到的 RAG 是如何调优的/)).toBeInTheDocument();
     });
   });
@@ -829,7 +830,7 @@ describe("InterviewChat", () => {
       render(<InterviewChat />);
 
       await waitFor(() => {
-        expect(screen.getByText("AI 思考过程 - 准备阶段")).toBeInTheDocument();
+        expect(screen.getByText("调度中心：准备就绪")).toBeInTheDocument();
       });
       expect(screen.getByText("调度")).toBeInTheDocument();
       expect(
