@@ -294,3 +294,43 @@ async def test_supervisor_prevents_loop():
     result = await supervisor_node(state)
     assert result["next_action"] == "END"
     assert result["iteration_count"] == 7
+
+@pytest.mark.asyncio
+async def test_question_gen_uses_job_intel_when_available():
+    """question_gen 应优先用 job_intel.job_interpretation 的 hard_requirements / focus 出题。"""
+    from app.agents.prepare.nodes import question_gen_node
+
+    state: PrepareState = {
+        "user_id": "u1",
+        "direction": "AI Agent 工程师",
+        "user_direction": "AI Agent 工程师",
+        "user_background": "3 年 Python",
+        "weak_areas": [],
+        "jd_context": None,
+        "job_intel": {
+            "job_interpretation": {
+                "hard_requirements": ["分布式系统", "高并发"],
+                "soft_requirements": ["快节奏适应"],
+                "hidden_bonuses": ["LangGraph 经验"],
+                "summary": "字节核心业务",
+            },
+            "resume_match": {"strengths": ["Python"], "gaps": ["缺分布式"]},
+        },
+    }
+
+    mock_content = '[{"id":1,"question":"Q1","category":"technical","focus_area":"分布式","priority":1}]'
+    captured: dict[str, str] = {}
+
+    async def mock_astream(messages):
+        captured["prompt"] = messages[0].content
+        mock_chunk = MagicMock()
+        mock_chunk.content = mock_content
+        yield mock_chunk
+
+    with patch("app.agents.prepare.nodes._llm") as mock_llm:
+        mock_llm.return_value.with_config.return_value.astream = mock_astream
+        await question_gen_node(state)
+
+    # 验证 job_intel 的硬要求和 gap 进了出题 prompt
+    assert "分布式系统" in captured["prompt"]
+    assert "缺分布式" in captured["prompt"]

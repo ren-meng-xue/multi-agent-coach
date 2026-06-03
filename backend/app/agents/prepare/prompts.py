@@ -52,5 +52,6 @@ QUESTION_GEN_SYSTEM_PROMPT = """你是专业面试出题官。根据以下信息
 练习方向：{direction}
 目标岗位：{target_role}
 {jd_context_block}
+{job_intel_block}
 {user_background_block}
 {weak_areas_block}"""

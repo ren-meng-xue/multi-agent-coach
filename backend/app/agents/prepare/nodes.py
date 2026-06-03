@@ -193,6 +193,24 @@ async def question_gen_node(state: PrepareState) -> PrepareState:
     if jd_context:
         jd_block = f"JD 考点：{', '.join(jd_context.get('focus_areas', []))}\n技术栈：{', '.join(jd_context.get('key_skills', []))}"
 
+    # 优先用 research_agent 的 job_intel，没有则空字符串
+    job_intel = state.get("job_intel") or {}
+    job_intel_block = ""
+    if job_intel:
+        ji = job_intel.get("job_interpretation") or {}
+        rm = job_intel.get("resume_match") or {}
+        lines = []
+        if ji.get("hard_requirements"):
+            lines.append(f"岗位硬要求：{', '.join(ji['hard_requirements'])}")
+        if ji.get("soft_requirements"):
+            lines.append(f"岗位软偏好：{', '.join(ji['soft_requirements'])}")
+        if rm.get("gaps"):
+            lines.append(f"候选人对此岗位的 Gap（优先围绕这些出题）：{', '.join(rm['gaps'])}")
+        if rm.get("strengths"):
+            lines.append(f"候选人优势（可适当探测深度）：{', '.join(rm['strengths'])}")
+        if lines:
+            job_intel_block = "岗位调研情报：\n" + "\n".join(lines)
+
     weak_block = f"历史薄弱点（优先出题）：{', '.join(weak_areas)}" if weak_areas else ""
     user_background = state.get("user_background") or ""
     background_block = f"候选人背景/简历摘要：{user_background[:2000]}" if user_background else ""
@@ -202,6 +220,7 @@ async def question_gen_node(state: PrepareState) -> PrepareState:
         direction=direction,
         target_role=target_role,
         jd_context_block=jd_block,
+        job_intel_block=job_intel_block,
         user_background_block=background_block,
         weak_areas_block=weak_block,
     )
@@ -263,7 +282,9 @@ async def question_gen_node(state: PrepareState) -> PrepareState:
 # ─────────────────────────────────────────────
 
 class SupervisorDecision(BaseModel):
-    next: Literal["memory_search", "jd_analysis", "question_gen", "need_direction", "END"]
+    next: Literal[
+        "memory_search", "research_agent", "jd_analysis", "question_gen", "need_direction", "END"
+    ]
     direction: str = ""
     reasoning: str = ""
 
@@ -273,6 +294,7 @@ def _build_state_summary(state: PrepareState) -> str:
     jd_raw = state.get("jd_raw") or ""
     weak_areas = state.get("weak_areas") or []
     jd_context = state.get("jd_context")
+    job_intel = state.get("job_intel")
     user_background = state.get("user_background") or ""
     completed = state.get("completed_tools", [])
 
@@ -281,7 +303,8 @@ def _build_state_summary(state: PrepareState) -> str:
         f"是否提供用户背景: {'是' if user_background else '否'}",
         f"是否提供 JD: {'是' if jd_raw else '否'}",
         f"历史薄弱点: {', '.join(weak_areas) if weak_areas else '无'}",
-        f"JD 分析结果: {'已完成' if jd_context else '未完成'}",
+        f"岗位调研 (MCP): {'已完成' if job_intel else '未完成'}",
+        f"JD 浅分析 (兜底): {'已完成' if jd_context else '未完成'}",
         f"已运行 Agent: {', '.join(completed) if completed else '无'}",
     ]
     return "\n".join(summary)
