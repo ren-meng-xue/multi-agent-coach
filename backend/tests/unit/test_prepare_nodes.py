@@ -20,7 +20,10 @@ async def test_memory_search_returns_weak_areas_from_history():
 
     state: PrepareState = {"user_id": "user_123", "user_direction": "AI Agent 工程师"}
 
-    with patch("app.agents.prepare.nodes._get_recent_sessions", new_callable=AsyncMock, return_value=mock_sessions):
+    with (
+        patch("app.agents.prepare.nodes._get_recent_sessions", new_callable=AsyncMock, return_value=mock_sessions),
+        patch("app.agents.prepare.nodes._get_resume_summary", new_callable=AsyncMock, return_value=None),
+    ):
         result = await memory_search_node(state)
 
     assert len(result["weak_areas"]) > 0
@@ -34,10 +37,55 @@ async def test_memory_search_empty_when_no_history():
 
     state: PrepareState = {"user_id": "new_user"}
 
-    with patch("app.agents.prepare.nodes._get_recent_sessions", new_callable=AsyncMock, return_value=[]):
+    with (
+        patch("app.agents.prepare.nodes._get_recent_sessions", new_callable=AsyncMock, return_value=[]),
+        patch("app.agents.prepare.nodes._get_resume_summary", new_callable=AsyncMock, return_value=None),
+    ):
         result = await memory_search_node(state)
 
     assert result["weak_areas"] == []
+    assert result["user_background"] is None
+    assert "memory_search" in result["completed_tools"]
+
+
+@pytest.mark.asyncio
+async def test_memory_search_uses_resume_summary_when_background_missing():
+    """当前请求未带背景时，应从用户简历摘要兜底填入 user_background。"""
+    from app.agents.prepare.nodes import memory_search_node
+
+    state: PrepareState = {"user_id": "new_user", "user_background": None}
+
+    with (
+        patch("app.agents.prepare.nodes._get_recent_sessions", new_callable=AsyncMock, return_value=[]),
+        patch(
+            "app.agents.prepare.nodes._get_resume_summary",
+            new_callable=AsyncMock,
+            return_value="3年 Python 后端经验，做过 RAG 和 Agent 项目。",
+        ) as mock_resume,
+    ):
+        result = await memory_search_node(state)
+
+    mock_resume.assert_awaited_once_with("new_user")
+    assert result["weak_areas"] == []
+    assert result["user_background"] == "3年 Python 后端经验，做过 RAG 和 Agent 项目。"
+    assert "memory_search" in result["completed_tools"]
+
+
+@pytest.mark.asyncio
+async def test_memory_search_keeps_explicit_background():
+    """请求已带背景时，不应再用简历摘要覆盖用户本次输入。"""
+    from app.agents.prepare.nodes import memory_search_node
+
+    state: PrepareState = {"user_id": "u1", "user_background": "本次重点准备 LangGraph 项目"}
+
+    with (
+        patch("app.agents.prepare.nodes._get_recent_sessions", new_callable=AsyncMock, return_value=[]),
+        patch("app.agents.prepare.nodes._get_resume_summary", new_callable=AsyncMock) as mock_resume,
+    ):
+        result = await memory_search_node(state)
+
+    mock_resume.assert_not_awaited()
+    assert result["user_background"] == "本次重点准备 LangGraph 项目"
     assert "memory_search" in result["completed_tools"]
 
 
@@ -93,6 +141,7 @@ async def test_question_gen_returns_5_questions():
         "user_id": "u1",
         "direction": "AI Agent 工程师",
         "user_direction": "AI Agent 工程师",
+        "user_background": "做过一个多 Agent 面试教练项目",
         "weak_areas": ["量化结果欠缺"],
         "jd_context": None,
     }
@@ -110,6 +159,35 @@ async def test_question_gen_returns_5_questions():
     assert len(result["prepared_questions"]) == 5
     assert result["prepared_questions"][0]["priority"] == 1
     assert "question_gen" in result["completed_tools"]
+
+
+@pytest.mark.asyncio
+async def test_question_gen_injects_user_background_into_prompt():
+    from app.agents.prepare.nodes import question_gen_node
+
+    state: PrepareState = {
+        "user_id": "u1",
+        "direction": "AI Agent 工程师",
+        "user_direction": "AI Agent 工程师",
+        "user_background": "3年 Python 后端经验，做过 RAG 和 Agent 项目。",
+        "weak_areas": [],
+        "jd_context": None,
+    }
+
+    mock_content = '[{"id":1,"question":"Q1","category":"technical","focus_area":"RAG","priority":1}]'
+    captured: dict[str, str] = {}
+
+    async def mock_astream(messages):
+        captured["prompt"] = messages[0].content
+        mock_chunk = MagicMock()
+        mock_chunk.content = mock_content
+        yield mock_chunk
+
+    with patch("app.agents.prepare.nodes._llm") as mock_llm:
+        mock_llm.return_value.with_config.return_value.astream = mock_astream
+        await question_gen_node(state)
+
+    assert "候选人背景/简历摘要：3年 Python 后端经验，做过 RAG 和 Agent 项目。" in captured["prompt"]
 
 
 @pytest.mark.asyncio

@@ -47,6 +47,19 @@ async def _get_recent_sessions(user_id: str, limit: int = 5) -> list[Any]:
         return list(result.scalars().all())
 
 
+async def _get_resume_summary(user_id: str) -> str | None:
+    """读取用户简历摘要，用于新用户 prepare 背景兜底。"""
+    from sqlalchemy import select
+
+    from app.db.session import async_session_factory
+    from app.models.core import User
+
+    async with async_session_factory() as db:
+        result = await db.execute(select(User.resume_summary).where(User.id == user_id))
+        summary = result.scalar_one_or_none()
+        return summary.strip() if isinstance(summary, str) and summary.strip() else None
+
+
 def _extract_weak_areas(sessions: list[Any]) -> list[str]:
     """从历史 session report 提取薄弱点描述。"""
     weak = []
@@ -78,23 +91,31 @@ def _extract_weak_areas(sessions: list[Any]) -> list[str]:
 # ─────────────────────────────────────────────
 
 async def memory_search_node(state: PrepareState) -> PrepareState:
-    """查询历史面试表现，填充 weak_areas。"""
+    """查询历史面试表现，填充 weak_areas，并用简历摘要兜底用户背景。"""
     user_id = state.get("user_id", "")
     if not user_id:
         completed = state.get("completed_tools", [])
         return {**state, "weak_areas": [], "completed_tools": completed + ["memory_search"]}
 
     sessions = await _get_recent_sessions(user_id)
-
     weak_areas = _extract_weak_areas(sessions)
+    user_background = state.get("user_background")
+    if not user_background:
+        user_background = await _get_resume_summary(user_id)
 
     log.info(
         "memory_search_done",
         user_id=user_id,
         weak_count=len(weak_areas),
+        resume_summary_fallback=bool(user_background and not state.get("user_background")),
     )
     completed = state.get("completed_tools", [])
-    return {**state, "weak_areas": weak_areas, "completed_tools": completed + ["memory_search"]}
+    return {
+        **state,
+        "user_background": user_background,
+        "weak_areas": weak_areas,
+        "completed_tools": completed + ["memory_search"],
+    }
 
 
 def _llm(streaming: bool = False, timeout: int = 30) -> Any:
@@ -173,12 +194,15 @@ async def question_gen_node(state: PrepareState) -> PrepareState:
         jd_block = f"JD 考点：{', '.join(jd_context.get('focus_areas', []))}\n技术栈：{', '.join(jd_context.get('key_skills', []))}"
 
     weak_block = f"历史薄弱点（优先出题）：{', '.join(weak_areas)}" if weak_areas else ""
+    user_background = state.get("user_background") or ""
+    background_block = f"候选人背景/简历摘要：{user_background[:2000]}" if user_background else ""
 
     prompt = QUESTION_GEN_SYSTEM_PROMPT.format(
         count=5,
         direction=direction,
         target_role=target_role,
         jd_context_block=jd_block,
+        user_background_block=background_block,
         weak_areas_block=weak_block,
     )
 
@@ -249,10 +273,12 @@ def _build_state_summary(state: PrepareState) -> str:
     jd_raw = state.get("jd_raw") or ""
     weak_areas = state.get("weak_areas") or []
     jd_context = state.get("jd_context")
+    user_background = state.get("user_background") or ""
     completed = state.get("completed_tools", [])
 
     summary = [
         f"用户目标方向: {user_direction or '未提供'}",
+        f"是否提供用户背景: {'是' if user_background else '否'}",
         f"是否提供 JD: {'是' if jd_raw else '否'}",
         f"历史薄弱点: {', '.join(weak_areas) if weak_areas else '无'}",
         f"JD 分析结果: {'已完成' if jd_context else '未完成'}",
