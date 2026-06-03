@@ -65,6 +65,10 @@ class Settings(BaseSettings):
     # 跨域白名单
     cors_origins: list[str] = ["http://localhost:3000"]
 
+    # job-intel MCP server（Prepare 阶段 research_agent 使用）
+    mcp_job_intel_url: str = "http://localhost:9001/mcp"
+    mcp_job_intel_timeout_seconds: int = 90
+
     # 本地开发/QA 专用：显式开启后允许固定测试 token 跳过 Clerk。
     dev_auth_bypass: bool = False
     dev_auth_user_id: str = "dev-user"

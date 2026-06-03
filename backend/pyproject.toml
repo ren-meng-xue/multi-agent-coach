@@ -29,6 +29,7 @@ dependencies = [
     "mammoth>=1.8.0",
     "beautifulsoup4>=4.12.3",
     "rich>=13.9.4",
+    "langchain-mcp-adapters>=0.1.0",
 ]
 
 [project.scripts]
