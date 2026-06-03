@@ -220,6 +220,22 @@ async def stream_prepare_events(state: PrepareState) -> AsyncIterator[dict[str, 
         ev_name = event.get("event", "")
         ev_node = event.get("metadata", {}).get("langgraph_node", "")
 
+        # 工具级 SSE 事件：透传 research_agent ReAct loop 内部的自定义事件
+        if ev_name == "on_custom":
+            payload = event.get("data") or {}
+            kind = payload.get("kind", "")
+            if kind in {
+                "tool_thinking_start",
+                "tool_thinking_token",
+                "tool_thinking_done",
+                "tool_call_start",
+                "tool_call_done",
+            }:
+                forwarded = {k: v for k, v in payload.items() if k != "kind"}
+                forwarded.setdefault("node", ev_node or "research_agent")
+                yield {"event": kind, "data": forwarded}
+                continue
+
         # 节点开始
         # 对于 supervisor，允许重复触发；对于其他节点，只触发一次且避免重复 yield 同一节点
         if ev_name == "on_chain_start" and ev_node and (
