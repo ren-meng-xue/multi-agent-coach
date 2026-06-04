@@ -35,7 +35,68 @@ import type {
   PrepareSSEEvent,
   TraceNodeData,
   InterviewTraceNodeEvent,
+  ReactIteration,
 } from "@/lib/prepare-types";
+
+export function aggregateReactSteps(
+  prev: ReactIteration[],
+  event: PrepareSSEEvent,
+): ReactIteration[] {
+  const { data } = event;
+  const iter = data.iteration ?? 0;
+  const next = [...prev];
+
+  while (next.length <= iter) {
+    next.push({
+      index: next.length,
+      thinkContent: "",
+      thinkStatus: "running",
+      toolCalls: [],
+    });
+  }
+
+  const slot = { ...next[iter], toolCalls: [...next[iter].toolCalls] };
+
+  switch (event.event) {
+    case "tool_thinking_start":
+      slot.thinkStatus = "running";
+      break;
+    case "tool_thinking_token":
+      slot.thinkContent = slot.thinkContent + (data.text ?? "");
+      break;
+    case "tool_thinking_done":
+      slot.thinkStatus = "done";
+      break;
+    case "tool_call_start": {
+      slot.toolCalls.push({
+        stepId: data.step_id ?? `tool-${iter}-${slot.toolCalls.length}`,
+        toolName: data.tool_name ?? "unknown",
+        argsSummary: data.tool_args_summary ?? "",
+        status: "running",
+      });
+      break;
+    }
+    case "tool_call_done": {
+      const idx = slot.toolCalls.findIndex((t) => t.stepId === data.step_id);
+      if (idx >= 0) {
+        const isError = !!data.tool_error;
+        slot.toolCalls[idx] = {
+          ...slot.toolCalls[idx],
+          resultSummary: data.tool_result_summary,
+          elapsedMs: data.tool_elapsed_ms,
+          error: data.tool_error,
+          status: isError ? "error" : "done",
+        };
+      }
+      break;
+    }
+    default:
+      return prev;
+  }
+
+  next[iter] = slot;
+  return next;
+}
 
 function buildOpeningMessage(
   context: { target_role?: string; user_background?: string } | null,
@@ -205,6 +266,11 @@ export function InterviewChat() {
   const prepAbortRef = useRef<AbortController | null>(null);
   const assistantIndexRef = useRef<number | null>(null);
   const currentTurnIdRef = useRef<string | null>(null);
+  // 标记当前是否为 autoLaunch 路径（/prepare/launch）。
+  // 该路径后端负责发 phase_change 接管开场，prepStatus done effect 必须跳过，
+  // 否则 DB 写入间隙会让 effect 在 phase_change 到达前抢先注入 launch 节点动画，
+  // 造成第二面板出现后第一面板还在 running 状态的视觉 race condition。
+  const autoLaunchRef = useRef(false);
   const deltaBufferRef = useRef("");
   const traceBufferRef = useRef<
     { turnId: string; ev: InterviewTraceNodeEvent }[]
@@ -427,6 +493,7 @@ export function InterviewChat() {
     },
     { autoLaunch = false }: { autoLaunch?: boolean } = {},
   ) {
+    autoLaunchRef.current = autoLaunch;
     prepAbortRef.current?.abort();
     const abortController = new AbortController();
     prepAbortRef.current = abortController;
@@ -484,6 +551,20 @@ export function InterviewChat() {
       return;
     }
 
+    if (event.startsWith("tool_thinking") || event.startsWith("tool_call")) {
+      updatePrepareTraceMessage((payload) => ({
+        ...payload,
+        nodes: payload.nodes.map((n) => {
+          if (n.id !== "research_agent") return n;
+          return {
+            ...n,
+            reactSteps: aggregateReactSteps(n.reactSteps ?? [], ev),
+            reactStatus: "running" as const,
+          };
+        }),
+      }));
+    }
+
     if (event === "node_start") {
       updatePrepareTraceMessage((payload) => {
         const nodes = [...payload.nodes];
@@ -527,7 +608,26 @@ export function InterviewChat() {
         ...payload,
         nodes: payload.nodes.map((n) =>
           n.id === data.node
-            ? { ...n, status: "done" as const, elapsedMs: data.elapsed_ms }
+            ? {
+                ...n,
+                status: "done" as const,
+                elapsedMs: data.elapsed_ms,
+                ...(n.id === "research_agent"
+                  ? { reactStatus: "done" as const }
+                  : {}),
+                weakAreas: data.weak_areas,
+                recordCount: data.record_count,
+                reactIterations: data.react_iterations,
+                reactToolCount: data.react_tool_count,
+                companyName: data.company_name,
+                gaps: data.gaps,
+                jdCompany: data.jd_company,
+                jdRole: data.jd_role,
+                jdDifficulty: data.jd_difficulty,
+                jdKeySkills: data.jd_key_skills,
+                questionStats: data.question_stats,
+                questionTotal: data.question_total,
+              }
             : n,
         ),
       }));
@@ -559,6 +659,7 @@ export function InterviewChat() {
       updatePrepareTraceMessage((payload) => ({
         ...payload,
         status: "done",
+        nodes: payload.nodes.map((n) => ({ ...n, status: "done" as const })),
         questions: data.prepared_questions ?? [],
         summary: data.summary ?? "",
         direction: data.direction,
@@ -574,6 +675,13 @@ export function InterviewChat() {
 
       setPrepStatus(null);
       setIsStreaming(true);
+
+      // 防御性地将准备阶段面板及其所有子节点强行闭合为已完成状态，卡死面板时序状态
+      updatePrepareTraceMessage((payload) => ({
+        ...payload,
+        status: "done",
+        nodes: payload.nodes.map((n) => ({ ...n, status: "done" as const })),
+      }));
 
       // updater 外捕获 assistantIndex 后再写入 ref，规避 StrictMode 下 functional
       // updater 被双调用对 ref 产生 race；之后到达的 turn_delta 走 scheduleDeltaFlush
@@ -883,6 +991,7 @@ export function InterviewChat() {
             : item,
         ),
       );
+      finishTurnTrace(turnId);
     } finally {
       if (!abortController.signal.aborted) {
         setIsStreaming(false);
@@ -896,11 +1005,15 @@ export function InterviewChat() {
   handleStartFirstQuestionRef.current = handleStartFirstQuestion;
 
   // 准备完成后自动加"进入面试"节点并触发开场。
-  // /prepare/launch 路径下后端会发 phase_change 接管开场，此 effect 应跳过；
-  // /prepare/resume 路径（need_direction 后的方向追问）后端不会接管，此 effect 兜底进入面试。
+  // /prepare/launch 路径下后端会发 phase_change 接管开场，此 effect 必须跳过：
+  //   后端 _persist_prepare_trace DB 写入会在 done 和 phase_change 之间制造时间间隙，
+  //   若 done/phase_change 落在不同 TCP 包则前端在 phase_change 到达前就触发此 effect，
+  //   导致第一面板在 phase_change（第二面板出现）之后仍以 running 状态注入 launch 节点。
+  // /prepare/resume 路径（need_direction 后的方向追问）后端不发 phase_change，此 effect 兜底进入面试。
   useEffect(() => {
     if (prepStatus !== "done") return;
     if (currentTurnIdRef.current) return;
+    if (autoLaunchRef.current) return;
 
     updatePrepareTraceMessage((payload) => ({
       ...payload,
@@ -1125,6 +1238,7 @@ export function InterviewChat() {
 
     // 若当前处于等待面试练习方向的交互追问阶段
     if (prepStatus === "waiting_direction") {
+      autoLaunchRef.current = false;
       setMessages((prev) => [...prev, { role: "user", content }]);
       setPrepStatus("running");
       updatePrepareTraceMessage((payload) => ({
@@ -1258,6 +1372,7 @@ export function InterviewChat() {
             : item,
         ),
       );
+      finishTurnTrace(turnId);
     } finally {
       if (!abortController.signal.aborted) {
         setIsStreaming(false);
@@ -1351,6 +1466,7 @@ export function InterviewChat() {
                   status={message.payload.status}
                   nodes={message.payload.nodes}
                   direction={message.payload.direction}
+                  summary={message.payload.summary}
                 />
               );
             }
@@ -1403,30 +1519,34 @@ export function InterviewChat() {
               return null;
             }
             if (associatedTrace) {
-              // 题目已出现在看版 header，不再单独渲染气泡避免重复
-              const hasDesignedQuestion = associatedTrace.payload.nodes.some(
+              const nodeWithQuestion = associatedTrace.payload.nodes.find(
                 (n) => n.designedQuestion,
               );
-              if (hasDesignedQuestion) {
-                return (
-                  <TurnTraceCard
-                    key={`${message.role}-${index}`}
-                    status={associatedTrace.payload.status}
-                    nodes={associatedTrace.payload.nodes}
-                    turnIndex={associatedTrace.payload.turnIndex}
-                    summaryScore={associatedTrace.payload.summaryScore}
-                    isOpening={associatedTrace.payload.isOpening}
-                    isEmbedded={false}
-                  />
-                );
-              }
-              // 追问等无 designedQuestion 的轮次：气泡 + 看版并列
+              const hasDesignedQuestion = !!nodeWithQuestion?.designedQuestion;
+              const isFollowup = associatedTrace.payload.nodes.some(
+                (n) => n.followupFocus,
+              );
+
+              const shouldRenderHero =
+                hasDesignedQuestion &&
+                associatedTrace.payload.status === "done" &&
+                !associatedTrace.payload.isOpening;
+
               return (
                 <Fragment key={`${message.role}-${index}`}>
-                  <MessageBubble
-                    message={message}
-                    isPending={isStreaming && index === messages.length - 1}
-                  />
+                  {shouldRenderHero && (
+                    <HeroQuestionCard
+                      question={nodeWithQuestion.designedQuestion!}
+                      category={nodeWithQuestion.designedCategory}
+                      isFollowup={isFollowup}
+                    />
+                  )}
+                  {(!hasDesignedQuestion || (!shouldRenderHero && message.content)) && (
+                    <MessageBubble
+                      message={message}
+                      isPending={isStreaming && index === messages.length - 1}
+                    />
+                  )}
                   <TurnTraceCard
                     status={associatedTrace.payload.status}
                     nodes={associatedTrace.payload.nodes}
@@ -1529,4 +1649,41 @@ function formatStageLabel(stage: InterviewProgressState["stage"]) {
   if (stage === "opening") return "待命 · 准备开始";
   if (stage === "closing") return "本轮面试已结束";
   return "正式面试进行中";
+}
+
+function HeroQuestionCard({
+  question,
+  category,
+  isFollowup,
+}: {
+  question: string;
+  category?: string;
+  isFollowup: boolean;
+}) {
+  let badgeText = "技术";
+  if (isFollowup) {
+    badgeText = "追问";
+  } else if (category === "behavioral") {
+    badgeText = "行为";
+  } else if (category === "system_design") {
+    badgeText = "系统设计";
+  } else if (category === "technical") {
+    badgeText = "技术";
+  } else if (category) {
+    badgeText = category;
+  }
+
+  return (
+    <div className="bg-gradient-to-br from-[#f0fdf4] to-[#f0f9ff] border-[1.5px] border-[#6ee7b7] rounded-xl p-3.5 mb-4 shadow-sm animate-in fade-in slide-in-from-top-1 duration-500">
+      <div className="text-[10px] font-bold text-[#059669] flex items-center gap-1.5 mb-1.5">
+        📝 面试官追问
+        <span className="text-[9px] bg-[#d1fae5] text-[#065f46] rounded px-1.5 py-0.5 font-bold">
+          {badgeText}
+        </span>
+      </div>
+      <p className="text-sm font-semibold text-[#064e3b] leading-relaxed">
+        {question}
+      </p>
+    </div>
+  );
 }

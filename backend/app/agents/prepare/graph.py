@@ -30,7 +30,11 @@ def _state_delta(before: PrepareState, after: PrepareState) -> PrepareState:
 
 async def _memory_search_delta(state: PrepareState) -> PrepareState:
     result = await nodes.memory_search_node(state)
-    return _state_delta(state, result)
+    delta = dict(_state_delta(state, result))
+    # Force include weak_areas: even when unchanged from before state (resume path),
+    # stream_prepare_events must emit it in node_done SSE payload.
+    delta["weak_areas"] = result.get("weak_areas") or []
+    return cast(PrepareState, delta)
 
 
 async def _research_agent_lazy(state):
@@ -149,6 +153,9 @@ def _supervisor_router(state: PrepareState) -> str | list[str]:
             return targets
         if targets:
             return targets[0]
+        # 两个节点都已完成但 supervisor 仍发 memory_search/research_agent，
+        # 防御性推进到下一阶段，避免重复执行
+        return "question_gen"
     return action
 
 
@@ -220,6 +227,22 @@ async def stream_prepare_events(state: PrepareState) -> AsyncIterator[dict[str, 
         ev_name = event.get("event", "")
         ev_node = event.get("metadata", {}).get("langgraph_node", "")
 
+        # 工具级 SSE 事件：透传 research_agent ReAct loop 内部的自定义事件
+        if ev_name == "on_custom":
+            payload = event.get("data") or {}
+            kind = payload.get("kind", "")
+            if kind in {
+                "tool_thinking_start",
+                "tool_thinking_token",
+                "tool_thinking_done",
+                "tool_call_start",
+                "tool_call_done",
+            }:
+                forwarded = {k: v for k, v in payload.items() if k != "kind"}
+                forwarded.setdefault("node", ev_node or "research_agent")
+                yield {"event": kind, "data": forwarded}
+                continue
+
         # 节点开始
         # 对于 supervisor，允许重复触发；对于其他节点，只触发一次且避免重复 yield 同一节点
         if ev_name == "on_chain_start" and ev_node and (
@@ -273,6 +296,42 @@ async def stream_prepare_events(state: PrepareState) -> AsyncIterator[dict[str, 
                 for line in _node_completion_trace(ev_node, node_state):
                     yield {"event": "node_token", "data": {"node": ev_node, "text": f"• {line}\n"}}
 
+                if ev_node == "memory_search":
+                    weak_areas = node_state.get("weak_areas") or []
+                    extra["weak_areas"] = weak_areas
+                    extra["record_count"] = len(weak_areas)
+                elif ev_node == "research_agent":
+                    job_intel = node_state.get("job_intel") or {}
+                    trace = job_intel.get("_trace") or {}
+                    extra["react_iterations"] = trace.get("iterations") or 0
+                    extra["react_tool_count"] = len(trace.get("tools_used") or [])
+                    
+                    company_profile = job_intel.get("company_profile") or {}
+                    company_name = company_profile.get("name")
+                    if not company_name:
+                        summary = job_intel.get("summary") or ""
+                        company_name = summary[:20] if summary else ""
+                    extra["company_name"] = company_name
+                    
+                    resume_match = job_intel.get("resume_match") or {}
+                    extra["gaps"] = (resume_match.get("gaps") or [])[:3]
+                elif ev_node == "jd_analysis":
+                    jd_context = node_state.get("jd_context") or {}
+                    extra["jd_company"] = jd_context.get("company")
+                    extra["jd_role"] = jd_context.get("role")
+                    extra["jd_difficulty"] = jd_context.get("difficulty")
+                    extra["jd_key_skills"] = (jd_context.get("key_skills") or [])[:6]
+                elif ev_node == "question_gen":
+                    prepared_questions = node_state.get("prepared_questions") or []
+                    stats = {}
+                    for q in prepared_questions:
+                        cat = q.get("category")
+                        if cat:
+                            stats[cat] = stats.get(cat, 0) + 1
+                    
+                    extra["question_stats"] = {k: v for k, v in stats.items() if v > 0}
+                    extra["question_total"] = len(prepared_questions)
+
             yield {"event": "node_done", "data": {"node": ev_node, **extra}}
 
         # 全图结束
@@ -301,11 +360,17 @@ async def stream_prepare_events(state: PrepareState) -> AsyncIterator[dict[str, 
                     log.warning("prepare_state_cache_failed", session_id=session_id, error=str(exc))
 
             if not final.get("need_direction"):
+                raw_intel = final.get("job_intel")
+                intel: dict | None = (
+                    {k: v for k, v in raw_intel.items() if k != "_trace"}
+                    if isinstance(raw_intel, dict)
+                    else None
+                )
                 yield {
                     "event": "done",
                     "data": {
                         "jd_context": final.get("jd_context"),
-                        "job_intel": final.get("job_intel"),
+                        "job_intel": intel,
                         "prepared_questions": final.get("prepared_questions", []),
                         "summary": final.get("summary", ""),
                         "direction": final.get("direction", ""),

@@ -170,6 +170,21 @@ _TURN_FORWARD_EVENTS = frozenset({
     "node_start", "node_token", "node_done", "delta", "state", "report",
 })
 
+_PREPARE_NODE_DONE_FIELDS = {
+    "weak_areas": "weakAreas",
+    "record_count": "recordCount",
+    "react_iterations": "reactIterations",
+    "react_tool_count": "reactToolCount",
+    "company_name": "companyName",
+    "gaps": "gaps",
+    "jd_company": "jdCompany",
+    "jd_role": "jdRole",
+    "jd_difficulty": "jdDifficulty",
+    "jd_key_skills": "jdKeySkills",
+    "question_stats": "questionStats",
+    "question_total": "questionTotal",
+}
+
 
 def _empty_prepare_trace() -> dict:
     return {
@@ -215,7 +230,58 @@ def _apply_prepare_trace_event(payload: dict, ev: dict) -> None:
                 node["status"] = "done"
                 if data.get("elapsed_ms") is not None:
                     node["elapsedMs"] = data.get("elapsed_ms")
+                if node_id == "research_agent":
+                    node["reactStatus"] = "done"
+                for source_key, target_key in _PREPARE_NODE_DONE_FIELDS.items():
+                    if source_key in data:
+                        node[target_key] = data.get(source_key)
                 break
+        return
+
+    if event in (
+        "tool_thinking_start",
+        "tool_thinking_token",
+        "tool_thinking_done",
+        "tool_call_start",
+        "tool_call_done",
+    ) and node_id:
+        iteration = data.get("iteration", 0)
+        step_id = data.get("step_id", "")
+        for node in payload.setdefault("nodes", []):
+            if node.get("id") != node_id:
+                continue
+            react_steps: list = node.setdefault("reactSteps", [])
+            while len(react_steps) <= iteration:
+                react_steps.append({
+                    "index": len(react_steps),
+                    "thinkContent": "",
+                    "thinkStatus": "running",
+                    "toolCalls": [],
+                })
+            slot = react_steps[iteration]
+            if event == "tool_thinking_start":
+                slot["thinkStatus"] = "running"
+            elif event == "tool_thinking_token":
+                slot["thinkContent"] = slot.get("thinkContent", "") + (data.get("text") or "")
+            elif event == "tool_thinking_done":
+                slot["thinkStatus"] = "done"
+            elif event == "tool_call_start":
+                slot.setdefault("toolCalls", []).append({
+                    "stepId": step_id,
+                    "toolName": data.get("tool_name", "unknown"),
+                    "argsSummary": data.get("tool_args_summary", ""),
+                    "status": "running",
+                })
+            elif event == "tool_call_done":
+                is_error = bool(data.get("tool_error"))
+                for tc in slot.get("toolCalls", []):
+                    if tc.get("stepId") == step_id:
+                        tc["resultSummary"] = data.get("tool_result_summary")
+                        tc["elapsedMs"] = data.get("tool_elapsed_ms")
+                        tc["error"] = data.get("tool_error")
+                        tc["status"] = "error" if is_error else "done"
+                        break
+            break
         return
 
     if event == "done":

@@ -40,6 +40,8 @@ export function AgentTrace({ nodes, nodeTitles, nodeLabels, summaryScore }: Agen
             designedCategory={node.designedCategory}
             designedSource={node.designedSource}
             summaryScore={node.summaryScore ?? (node.id === "evaluator" ? summaryScore : undefined)}
+            reactSteps={node.reactSteps}
+            reactStatus={node.reactStatus}
           />
         );
       })}

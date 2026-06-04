@@ -20,10 +20,49 @@ from app.agents.prepare.state import PrepareState
 from app.core.logging import get_logger
 from app.services.mcp_client import get_mcp_tools
 
+try:
+    from langgraph.config import get_stream_writer  # type: ignore
+except ImportError:  # 老版本 LangGraph 兼容
+    def get_stream_writer():  # type: ignore
+        return None
+
 log = get_logger("app.agents.prepare.research_agent")
 
 MAX_ITERATIONS = 6
 TOTAL_TIMEOUT_SECONDS = 90
+
+
+def _summarize_args(args: dict) -> str:
+    """工具入参摘要：截短长字符串、隐藏 list/dict 内容，前端可直接展示。"""
+    parts: list[str] = []
+    for k, v in (args or {}).items():
+        if isinstance(v, str):
+            v_short = v[:60] + ("..." if len(v) > 60 else "")
+            parts.append(f'{k}="{v_short}"')
+        elif isinstance(v, list):
+            parts.append(f"{k}=<list len={len(v)}>")
+        elif isinstance(v, dict):
+            parts.append(f"{k}=<dict len={len(v)}>")
+        else:
+            parts.append(f"{k}={v}")
+    return ", ".join(parts)
+
+
+def _summarize_result(result) -> str:
+    """工具出参摘要：dict 列 key、list 给计数、string 截短。"""
+    if isinstance(result, dict):
+        keys = list(result.keys())[:6]
+        body = ", ".join(keys)
+        suffix = "..." if len(result) > 6 else ""
+        return "{" + body + "}" + suffix
+    if isinstance(result, list):
+        return f"[{len(result)} 条结果]"
+    if isinstance(result, str):
+        if len(result) > 120:
+            return result[:120] + "..."
+        return result
+    s = str(result)
+    return s[:120] + ("..." if len(s) > 120 else "")
 
 
 def _chat_model() -> Any:
@@ -107,6 +146,17 @@ async def _force_finalize(
         return None
 
 
+async def _collect_stream_chunks(model: Any, messages: list, emit_token) -> list:
+    """消费一次 LLM 流式响应；调用方负责套总预算 timeout。"""
+    chunks = []
+    async for chunk in model.astream(messages):
+        chunks.append(chunk)
+        token = chunk.content if isinstance(chunk.content, str) else ""
+        if token:
+            emit_token(token)
+    return chunks
+
+
 async def research_agent_node(state: PrepareState) -> PrepareState:
     """research_agent 节点：ReAct loop 调 MCP 工具，产出 job_intel 写 State。"""
     completed = state.get("completed_tools", [])
@@ -117,6 +167,20 @@ async def research_agent_node(state: PrepareState) -> PrepareState:
         return {**state, "job_intel": None, "completed_tools": completed + ["research_agent"]}
 
     started = time.time()
+
+    try:
+        writer = get_stream_writer()
+    except Exception:
+        writer = None
+
+    def _emit(payload: dict) -> None:
+        """安全 emit：writer 为 None 或抛错时静默跳过，绝不阻断业务。"""
+        if writer is None:
+            return
+        try:
+            writer(payload)
+        except Exception as exc:
+            log.warning("research_agent_emit_failed", error=str(exc))
 
     # 拉 MCP 工具
     try:
@@ -145,17 +209,45 @@ async def research_agent_node(state: PrepareState) -> PrepareState:
     iteration = 0
 
     try:
-        for iteration in range(1, MAX_ITERATIONS + 1):
+        for iteration in range(MAX_ITERATIONS):
             remaining = _remaining_budget_seconds(started)
             if remaining <= 0:
                 log.warning("research_agent_total_timeout", elapsed_ms=int((time.time() - started) * 1000))
                 break
 
-            response = await asyncio.wait_for(
-                model.ainvoke(messages),
+            think_step_id = f"think-{iteration}"
+            _emit({"kind": "tool_thinking_start", "iteration": iteration, "step_id": think_step_id})
+
+            def _emit_thinking_token(
+                token: str,
+                current_iteration: int = iteration,
+                current_step_id: str = think_step_id,
+            ) -> None:
+                _emit({
+                    "kind": "tool_thinking_token",
+                    "iteration": current_iteration,
+                    "step_id": current_step_id,
+                    "text": token,
+                })
+
+            # 流式调用 LLM；整段流式消费必须受 research_agent 剩余总预算约束。
+            chunks = await asyncio.wait_for(
+                _collect_stream_chunks(model, messages, _emit_thinking_token),
                 timeout=remaining,
             )
+
+            if chunks:
+                response = chunks[0]
+                for c in chunks[1:]:
+                    response = response + c
+            else:
+                response = await asyncio.wait_for(
+                    model.ainvoke(messages),
+                    timeout=_remaining_budget_seconds(started),
+                )
+
             messages.append(response)
+            _emit({"kind": "tool_thinking_done", "iteration": iteration, "step_id": think_step_id})
 
             if isinstance(response.content, str) and response.content.strip():
                 final_thought = response.content.strip()[:300]
@@ -178,9 +270,27 @@ async def research_agent_node(state: PrepareState) -> PrepareState:
                 name = tc.get("name", "")
                 args = tc.get("args", {}) or {}
                 call_id = tc.get("id", name)
+                step_id = f"tool-{iteration}-{call_id}"
+
+                _emit({
+                    "kind": "tool_call_start",
+                    "iteration": iteration,
+                    "step_id": step_id,
+                    "tool_name": name,
+                    "tool_args_summary": _summarize_args(args),
+                })
+
+                t0 = time.time()
                 tool = tools_by_name.get(name)
                 if tool is None:
                     content = json.dumps({"error": f"unknown tool: {name}"})
+                    _emit({
+                        "kind": "tool_call_done",
+                        "iteration": iteration,
+                        "step_id": step_id,
+                        "tool_error": f"unknown tool: {name}",
+                        "tool_elapsed_ms": 0,
+                    })
                 else:
                     try:
                         result = await asyncio.wait_for(tool.ainvoke(args), timeout=min(30, remaining))
@@ -198,17 +308,28 @@ async def research_agent_node(state: PrepareState) -> PrepareState:
                             partial.setdefault("search_results", {}).setdefault("general", []).extend(result if isinstance(result, list) else [])
                         elif name == "extract_resume" and isinstance(result, dict):
                             partial["resume_content"] = result.get("summary", "")
+
+                        _emit({
+                            "kind": "tool_call_done",
+                            "iteration": iteration,
+                            "step_id": step_id,
+                            "tool_result_summary": _summarize_result(result),
+                            "tool_elapsed_ms": int((time.time() - t0) * 1000),
+                        })
                     except Exception as exc:
                         log.warning("research_agent_tool_failed", tool=name, error=str(exc))
                         content = json.dumps({"error": str(exc)})
+                        _emit({
+                            "kind": "tool_call_done",
+                            "iteration": iteration,
+                            "step_id": step_id,
+                            "tool_error": str(exc),
+                            "tool_elapsed_ms": int((time.time() - t0) * 1000),
+                        })
 
                 messages.append(ToolMessage(content=content, tool_call_id=call_id, name=name))
-    except TimeoutError as exc:
-        log.warning(
-            "research_agent_iter_timeout",
-            error=str(exc),
-            elapsed_ms=int((time.time() - started) * 1000),
-        )
+    except TimeoutError:
+        log.warning("research_agent_iter_timeout")
     except Exception as exc:
         log.warning(
             "research_agent_loop_failed",
@@ -232,7 +353,7 @@ async def research_agent_node(state: PrepareState) -> PrepareState:
 
     job_intel["_trace"] = {
         "tools_used": tools_used,
-        "iterations": iteration,
+        "iterations": iteration + 1,
         "elapsed_ms": elapsed_ms,
         "final_thought": final_thought,
     }
@@ -240,7 +361,7 @@ async def research_agent_node(state: PrepareState) -> PrepareState:
     log.info(
         "research_agent_done",
         tools_used=tools_used,
-        iterations=job_intel["_trace"]["iterations"],
+        iterations=iteration + 1,
         elapsed_ms=elapsed_ms,
         has_report=True,
     )

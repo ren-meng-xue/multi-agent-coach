@@ -95,6 +95,8 @@ export const PREPARE_NODE_TITLES: Record<string, string> = {
 
 /** 格式化 Trace 节点的 tokens，过滤 JSON 并美化输出。 */
 export function formatTraceTokens(id: string, tokens: string): string {
+  if (id === "question_gen")
+    return "已为你定制 5 道专属面试题，面试中将逐题呈现。";
   if (!tokens) return "(无详细信息)";
 
   // 其他节点：过滤 JSON 标记，保留普通文本

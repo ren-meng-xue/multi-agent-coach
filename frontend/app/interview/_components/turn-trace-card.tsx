@@ -37,7 +37,7 @@ export function TurnTraceCard({
   expanded: controlledExpanded,
   onToggle: controlledOnToggle,
 }: TurnTraceCardProps) {
-  const [internalExpanded, setInternalExpanded] = useState(true);
+  const [internalExpanded, setInternalExpanded] = useState(false);
 
   const expanded =
     controlledExpanded !== undefined ? controlledExpanded : internalExpanded;
@@ -64,16 +64,9 @@ export function TurnTraceCard({
     );
   }
 
-  // 独立模式：完整 TracePanelShell（含 header）
-  const designedQuestion = nodes.find(
-    (n) => n.designedQuestion,
-  )?.designedQuestion;
-
   let headerText = "";
   if (error) {
     headerText = error;
-  } else if (designedQuestion && isDone) {
-    headerText = designedQuestion;
   } else if (isOpening || turnIndex === 1) {
     headerText = isDone ? "AI 面试官 · 准备就绪" : "AI 面试官 · 正在准备题目";
   } else {
@@ -88,7 +81,7 @@ export function TurnTraceCard({
         expanded={expanded}
         title={headerText}
         tone={error ? "error" : isDone ? "success" : "default"}
-        toggleText={expanded ? "收起依据" : "查看依据"}
+        toggleText={expanded ? "收起思考过程" : "查看 AI 思考过程"}
         onToggle={onToggle}
       >
         <AgentTrace
