@@ -64,6 +64,18 @@ export interface PrepareSSEEvent {
     tool_result_summary?: string;
     tool_elapsed_ms?: number;
     tool_error?: string;
+    weak_areas?: string[];
+    record_count?: number;
+    react_iterations?: number;
+    react_tool_count?: number;
+    company_name?: string;
+    gaps?: string[];
+    jd_company?: string;
+    jd_role?: string;
+    jd_difficulty?: string;
+    jd_key_skills?: string[];
+    question_stats?: Record<string, number>;
+    question_total?: number;
   };
 }
 
@@ -90,6 +102,18 @@ export interface TraceNodeData {
   reactSteps?: ReactIteration[];
   /** research_agent 节点专属：ReAct loop 整体状态 */
   reactStatus?: "running" | "done";
+  weakAreas?: string[];
+  recordCount?: number;
+  reactIterations?: number;
+  reactToolCount?: number;
+  companyName?: string;
+  gaps?: string[];
+  jdCompany?: string;
+  jdRole?: string;
+  jdDifficulty?: string;
+  jdKeySkills?: string[];
+  questionStats?: Record<string, number>;
+  questionTotal?: number;
 }
 
 export interface InterviewTraceNodeEvent {

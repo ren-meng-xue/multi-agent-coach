@@ -4,7 +4,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, AIMessageChunk
 
 
 def _mock_tool(name: str, return_value):
@@ -162,6 +162,40 @@ async def test_research_agent_tool_timeout_uses_remaining_budget():
     assert wait_for_timeouts[0] == 20
     assert wait_for_timeouts[1] == 1
     assert all(timeout <= 20 for timeout in wait_for_timeouts)
+
+
+@pytest.mark.asyncio
+async def test_research_agent_streaming_llm_uses_remaining_budget():
+    """流式 LLM 消费必须继续受 research_agent 剩余总预算约束。"""
+    from app.agents.prepare.research_agent import research_agent_node
+
+    report_tool = _mock_tool("generate_position_report", {"job_interpretation": {}})
+
+    async def stream_response(messages):
+        yield AIMessageChunk(content="调研完成")
+
+    mock_model = MagicMock()
+    mock_model.bind_tools = MagicMock(return_value=mock_model)
+    mock_model.astream = stream_response
+    mock_model.ainvoke = AsyncMock()
+
+    time_values = iter([0, 70, 70, 70, 70])
+    wait_for_timeouts: list[float] = []
+
+    async def fake_wait_for(awaitable, timeout):
+        wait_for_timeouts.append(timeout)
+        return await awaitable
+
+    with (
+        patch("app.agents.prepare.research_agent.get_mcp_tools", new_callable=AsyncMock, return_value=[report_tool]),
+        patch("app.agents.prepare.research_agent._chat_model", return_value=mock_model),
+        patch("app.agents.prepare.research_agent.time.time", side_effect=lambda: next(time_values)),
+        patch("app.agents.prepare.research_agent.asyncio.wait_for", side_effect=fake_wait_for),
+    ):
+        await research_agent_node({"user_id": "u1", "jd_raw": "JD..."})
+
+    assert wait_for_timeouts[0] == 20
+    mock_model.ainvoke.assert_not_awaited()
 
 
 @pytest.mark.asyncio

@@ -217,3 +217,65 @@ async def test_prepare_graph_runs_jd_analysis_after_research_fallback(monkeypatc
     assert visited.index("research_agent") < visited.index("jd_analysis")
     assert final["job_intel"] is None
     assert final["jd_context"]["role"] == "AI Agent 工程师"
+
+
+@pytest.mark.asyncio
+async def test_memory_search_delta_always_includes_weak_areas_when_unchanged(monkeypatch):
+    """resume 路径：before state 已有 weak_areas，memory_search_node 返回相同值，
+    _memory_search_delta 仍须强制把 weak_areas 写入 delta，
+    使 stream_prepare_events 的 node_done SSE 里 weak_areas 不为空。"""
+    from app.agents.prepare import graph as graph_module
+
+    SAME_WEAK_AREAS = ["系统设计", "并发编程"]
+
+    # memory_search_node 返回与 before state 完全相同的 weak_areas
+    async def fake_memory_search(state: PrepareState) -> PrepareState:
+        return {
+            **state,
+            "weak_areas": SAME_WEAK_AREAS,
+            "completed_tools": state.get("completed_tools", []) + ["memory_search"],
+        }
+
+    async def fake_supervisor(state: PrepareState) -> PrepareState:
+        completed = state.get("completed_tools", [])
+        if "question_gen" in completed:
+            return {**state, "next_action": "END"}
+        if "memory_search" in completed:
+            return {**state, "next_action": "question_gen"}
+        return {**state, "next_action": "memory_search"}
+
+    async def fake_question_gen(state: PrepareState) -> PrepareState:
+        return {
+            **state,
+            "prepared_questions": [],
+            "summary": "done",
+            "completed_tools": state.get("completed_tools", []) + ["question_gen"],
+        }
+
+    monkeypatch.setattr(graph_module.nodes, "memory_search_node", fake_memory_search)
+    monkeypatch.setattr(graph_module.nodes, "supervisor_node", fake_supervisor)
+    monkeypatch.setattr(graph_module.nodes, "question_gen_node", fake_question_gen)
+
+    # 重新编译 graph，使 monkeypatch 生效
+    graph = graph_module._build_graph()
+    monkeypatch.setattr(graph_module, "_prepare_graph", graph)
+
+    # before state 里已有 weak_areas（模拟从 Redis 恢复的 resume 路径）
+    init_state: PrepareState = {
+        "session_id": "s-resume",
+        "user_id": "u1",
+        "weak_areas": SAME_WEAK_AREAS,  # 与 memory_search_node 返回值相同
+        "completed_tools": [],
+    }
+
+    node_done_events: list[dict] = []
+    async for sse in graph_module.stream_prepare_events(init_state):
+        if sse.get("event") == "node_done" and sse.get("data", {}).get("node") == "memory_search":
+            node_done_events.append(sse)
+
+    assert node_done_events, "应当收到至少一个 memory_search node_done 事件"
+    payload = node_done_events[0]["data"]
+    assert "weak_areas" in payload, "node_done 必须包含 weak_areas 字段"
+    assert payload["weak_areas"] == SAME_WEAK_AREAS, (
+        f"weak_areas 应为 {SAME_WEAK_AREAS}，实际为 {payload['weak_areas']}"
+    )

@@ -10,12 +10,14 @@ interface PreparationCardProps {
   status: "running" | "done" | "waiting_direction";
   nodes: TraceNodeData[];
   direction?: string;
+  summary?: string;
 }
 
 export function PreparationCard({
   status,
   nodes,
   direction,
+  summary,
 }: PreparationCardProps) {
   const [expanded, setExpanded] = useState(status === "running" || nodes.length > 0);
 
@@ -47,6 +49,22 @@ export function PreparationCard({
         onToggle={() => setExpanded((v) => !v)}
       >
         <AgentTrace nodes={nodes} />
+        {summary && (
+          <div className="animate-in fade-in duration-500">
+            <div className="border-t border-dashed border-slate-200 my-4" />
+            <div className="bg-[#fafaf9] border border-[#e7e5e4] rounded-xl p-3 mt-0">
+              <div className="flex items-center gap-1.5 mb-2">
+                <div className="w-4 h-4 rounded-full bg-[#1e293b] shrink-0" />
+                <span className="text-[10px] font-bold text-[#44403c]">
+                  准备完成 · AI 综合判断
+                </span>
+              </div>
+              <p className="text-xs text-[#57534e] leading-relaxed whitespace-pre-wrap">
+                {summary}
+              </p>
+            </div>
+          </div>
+        )}
       </TracePanelShell>
     </div>
   );

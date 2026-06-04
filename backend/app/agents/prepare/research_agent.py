@@ -20,8 +20,6 @@ from app.agents.prepare.state import PrepareState
 from app.core.logging import get_logger
 from app.services.mcp_client import get_mcp_tools
 
-from contextlib import suppress
-
 try:
     from langgraph.config import get_stream_writer  # type: ignore
 except ImportError:  # 老版本 LangGraph 兼容
@@ -148,6 +146,17 @@ async def _force_finalize(
         return None
 
 
+async def _collect_stream_chunks(model: Any, messages: list, emit_token) -> list:
+    """消费一次 LLM 流式响应；调用方负责套总预算 timeout。"""
+    chunks = []
+    async for chunk in model.astream(messages):
+        chunks.append(chunk)
+        token = chunk.content if isinstance(chunk.content, str) else ""
+        if token:
+            emit_token(token)
+    return chunks
+
+
 async def research_agent_node(state: PrepareState) -> PrepareState:
     """research_agent 节点：ReAct loop 调 MCP 工具，产出 job_intel 写 State。"""
     completed = state.get("completed_tools", [])
@@ -209,25 +218,33 @@ async def research_agent_node(state: PrepareState) -> PrepareState:
             think_step_id = f"think-{iteration}"
             _emit({"kind": "tool_thinking_start", "iteration": iteration, "step_id": think_step_id})
 
-            # 流式调用 LLM，每个 chunk emit token 事件并累积成完整 response
-            chunks = []
-            async for chunk in model.astream(messages):
-                chunks.append(chunk)
-                token = chunk.content if isinstance(chunk.content, str) else ""
-                if token:
-                    _emit({
-                        "kind": "tool_thinking_token",
-                        "iteration": iteration,
-                        "step_id": think_step_id,
-                        "text": token,
-                    })
+            def _emit_thinking_token(
+                token: str,
+                current_iteration: int = iteration,
+                current_step_id: str = think_step_id,
+            ) -> None:
+                _emit({
+                    "kind": "tool_thinking_token",
+                    "iteration": current_iteration,
+                    "step_id": current_step_id,
+                    "text": token,
+                })
+
+            # 流式调用 LLM；整段流式消费必须受 research_agent 剩余总预算约束。
+            chunks = await asyncio.wait_for(
+                _collect_stream_chunks(model, messages, _emit_thinking_token),
+                timeout=remaining,
+            )
 
             if chunks:
                 response = chunks[0]
                 for c in chunks[1:]:
                     response = response + c
             else:
-                response = await asyncio.wait_for(model.ainvoke(messages), timeout=remaining)
+                response = await asyncio.wait_for(
+                    model.ainvoke(messages),
+                    timeout=_remaining_budget_seconds(started),
+                )
 
             messages.append(response)
             _emit({"kind": "tool_thinking_done", "iteration": iteration, "step_id": think_step_id})
@@ -311,7 +328,7 @@ async def research_agent_node(state: PrepareState) -> PrepareState:
                         })
 
                 messages.append(ToolMessage(content=content, tool_call_id=call_id, name=name))
-    except asyncio.TimeoutError:
+    except TimeoutError:
         log.warning("research_agent_iter_timeout")
     except Exception as exc:
         log.warning(

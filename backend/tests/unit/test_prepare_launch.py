@@ -1,11 +1,12 @@
 """Unit tests for stream_prepare_and_launch generator."""
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, patch
 
-from app.api.v1.prepare import stream_prepare_and_launch
+import pytest
+
 from app.agents.prepare.state import PrepareState
+from app.api.v1.prepare import _apply_prepare_trace_event, stream_prepare_and_launch
 
 
 def _make_state(need_direction: bool = False) -> PrepareState:
@@ -168,3 +169,70 @@ async def test_prepared_questions_passed_to_turn():
     pqs = captured.get("prepared_questions", [])
     assert len(pqs) == 1
     assert pqs[0]["question"] == "Q1"
+
+
+def test_prepare_trace_persists_structured_node_done_fields():
+    """node_done 新增结构化字段应进入 prepare_trace，刷新恢复时不退化为空状态。"""
+    payload = {"nodes": [{"id": "research_agent", "label": "调研", "status": "running", "tokens": ""}]}
+
+    _apply_prepare_trace_event(
+        payload,
+        {
+            "event": "node_done",
+            "data": {
+                "node": "research_agent",
+                "elapsed_ms": 123,
+                "record_count": 7,
+                "react_iterations": 2,
+                "react_tool_count": 4,
+                "company_name": "Acme",
+                "gaps": ["缺少大规模系统经验"],
+            },
+        },
+    )
+
+    node = payload["nodes"][0]
+    assert node["status"] == "done"
+    assert node["elapsedMs"] == 123
+    assert node["reactStatus"] == "done"
+    assert node["recordCount"] == 7
+    assert node["reactIterations"] == 2
+    assert node["reactToolCount"] == 4
+    assert node["companyName"] == "Acme"
+    assert node["gaps"] == ["缺少大规模系统经验"]
+
+    payload = {"nodes": [{"id": "jd_analysis", "label": "JD", "status": "running", "tokens": ""}]}
+    _apply_prepare_trace_event(
+        payload,
+        {
+            "event": "node_done",
+            "data": {
+                "node": "jd_analysis",
+                "jd_company": "Acme",
+                "jd_role": "Senior Backend",
+                "jd_difficulty": "高",
+                "jd_key_skills": ["Python", "Redis"],
+            },
+        },
+    )
+    node = payload["nodes"][0]
+    assert node["jdCompany"] == "Acme"
+    assert node["jdRole"] == "Senior Backend"
+    assert node["jdDifficulty"] == "高"
+    assert node["jdKeySkills"] == ["Python", "Redis"]
+
+    payload = {"nodes": [{"id": "question_gen", "label": "出题", "status": "running", "tokens": ""}]}
+    _apply_prepare_trace_event(
+        payload,
+        {
+            "event": "node_done",
+            "data": {
+                "node": "question_gen",
+                "question_stats": {"technical": 3, "behavioral": 1},
+                "question_total": 4,
+            },
+        },
+    )
+    node = payload["nodes"][0]
+    assert node["questionStats"] == {"technical": 3, "behavioral": 1}
+    assert node["questionTotal"] == 4

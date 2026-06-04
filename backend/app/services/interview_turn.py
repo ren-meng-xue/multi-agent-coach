@@ -49,7 +49,7 @@ async def get_or_create_active_session(
 
     返回的 bool 表示这是否是用户第一次拥有面试 run，用于 opening 阶段区分新老用户。
     """
-    await ensure_user_exists(db, user_id=user_id)
+    user = await ensure_user_exists(db, user_id=user_id)
 
     total_result = await db.execute(
         select(func.count()).select_from(InterviewSession).where(InterviewSession.user_id == user_id)
@@ -67,7 +67,10 @@ async def get_or_create_active_session(
     )
     active = active_result.scalar_one_or_none()
     if active is not None:
-        if await _is_stale_active_session(db, active):
+        if user.target_role and active.target_role and active.target_role != user.target_role:
+            active.status = "abandoned"
+            await db.flush()
+        elif await _is_stale_active_session(db, active):
             active.status = "abandoned"
             await db.flush()
         else:
@@ -259,7 +262,7 @@ async def get_active_interview_session(
     user_id: str,
 ) -> dict:
     """获取当前处于进行中（in_progress）的活动会话及历史消息记录。"""
-    await ensure_user_exists(db, user_id=user_id)
+    user = await ensure_user_exists(db, user_id=user_id)
 
     active_result = await db.execute(
         select(InterviewSession)
@@ -273,7 +276,11 @@ async def get_active_interview_session(
     active = active_result.scalar_one_or_none()
 
     if active is not None:
-        if await _is_stale_active_session(db, active):
+        if user.target_role and active.target_role and active.target_role != user.target_role:
+            active.status = "abandoned"
+            await db.commit()
+            return {}
+        elif await _is_stale_active_session(db, active):
             active.status = "abandoned"
             await db.commit()
             return {}
