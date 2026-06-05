@@ -30,6 +30,8 @@ from app.services.interview_turn import (
 router = APIRouter(prefix="/interview")
 log = get_logger("app.api.v1.interview")
 
+EMPTY_TURN_GUIDANCE = "我没有收到具体回答。请补充你的思路、项目经历或你想跳过这题，我会继续推进。"
+
 
 @router.post("/chat")
 async def chat(
@@ -78,6 +80,13 @@ async def turn(
 
     async def event_gen() -> AsyncIterator[dict[str, str]]:
         try:
+            if not req.message.strip():
+                yield {
+                    "event": "delta",
+                    "data": json.dumps({"text": EMPTY_TURN_GUIDANCE}, ensure_ascii=False),
+                }
+                yield {"event": "done", "data": "{}"}
+                return
             async for event in stream_interview_turn(
                 req.message,
                 user_id=user_id,

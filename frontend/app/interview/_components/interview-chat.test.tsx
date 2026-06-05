@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import {
+  render,
+  screen,
+  waitFor,
+  fireEvent,
+  within,
+} from "@testing-library/react";
 
 if (typeof globalThis.crypto === "undefined") {
   (globalThis as any).crypto = {};
@@ -987,7 +993,8 @@ describe("InterviewChat", () => {
         screen.getByText("能具体说说你遇到的分布式锁问题吗？"),
       ).toBeInTheDocument();
       // followupFocus 存在时 badge 显示"追问"
-      expect(screen.getByText("追问")).toBeInTheDocument();
+      const heroTitle = screen.getByText(/📝 面试官追问/);
+      expect(within(heroTitle).getByText("追问")).toBeInTheDocument();
     });
 
     it("isOpening=true 时即使有 designedQuestion 也不渲染 HeroQuestionCard", async () => {

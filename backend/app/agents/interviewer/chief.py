@@ -43,6 +43,19 @@ TERMINATION_KEYWORDS = (
     "拜拜",
 )
 
+SKIP_KEYWORDS = (
+    "跳过",
+    "跳过这题",
+    "跳过这个问题",
+    "下一题",
+    "下一个问题",
+    "换一题",
+    "换个问题",
+    "不会答",
+    "不想答",
+    "先不答",
+)
+
 
 class _DesignQuestionArgs(BaseModel):
     focus: str = Field(
@@ -83,6 +96,11 @@ def _previous_questions(state: InterviewState) -> list[str]:
 def _wants_to_end(text: str) -> bool:
     compact = text.strip()
     return bool(compact) and len(compact) < 20 and any(kw in compact for kw in TERMINATION_KEYWORDS)
+
+
+def _wants_to_skip(text: str) -> bool:
+    compact = text.strip()
+    return bool(compact) and len(compact) < 30 and any(kw in compact for kw in SKIP_KEYWORDS)
 
 
 def _score(report: dict[str, Any] | None) -> float:
@@ -247,6 +265,18 @@ async def chief_think(state: InterviewState) -> InterviewState:
         thoughts.append("Chief loop 达到上限，降级为直接回复。")
         return cast(InterviewState, {**dict(state), "chief_thoughts": thoughts})
 
+    latest_answer = _last_human_message(state)
+    if _wants_to_skip(latest_answer) and state.get("question_count", 0) > 0:
+        thoughts.append("候选人要求跳过当前问题，直接进入下一题。")
+        designed = await _execute_design(state, focus="new_question")
+        return cast(InterviewState, {
+            **dict(state),
+            "designer_output": designed,
+            "designer_dual_output": None,
+            "evaluator_report": None,
+            "chief_thoughts": thoughts,
+        })
+
     # 已有 eval+design 结果时直接选题，跳过本轮 LLM 调用
     if iteration > 0 and state.get("evaluator_report") and state.get("designer_dual_output"):
         chief_messages = list(state.get("chief_messages") or [])
@@ -261,7 +291,6 @@ async def chief_think(state: InterviewState) -> InterviewState:
     chief_messages = list(state.get("chief_messages") or [])
     if not chief_messages:
         prompt = CHIEF_SYSTEM_PROMPT.format(context=_chief_context(state))
-        latest_answer = _last_human_message(state)
         human_text = latest_answer or "请启动本轮面试。"
         chief_messages = [SystemMessage(content=prompt), HumanMessage(content=human_text)]
 

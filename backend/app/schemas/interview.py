@@ -57,8 +57,6 @@ class TurnRequest(BaseModel):
     @classmethod
     def _message_not_blank(cls, v: str) -> str:
         text = v.strip()
-        if not text:
-            raise ValueError("message 不能为空")
         if len(text) > MAX_CONTENT_LEN:
             raise ValueError(f"message 长度不能超过 {MAX_CONTENT_LEN}")
         return text

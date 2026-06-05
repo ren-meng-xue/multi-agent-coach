@@ -72,10 +72,10 @@ def test_valid_turn_request_passes():
     assert req.message == "我想练 AI Agent 工程师面试"
 
 
-def test_blank_turn_message_rejected():
-    """统一入口 message 不能为空。"""
-    with pytest.raises(ValidationError):
-        TurnRequest(message="   ")
+def test_blank_turn_message_allowed_for_guidance():
+    """统一入口允许空白 message，由 SSE 路由返回礼貌引导而非 422。"""
+    req = TurnRequest(message="   ")
+    assert req.message == ""
 
 
 def test_turn_message_too_long_rejected():

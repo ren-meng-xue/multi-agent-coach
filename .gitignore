@@ -54,3 +54,5 @@ build/
 # Agent 工具本地缓存与运行时状态
 .antigravitycli/
 .superpowers/
+artifacts/gif-captures/
+handoff.md

@@ -153,6 +153,52 @@ async def test_stream_interview_turn_persists_user_and_assistant_messages(db, mo
 
 
 @pytest.mark.asyncio
+async def test_stream_interview_turn_preserves_long_candidate_answer(db, monkeypatch):
+    """F4-4：超过 1000 字的回答应完整进入图状态并持久化，不应被截断或拒绝。"""
+    long_answer = "我负责了高并发订单系统。" + "峰值流量、降级策略、数据一致性。" * 90
+    assert len(long_answer) > 1000
+    captured_state = {}
+
+    async def fake_graph_events(state):
+        captured_state.update(state)
+        yield {
+            "event": "final",
+            "data": {
+                **state,
+                "stage": "interview",
+                "question_count": 2,
+                "assistant_message": "请补充一下这个系统的量化指标。",
+            },
+        }
+
+    monkeypatch.setattr("app.services.interview_turn.stream_interviewer_turn_events", fake_graph_events)
+    user_id = f"user_turn_long_{uuid4().hex}"
+
+    events = [
+        event
+        async for event in stream_interview_turn(
+            long_answer,
+            user_id=user_id,
+            db=db,
+        )
+    ]
+
+    assert any(event["event"] == "done" for event in events)
+    assert captured_state["messages"][-1].content == long_answer
+
+    session_result = await db.execute(
+        select(InterviewSession).where(InterviewSession.user_id == user_id)
+    )
+    session = session_result.scalar_one()
+    message_result = await db.execute(
+        select(InterviewMessage)
+        .where(InterviewMessage.session_id == session.id, InterviewMessage.role == "user")
+    )
+    user_message = message_result.scalar_one()
+    assert user_message.content == long_answer
+
+
+@pytest.mark.asyncio
 async def test_first_question_uses_prepared_questions_for_existing_user_session(db, monkeypatch):
     """即使不是首次用户，首题启动也必须把准备阶段题目传入图状态。"""
     user_id = f"user_turn_prepared_existing_{uuid4().hex}"
@@ -280,9 +326,56 @@ async def test_stream_interview_turn_emits_report_event_on_closing(db, monkeypat
         select(InterviewSession).where(InterviewSession.user_id == user_id)
     )
     session = session_result.scalar_one()
+    assert session.status == "completed"
     assert session.score == 7.5
     assert session.pass_fail == "pass"
     assert session.key_issues == ["可补充量化数据"]
+
+
+@pytest.mark.asyncio
+async def test_stream_interview_turn_loads_history_between_turns(db, monkeypatch):
+    """F2-2：后续轮次 state 必须包含前轮 user/assistant 历史。"""
+    user_id = f"user_turn_history_{uuid4().hex}"
+    session, _ = await get_or_create_active_session(db, user_id=user_id)
+    db.add_all(
+        [
+            InterviewMessage(session_id=session.id, role="user", content="第一轮我介绍了缓存项目。"),
+            InterviewMessage(session_id=session.id, role="assistant", content="请说明缓存失效策略。"),
+        ]
+    )
+    await db.commit()
+    captured_state = {}
+
+    async def fake_graph_events(state):
+        captured_state.update(state)
+        yield {
+            "event": "final",
+            "data": {
+                **state,
+                "stage": "interview",
+                "question_count": 2,
+                "assistant_message": "你刚才提到缓存项目，请补充一致性取舍。",
+            },
+        }
+
+    monkeypatch.setattr("app.services.interview_turn.stream_interviewer_turn_events", fake_graph_events)
+
+    events = [
+        event
+        async for event in stream_interview_turn(
+            "第二轮回答：我使用了 TTL 和主动失效。",
+            user_id=user_id,
+            db=db,
+        )
+    ]
+
+    history_text = [str(message.content) for message in captured_state["messages"]]
+    assert history_text == [
+        "第一轮我介绍了缓存项目。",
+        "请说明缓存失效策略。",
+        "第二轮回答：我使用了 TTL 和主动失效。",
+    ]
+    assert any(event["event"] == "done" for event in events)
 
 
 @pytest.mark.asyncio

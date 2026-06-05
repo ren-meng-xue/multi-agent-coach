@@ -536,7 +536,17 @@ async def generate_prepared_question_reply(question_text: str, state: InterviewS
     if question_count <= 1:
         prefix = f"我们先从「{target_role}」相关的一道题开始。" if target_role else "我们先从第一道题开始。"
         return f"{prefix}\n\n{question_text}"
-    return question_text
+
+    # Q4-1: 增加主问题之间的过渡语，避免跳跃
+    import random
+    transitions = [
+        "关于这块我了解了。接下来，我们聊聊另一个话题：",
+        "好的。那我们换个方向，来看下一道题：",
+        "明白。我们继续深入，看这个问题：",
+        "很有参考价值。下面我们来看：",
+    ]
+    prefix = random.choice(transitions)
+    return f"{prefix}\n\n{question_text}"
 
 
 async def ask_question_node(state: InterviewState) -> InterviewState:

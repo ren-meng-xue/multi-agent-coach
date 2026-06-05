@@ -45,8 +45,10 @@ QUESTION_GEN_SYSTEM_PROMPT = """你是专业面试出题官。根据以下信息
    - 若有薄弱点，针对薄弱点的题目排在最前（分配 priority=1,2）。
    - 其余题目分配 priority=3,4,5。
 4. 题目类型: technical/behavioral/system_design 各占比均衡。
-5. 每道题输出 JSON: {{"id":N,"question":"...","category":"...","focus_area":"...","priority":N}}
-6. 输出纯 JSON 数组，不要任何其他内容。
+5. 所有一级岗位能力维度都应至少覆盖 1 道题；不得让单一 focus_area 占比超过 40%。
+6. 不要重复确认简历、JD 或候选人背景里已经明确给出的事实；应基于这些事实追问实现、取舍、结果或边界。
+7. 每道题输出 JSON: {{"id":N,"question":"...","category":"...","focus_area":"...","priority":N}}
+8. 输出纯 JSON 数组，不要任何其他内容。
 
 练习上下文：
 练习方向：{direction}

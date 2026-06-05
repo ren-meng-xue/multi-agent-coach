@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
+from app.api.v1.interview import EMPTY_TURN_GUIDANCE
 from app.core.auth import get_current_user_id
 from app.db.session import get_db
 from app.main import app
@@ -156,16 +157,22 @@ def test_turn_emits_error_event_on_failure():
     assert "event: error" in resp.text
 
 
-def test_turn_rejects_invalid_body():
-    """统一入口空 message 必须 422。"""
+def test_turn_blank_message_returns_guidance_without_graph_call():
+    """空 message：返回礼貌引导 SSE，不进入 LangGraph，也不返回 422。"""
     app.dependency_overrides[get_current_user_id] = _fake_user
     app.dependency_overrides[get_db] = _fake_db
+    mock_turn = AsyncMock()
     try:
-        resp = TestClient(app).post("/api/v1/interview/turn", json={"message": "   "})
+        with patch("app.api.v1.interview.stream_interview_turn", mock_turn):
+            resp = TestClient(app).post("/api/v1/interview/turn", json={"message": "   "})
     finally:
         app.dependency_overrides.clear()
 
-    assert resp.status_code == 422
+    assert resp.status_code == 200
+    assert "event: delta" in resp.text
+    assert EMPTY_TURN_GUIDANCE in resp.text
+    assert "event: done" in resp.text
+    mock_turn.assert_not_called()
 
 
 def test_reset_abandons_session_and_returns_ok():

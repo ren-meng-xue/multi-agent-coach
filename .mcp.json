@@ -2,9 +2,7 @@
   "mcpServers": {
     "vision": {
       "command": "python3",
-      "args": [
-        "scripts/mcp/openai_vision_mcp.py"
-      ],
+      "args": ["scripts/mcp/openai_vision_mcp.py"],
       "env": {
         "OPENAI_API_KEY": "${OPENAI_API_KEY}",
         "OPENAI_MODEL": "gpt-4o"
@@ -12,9 +10,7 @@
     },
     "TalkToFigma": {
       "command": "bunx",
-      "args": [
-        "cursor-talk-to-figma-mcp@latest"
-      ]
+      "args": ["cursor-talk-to-figma-mcp@latest"]
     },
     "postgres-local": {
       "command": "npx",

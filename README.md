@@ -1,8 +1,16 @@
 # Multi Agent Coach
 
-AI Agent 工程师面试陪练系统。多 Agent + 分级长期记忆 + Reflexion 自反思。
+面向 AI Agent 工程师求职者的多 Agent 面试陪练系统。用户上传目标 JD 或选择岗位方向后，系统完成备考准备、实时面试、回答评估、候选人画像积累和个性化复盘。
 
-> 当前处于工程脚手架与核心能力建设阶段。
+核心架构是层次化 Multi-Agent：Chief Interviewer 负责对话节奏和工具调用，Evaluator 负责回答评估与 candidate_memory 更新，Question Designer 负责追问和新题设计，Coach Agent 基于跨 session 画像生成复盘建议。
+
+## 核心能力
+
+- Prepare：解析 JD、识别岗位方向，生成结构化题库和首轮面试上下文。
+- Interview：Chief Interviewer 通过 ReAct Loop 调度 Evaluator / Designer，按 SSE 实时推送对话与 trace。
+- Evaluate：每轮回答生成评分、弱点标签、行为信号，并写入跨 session 候选人画像。
+- Coach：结合最近面试表现和长期画像生成个性化复盘、训练计划与下一步建议。
+- Report：沉淀历史报告、趋势和可追踪的成长数据。
 
 ## 文档入口
 
@@ -18,11 +26,28 @@ AI Agent 工程师面试陪练系统。多 Agent + 分级长期记忆 + Reflexio
 
 ```text
 multi-agent-coach/
-├── backend/        # FastAPI 后端服务
-├── frontend/       # Next.js 前端应用
+├── backend/        # FastAPI 后端服务、LangGraph Agent、评估与画像逻辑
+├── frontend/       # Next.js 前端应用、面试房、教练台、报告页面
+├── docs/           # 业务文档、spec、计划和 QA 报告
 ├── CLAUDE.md       # 工程规范单一来源
 └── README.md       # 项目总入口
 ```
+
+## 产品流程
+
+```text
+Prepare
+  -> Interview
+  -> Evaluate
+  -> Coach
+  -> Report
+```
+
+详见：
+
+- [`docs/business/overview.md`](./docs/business/overview.md)：五阶段业务全景
+- [`docs/business/multi-agent-interview.md`](./docs/business/multi-agent-interview.md)：Chief + Evaluator + Designer 架构
+- [`docs/business/coach-flow.md`](./docs/business/coach-flow.md)：复盘和候选人画像闭环
 
 ## Agent OS 5-Phase 状态
 

@@ -277,20 +277,19 @@ async def stream_prepare_events(state: PrepareState) -> AsyncIterator[dict[str, 
 
             finished_nodes.add(ev_node)
             elapsed_ms = int((time.time() - elapsed_tracker.get(ev_node, time.time())) * 1000)
-            node_state = event.get("data", {}).get("output") or {}
+            _raw_output = event.get("data", {}).get("output") or {}
+            # 统一转换为 plain dict，兼容 Pydantic 对象
+            if hasattr(_raw_output, "model_dump"):
+                node_state: dict[str, Any] = _raw_output.model_dump()
+            elif hasattr(_raw_output, "dict") and not isinstance(_raw_output, dict):
+                node_state = _raw_output.dict()
+            else:
+                node_state = _raw_output if isinstance(_raw_output, dict) else {}
 
             extra: dict[str, Any] = {"elapsed_ms": elapsed_ms}
             if ev_node == "supervisor":
-                # 兼容 Pydantic 对象和 dict
-                node_dict = node_state
-                if hasattr(node_state, "model_dump"):
-                    node_dict = node_state.model_dump()
-                elif hasattr(node_state, "dict"):
-                    node_dict = node_state.dict()
-                
-                if isinstance(node_dict, dict):
-                    extra["next_action"] = node_dict.get("next_action", "END")
-                    extra["need_direction"] = node_dict.get("need_direction", False)
+                extra["next_action"] = node_state.get("next_action", "END")
+                extra["need_direction"] = node_state.get("need_direction", False)
 
             if isinstance(node_state, dict):
                 for line in _node_completion_trace(ev_node, node_state):

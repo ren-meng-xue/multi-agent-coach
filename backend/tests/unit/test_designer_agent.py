@@ -132,3 +132,30 @@ async def test_designer_dual_uses_prepared_question_for_new_question():
     assert out["followup_question"].startswith("请补充")
     assert out["new_question"].startswith("请讲讲你准备题库")
     assert out["new_question_source"] == "prepared"
+
+
+@pytest.mark.asyncio
+async def test_designer_rewrites_question_repeated_with_previous_questions():
+    """Q4-2：Designer 产出与已问问题高度重复时，应改写成更具体的问题。"""
+    fake_structured = MagicMock()
+    fake_structured.ainvoke = AsyncMock(
+        return_value=_DesignedQuestion(
+            question_text="请讲一个你做过的系统设计取舍？",
+            question_category="technical",
+            focus_area="system_design",
+        )
+    )
+    fake_model = MagicMock()
+    fake_model.with_structured_output.return_value = fake_structured
+
+    with patch("app.agents.designer.nodes._chat_model", return_value=fake_model):
+        out = await run_designer(
+            {
+                "focus": "system_design",
+                "previous_questions": ["请讲一个你做过的系统设计取舍？"],
+            }
+        )
+
+    assert out["question_text"].startswith("围绕system_design")
+    assert "约束条件" in out["question_text"]
+    assert "最终效果数据" in out["question_text"]

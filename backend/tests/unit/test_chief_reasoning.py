@@ -134,6 +134,32 @@ class TestChiefThinkDecisions:
         assert route_after_chief_think(result) == "chief_respond"
 
     @pytest.mark.asyncio
+    async def test_skip_request_designs_next_question_without_evaluation(self):
+        state = {
+            "question_count": 1,
+            "total_questions": 5,
+            "followup_count": 0,
+            "messages": [HumanMessage(content="这题我想跳过，下一题吧")],
+            "session_id": "s1",
+        }
+        design = {
+            "question_text": "请讲一个你做过的系统设计取舍？",
+            "question_category": "technical",
+            "focus_area": "system_design",
+            "source": "llm",
+        }
+
+        with patch("app.agents.interviewer.chief._execute_design", new=AsyncMock(return_value=design)) as design_mock, \
+            patch("app.agents.interviewer.chief._execute_evaluate", new=AsyncMock()) as eval_mock:
+            result = await chief_think(state)
+
+        design_mock.assert_awaited_once()
+        eval_mock.assert_not_called()
+        assert result["designer_output"] == design
+        assert result["evaluator_report"] is None
+        assert route_after_chief_think(result) == "chief_respond"
+
+    @pytest.mark.asyncio
     async def test_parallel_results_ready_low_score_picks_followup(self):
         state = {
             "question_count": 1,

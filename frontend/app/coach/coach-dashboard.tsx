@@ -622,8 +622,11 @@ export function CoachDashboard() {
       ) : (
         <>
           <div className="flex items-center gap-3.5 pb-4 border-b border-[#e8e7e2]">
-            <div className="w-[52px] h-[52px] rounded-full bg-gradient-to-br from-[#7c3aed] to-[#4f46e5] text-white flex items-center justify-center font-bold text-xl shadow-lg">
-              C
+            <div className="relative flex-shrink-0">
+              <div className="w-[52px] h-[52px] rounded-full bg-gradient-to-br from-[#7c3aed] to-[#4f46e5] text-white flex items-center justify-center font-[var(--mac-font-display)] text-[22px] font-normal shadow-lg ring-4 ring-[#7c3aed]/10">
+                C
+              </div>
+              <span className="absolute -right-0.5 -bottom-0.5 w-3.5 h-3.5 rounded-full bg-[#059669] border-2 border-white shadow-sm animate-pulse" />
             </div>
             <div>
               <div className="font-bold text-xl text-[#171717]">Coach</div>

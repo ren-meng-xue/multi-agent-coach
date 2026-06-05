@@ -1567,6 +1567,112 @@
   ::-webkit-scrollbar { width: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* === Trace Design v4 Styles (Scoped to #tab-interview) === */
+  #tab-interview .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 900px; margin: 0 auto; }
+  #tab-interview .lbl { font-size:11px;font-weight:700;color:#94a3b8;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:12px; }
+  #tab-interview .card { background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.04); }
+  #tab-interview .dot-done { width:20px;height:20px;border-radius:50%;background:#ecfdf5;border:1.5px solid #10b981;display:flex;align-items:center;justify-content:center;flex-shrink:0; }
+  #tab-interview .line { width:2px;background:linear-gradient(#d1d5db,transparent);flex:1;min-height:20px;margin-top:3px;border-radius:2px; }
+  #tab-interview .nb { font-size:10px;font-weight:700;background:#f1f5f9;border:1px solid #e2e8f0;color:#475569;padding:2px 7px;border-radius:4px;flex-shrink:0; }
+  #tab-interview .nt { font-size:11px;font-weight:600;color:#1e293b; }
+  #tab-interview .nm { margin-left:auto;font-size:10px;color:#94a3b8;flex-shrink:0;font-variant-numeric:tabular-nums; }
+  #tab-interview .badge { font-size:10px;background:#f8fafc;border:1px solid #e2e8f0;color:#64748b;padding:2px 8px;border-radius:20px; }
+  #tab-interview .badge-r { background:#fff1f2;border-color:#fecdd3;color:#be123c; }
+  #tab-interview .tbtn { font-size:11px;color:#7c3aed;background:none;border:none;cursor:pointer;padding:0;display:flex;align-items:center;gap:4px;font-weight:600; }
+  #tab-interview .tlog { background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-top:8px;font-family:'SF Mono','Fira Code',monospace;font-size:11px;line-height:1.9; }
+  #tab-interview .t-r { color:#7c3aed;font-weight:700; }
+  #tab-interview .t-a { color:#94a3b8; }
+  #tab-interview .t-k { color:#64748b; }
+  #tab-interview .t-tool { color:#2563eb;font-weight:600; }
+  #tab-interview .t-g { color:#059669; }
+  #tab-interview .t-y { color:#d97706; }
+  #tab-interview .t-sep { border:none;border-top:1px solid #e2e8f0;margin:5px 0; }
+  #tab-interview hr.dash { border:none;border-top:1px dashed #e2e8f0;margin:16px 0; }
+  #tab-interview .sum { background:#fafaf9;border:1px solid #e7e5e4;border-radius:10px;padding:12px 14px; }
+  #tab-interview .aidot { width:16px;height:16px;border-radius:50%;background:#1e293b;display:flex;align-items:center;justify-content:center;flex-shrink:0; }
+  #tab-interview .q-hero { background:linear-gradient(135deg,#f0fdf4,#f0f9ff);border:1.5px solid #6ee7b7;border-radius:12px;padding:14px 16px;margin-bottom:16px; }
+  #tab-interview .q-hero-label { font-size:10px;font-weight:700;color:#059669;margin-bottom:6px;display:flex;align-items:center;gap:5px; }
+  #tab-interview .q-type { font-size:9px;background:#d1fae5;color:#065f46;border-radius:4px;padding:2px 6px;font-weight:700; }
+  #tab-interview .q-hero-text { font-size:14px;font-weight:600;color:#064e3b;line-height:1.65; }
+
+  /* === Settings UI Alignment === */
+  #tab-settings .settings-layout {
+    display: flex; flex-direction: row; gap: 24px; align-items: stretch; margin-top: 16px;
+  }
+  #tab-settings .settings-left {
+    width: 340px; display: flex; flex-direction: column; gap: 16px; flex-shrink: 0;
+  }
+  #tab-settings .settings-right {
+    flex: 1; display: flex; flex-direction: column;
+  }
+  #tab-settings .profile-card, #tab-settings .info-card, #tab-settings .resume-card {
+    background: #fff; border: 1px solid var(--border-light); border-radius: var(--radius);
+    padding: 24px; box-shadow: var(--shadow-xs);
+  }
+  #tab-settings .profile-header {
+    display: flex; align-items: center; gap: 16px; padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-light); margin-bottom: 16px;
+  }
+  #tab-settings .profile-avatar {
+    width: 40px; height: 40px; border: 1px solid var(--border-light);
+    background: #fafaf8; display: flex; align-items: center; justify-content: center;
+    border-radius: var(--radius-xs); font-family: var(--font-display);
+    font-weight: 600; color: var(--text-primary); font-size: 16px;
+    overflow: hidden;
+  }
+  #tab-settings .profile-info span:first-child {
+    font-size: 12px; color: var(--text-tertiary); display: block;
+  }
+  #tab-settings .profile-info span:last-child {
+    font-size: 16px; font-family: var(--font-display); color: var(--text-primary); font-weight: 600;
+  }
+  #tab-settings .settings-item {
+    display: flex; gap: 12px; align-items: flex-start;
+  }
+  #tab-settings .settings-item .icon {
+    width: 16px; height: 16px; color: var(--text-tertiary); margin-top: 2px; flex-shrink: 0;
+  }
+  #tab-settings .settings-item .label {
+    font-size: 10px; color: var(--text-tertiary); text-transform: uppercase;
+    letter-spacing: 0.05em; display: block; margin-bottom: 2px; font-weight: 700;
+  }
+  #tab-settings .settings-item .value {
+    font-size: 14px; color: var(--text-primary); font-family: var(--font-body);
+  }
+  #tab-settings .progress-box {
+    background: #fafaf8; border: 1px solid var(--border-light); border-radius: var(--radius-sm);
+    padding: 12px; display: flex; gap: 12px; align-items: flex-start; margin-top: 16px;
+  }
+  #tab-settings .resume-header {
+    padding-bottom: 16px; border-bottom: 1px solid var(--border-light); margin-bottom: 16px;
+  }
+  #tab-settings .resume-header h3 {
+    font-size: 18px; font-weight: 400; color: var(--text-primary);
+    font-family: var(--font-display); display: flex; align-items: center; gap: 8px; margin: 0;
+  }
+  #tab-settings .resume-upload-area {
+    border: 1px dashed rgba(59, 130, 246, 0.4); background: rgba(240, 247, 255, 0.7);
+    border-radius: var(--radius-sm); height: 144px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; cursor: pointer; transition: all var(--transition);
+  }
+  #tab-settings .resume-upload-area:hover {
+    background: #fff; border-color: #3b82f6; box-shadow: var(--shadow-xs);
+  }
+  #tab-settings .resume-file-info {
+    border: 1px solid var(--border-light); background: #fafaf8; padding: 16px;
+    border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; margin-bottom: 16px;
+  }
+  #tab-settings .evaluation-box {
+    background: #fafaf8; border: 1px solid var(--border-light); border-radius: var(--radius-sm);
+    padding: 16px; max-height: 400px; overflow-y: auto; font-size: 12px; line-height: 1.6;
+    color: var(--text-secondary); white-space: pre-wrap; font-family: var(--font-body);
+  }
+  #tab-settings .info-card h3 {
+    font-size: 10px; font-weight: 700; color: var(--text-primary);
+    text-transform: uppercase; letter-spacing: 0.1em; display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+  }
 </style>
 </head>
 <body>
@@ -1583,7 +1689,7 @@
     <button class="nav-item" data-tab="coach">Coach</button>
     <button class="nav-item" data-tab="interview">面试房间</button>
     <button class="nav-item" data-tab="dashboard">个人仪表盘</button>
-    <button class="nav-item" data-tab="settings">设置 &amp; 故事库</button>
+    <button class="nav-item" data-tab="settings">设置</button>
   </nav>
   <div class="user-chip" id="userChip" style="display:none">
     <div class="avatar">张</div><span>张小凡</span>
@@ -1687,8 +1793,177 @@
   </div>
 
   <!-- ===== TAB 2: Interview Room ===== -->
-  <div class="page" id="tab-interview" style="height: 100%; overflow: hidden; padding: 0; background: var(--bg-root); border-radius: var(--radius-lg); border: 1px solid var(--border-light); box-shadow: var(--shadow-sm);">
-    <iframe src="interview.html" style="width: 100%; height: 100%; border: none; display: block; border-radius: var(--radius-lg);" id="interviewFrame"></iframe>
+  <div class="page" id="tab-interview">
+    <div class="layout">
+
+      <!-- LEFT: Prepare -->
+      <div>
+        <div class="lbl">Prepare 阶段</div>
+        <div class="card">
+
+          <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:2px;">
+            <div style="display:flex;flex-direction:column;align-items:center;padding-top:2px;width:20px;flex-shrink:0;">
+              <div class="dot-done"><svg viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="3" width="10" height="10"><polyline points="20 6 9 17 4 12"/></svg></div>
+              <div class="line"></div>
+            </div>
+            <div style="flex:1;min-width:0;padding-bottom:16px;">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
+                <span class="nb">记忆检索</span><span class="nt">读取历史表现</span><span class="nm">1.2s</span>
+              </div>
+              <div style="font-size:11px;color:#64748b;">读取到 2 条记录，薄弱点：<span style="color:#dc2626;font-weight:600;">系统设计、并发编程</span></div>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:2px;">
+            <div style="display:flex;flex-direction:column;align-items:center;padding-top:2px;width:20px;flex-shrink:0;">
+              <div class="dot-done"><svg viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="3" width="10" height="10"><polyline points="20 6 9 17 4 12"/></svg></div>
+              <div class="line" style="min-height:50px;"></div>
+            </div>
+            <div style="flex:1;min-width:0;padding-bottom:16px;">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
+                <span class="nb">岗位调研</span><span class="nt">调研目标岗位</span><span class="nm">23s</span>
+              </div>
+              <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">
+                <span class="badge">3 轮 · 3 次工具调用</span>
+                <span class="badge">字节核心业务</span>
+                <span class="badge badge-r">Gap：缺分布式</span>
+              </div>
+              <button class="tbtn" onclick="t1_v4()"><span id="a1_v4">▼</span> <span id="l1_v4">收起思考链</span></button>
+              <div id="b1_v4" class="tlog" style="display:block;">
+                <div><span class="t-r"># 第 1 轮</span></div>
+                <div><span class="t-a">→ </span><span class="t-k">先把 JD 嚼碎，提取岗位和技能要求</span></div>
+                <div><span class="t-a">⌥ </span><span class="t-tool">extract_jd_text</span><span class="t-a">(text="字节后端 JD...")</span></div>
+                <div><span class="t-a">↳ </span><span class="t-g">{company, title, skills}</span> <span class="t-y">1.2s</span></div>
+                <hr class="t-sep">
+                <div><span class="t-r"># 第 2 轮</span></div>
+                <div><span class="t-a">→ </span><span class="t-k">字节国际化团队不熟，搜一下背景</span></div>
+                <div><span class="t-a">⌥ </span><span class="t-tool">web_search</span><span class="t-a">(query="字节 飞书 国际化")</span></div>
+                <div><span class="t-a">↳ </span><span class="t-g">[5 条搜索结果]</span> <span class="t-y">3.5s</span></div>
+                <hr class="t-sep">
+                <div><span class="t-r"># 第 3 轮</span></div>
+                <div><span class="t-a">→ </span><span class="t-k">信息够了，候选人分布式有明显 gap</span></div>
+                <div><span class="t-a">⌥ </span><span class="t-tool">generate_position_report</span><span class="t-a">(...)</span></div>
+                <div><span class="t-a">↳ </span><span class="t-g">{6 模块完整报告}</span> <span class="t-y">18.1s</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:2px;">
+            <div style="display:flex;flex-direction:column;align-items:center;padding-top:2px;width:20px;flex-shrink:0;">
+              <div class="dot-done"><svg viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="3" width="10" height="10"><polyline points="20 6 9 17 4 12"/></svg></div>
+              <div class="line"></div>
+            </div>
+            <div style="flex:1;min-width:0;padding-bottom:16px;">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
+                <span class="nb">JD 分析</span><span class="nt">构建岗位考点地图</span><span class="nm">3.8s</span>
+              </div>
+              <div style="font-size:11px;color:#64748b;margin-bottom:5px;">字节跳动 · 国际化前端 · 难度 hard</div>
+              <div style="display:flex;flex-wrap:wrap;gap:4px;">
+                <span class="badge">React</span><span class="badge">性能优化</span><span class="badge">工程化</span>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:16px;">
+            <div style="display:flex;flex-direction:column;align-items:center;padding-top:2px;width:20px;flex-shrink:0;">
+              <div class="dot-done"><svg viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="3" width="10" height="10"><polyline points="20 6 9 17 4 12"/></svg></div>
+            </div>
+            <div style="flex:1;min-width:0;">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
+                <span class="nb">出题</span><span class="nt">定制专属题目</span><span class="nm">5.1s</span>
+              </div>
+              <div style="font-size:11px;color:#64748b;">已定制 5 道，面试中逐题呈现 · 技术 ×3 · 行为 ×1 · 系统设计 ×1</div>
+            </div>
+          </div>
+
+          <hr class="dash">
+          <div class="sum">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+              <div class="aidot"><span style="color:#fff;font-size:8px;font-weight:900;">AI</span></div>
+              <span style="font-size:10px;font-weight:700;color:#44403c;">准备完成 · AI 综合判断</span>
+            </div>
+            <p style="font-size:12px;color:#57534e;line-height:1.75;">你在<strong>分布式</strong>和<strong>并发</strong>上有薄弱点，字节恰好重点考这两块，题目已针对性覆盖。<span style="color:#dc2626;font-weight:600;">建议重点准备分布式场景案例。</span></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Interview turn — no bottom summary card -->
+      <div>
+        <div class="lbl">面试轮次（候选人回答后）</div>
+        <div class="card">
+
+          <!-- hero question -->
+          <div class="q-hero">
+            <div class="q-hero-label">
+              📝 面试官追问 <span class="q-type">追问</span>
+            </div>
+            <div class="q-hero-text">你提到优化了加载速度，能说说具体从多少毫秒降到多少毫秒吗？这个优化影响了多少用户？</div>
+          </div>
+
+          <!-- toggle -->
+          <button class="tbtn" onclick="t2_v4()" style="margin-bottom:12px;">
+            <span id="a2_v4">▼</span> <span id="l2_v4">收起思考过程</span>
+          </button>
+
+          <div id="b2_v4" style="display:block;">
+            <!-- chief_think -->
+            <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:2px;">
+              <div style="display:flex;flex-direction:column;align-items:center;padding-top:2px;width:20px;flex-shrink:0;">
+                <div class="dot-done"><svg viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="3" width="10" height="10"><polyline points="20 6 9 17 4 12"/></svg></div>
+                <div class="line"></div>
+              </div>
+              <div style="flex:1;min-width:0;padding-bottom:14px;">
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
+                  <span class="nb">调度思考</span><span class="nt">分析回答，规划下一步</span><span class="nm">2.1s</span>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:4px;">
+                  <span class="badge">评估回答</span><span class="badge">设计新题</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- evaluator — info merged in, no extra card below -->
+            <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:2px;">
+              <div style="display:flex;flex-direction:column;align-items:center;padding-top:2px;width:20px;flex-shrink:0;">
+                <div class="dot-done"><svg viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="3" width="10" height="10"><polyline points="20 6 9 17 4 12"/></svg></div>
+                <div class="line"></div>
+              </div>
+              <div style="flex:1;min-width:0;padding-bottom:14px;">
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
+                  <span class="nb">评估</span><span class="nt">评估候选人回答</span><span class="nm">4.3s</span>
+                </div>
+                <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:6px;">
+                  <span style="font-size:20px;font-weight:900;color:#1e293b;line-height:1;">7.2</span>
+                  <span style="font-size:11px;color:#64748b;">/ 10 · 中级</span>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;">
+                  <span class="badge">结构清晰</span>
+                  <span class="badge">有案例</span>
+                  <span class="badge badge-r">缺：量化结果</span>
+                  <span class="badge badge-r">缺：异常处理</span>
+                </div>
+                <div style="font-size:11px;color:#64748b;">→ 回答有结构但缺乏量化，继续追问具体数据</div>
+              </div>
+            </div>
+
+            <!-- designer -->
+            <div style="display:flex;align-items:flex-start;gap:10px;">
+              <div style="display:flex;flex-direction:column;align-items:center;padding-top:2px;width:20px;flex-shrink:0;">
+                <div class="dot-done"><svg viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="3" width="10" height="10"><polyline points="20 6 9 17 4 12"/></svg></div>
+              </div>
+              <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
+                  <span class="nb">出题专家</span><span class="nt">设计下一道题</span><span class="nm">3.2s</span>
+                </div>
+                <div style="font-size:11px;color:#64748b;">追问方向：<span style="color:#334155;font-weight:600;">量化结果 · 异常处理</span></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
   </div>
 
   <!-- ===== TAB 3: Dashboard ===== -->
@@ -1764,34 +2039,109 @@
     </div>
   </div>
 
-  <!-- ===== TAB 5: Settings & Stories ===== -->
+  <!-- ===== TAB 5: Settings ===== -->
   <div class="page" id="tab-settings">
-    <div class="settings-duo">
-      <div class="setting-card">
-        <h4>个人资料</h4>
-        <div class="field"><label>姓名</label><input value="张小凡" /></div>
-        <div class="field"><label>邮箱</label><input value="zhang@example.com" /></div>
-        <div class="field"><label>目标岗位</label><input value="AI Agent 工程师" /></div>
-        <div class="field"><label>工作年限</label><input value="3 年" /></div>
-        <button class="btn-sm filled" style="margin-top:8px">保存修改</button>
-      </div>
-      <div class="setting-card">
-        <h4>STAR 故事库</h4>
-        <div class="story-snip">
-          <div class="st-title">LangGraph 多 Agent 工单系统</div>
-          <div class="st-role">AI 工程师 · 2024-2025</div>
-          <div class="st-desc">设计并实现基于 LangGraph StateGraph 的多 Agent 协作工单处理系统，定义分类/处理/审核三个节点…</div>
-          <div class="st-tags"><span class="tag-pill info">LangGraph</span><span class="tag-pill info">Multi-Agent</span></div>
+    <div style="margin-bottom: 24px; padding-bottom: 12px; border-bottom: 1px solid var(--border-light);">
+      <h2 style="font-size: 24px; font-weight: 400; color: var(--text-primary); font-family: var(--font-display); letter-spacing: -0.01em;">个人设置</h2>
+      <p style="font-size: 12px; color: var(--text-tertiary); margin-top: 4px;">管理您的个人资料、目标方向及个人简历，定制专属模拟实战演练方案。</p>
+    </div>
+
+    <div class="settings-layout">
+      <!-- Left Column -->
+      <div class="settings-left">
+        <div class="profile-card">
+          <div class="profile-header">
+            <div class="profile-avatar">张</div>
+            <div class="profile-info">
+              <span>求职人</span>
+              <span>张小凡</span>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 16px;">
+            <div class="settings-item">
+              <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></div>
+              <div style="flex: 1; min-width: 0;">
+                <span class="label">电子邮箱</span>
+                <span class="value" style="font-family: 'SF Mono', monospace; font-size: 13px; display: block; overflow: hidden; text-overflow: ellipsis;">zhang@example.com</span>
+              </div>
+            </div>
+            <div class="settings-item">
+              <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+              <div>
+                <span class="label">目标方向</span>
+                <span class="value" style="font-family: var(--font-display);">AI Agent 工程师</span>
+              </div>
+            </div>
+            <div class="progress-box">
+              <div class="icon" style="color: var(--text-tertiary);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+              <div>
+                <span class="label">演练进度</span>
+                <span class="value" style="font-size: 12px; font-weight: 500;">已经历 37 次模拟实战</span>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="story-snip">
-          <div class="st-title">RAG 问答准确率优化</div>
-          <div class="st-role">NLP 工程师 · 2023-2024</div>
-          <div class="st-desc">通过混合检索（BM25 + 向量）+ 重排序，将客服 RAG 问答准确率从 78% 提升至 94%…</div>
-          <div class="st-tags"><span class="tag-pill info">RAG</span><span class="tag-pill info">Eval</span></div>
+
+        <div class="info-card">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <span>演练准备提示</span>
+          </h3>
+          <p style="font-size: 12px; color: var(--mac-text-secondary); line-height: 1.6; margin-bottom: 8px;">系统将根据您上传的个人简历，定制个性化的模拟实战演练。这能帮助您更好地在特定岗位和业务场景中展现自己的专业特长。</p>
+          <p style="font-size: 11px; color: var(--mac-text-tertiary); line-height: 1.6;">请确保您上传的简历包含您最真实的项目经历。完善的简历信息能够让 AI Coach 提供更具针对性的演练与深度反馈。</p>
         </div>
-        <button class="btn-sm" style="width:100%;margin-top:10px;border-style:dashed">+ 添加新 STAR 故事</button>
       </div>
 
+      <!-- Right Column -->
+      <div class="settings-right">
+        <div class="resume-card">
+          <div class="resume-header">
+            <h3>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              <span>个人简历</span>
+            </h3>
+          </div>
+          <p style="font-size: 12px; color: var(--mac-text-tertiary); line-height: 1.6; margin-bottom: 16px;">上传并绑定您的最新简历。AI Coach 将围绕您的真实项目背景，深度定制模拟实战演练方案。</p>
+          
+          <!-- Case: Resume Uploaded -->
+          <div class="resume-file-info">
+            <div style="display: flex; align-items: flex-start; gap: 12px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px; color: var(--text-tertiary); margin-top: 4px;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+              <div>
+                <span style="font-size: 12px; color: var(--text-tertiary); display: block; margin-bottom: 2px;">已绑定简历</span>
+                <h4 style="font-size: 14px; font-weight: 500; color: var(--text-primary); margin: 0;">张小凡_AI工程师简历.pdf</h4>
+                <div style="display: flex; align-items: center; gap: 6px; margin-top: 6px; color: var(--accent-emerald); font-size: 11px; font-weight: 500;">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="width: 14px; height: 14px;"><polyline points="20 6 9 17 4 12"/></svg>
+                  <span>已成功绑定演练上下文</span>
+                </div>
+              </div>
+            </div>
+            <button class="btn-sm" style="display: flex; align-items: center; gap: 6px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 12px; height: 12px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <span>更新简历</span>
+            </button>
+          </div>
+
+          <!-- AI Insight -->
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <span style="font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-secondary); display: flex; align-items: center; gap: 8px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px; color: var(--text-tertiary);"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+              <span>简历洞察与诊断建议</span>
+            </span>
+            <div class="evaluation-box">你的简历展示了在 **LangGraph** 和 **多 Agent 协作** 方面的扎实背景。
+
+**优势：**
+1. 项目描述符合 STAR 原则。
+2. 技术栈选择（LangGraph, FastAPI）非常契合当前 AI Agent 的发展方向。
+3. 具有实际的 RAG 准确率优化经验，这是一个非常强的加分项。
+
+**诊断建议：**
+1. **量化结果**：虽然提到了准确率从 78% 提升至 94%，但在 LangGraph 项目中，建议增加“工单处理效率提升 %”或“节省人工成本 %”等业务指标。
+2. **场景深挖**：面试中可能会重点考察 Agent 之间的状态同步（State Management）和冲突解决策略，建议准备好相关案例。
+3. **架构思考**：建议准备好关于“为什么选择 LangGraph 而不是原生实现或 AutoGen”的深度对比理由。</div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -2588,6 +2938,20 @@
     refreshStackOptions();
     setMode(selectedMode);
   }
+
+  // === Trace Design v4 Toggle Functions ===
+  window.t1_v4 = function() {
+    const b = document.getElementById('b1_v4'), a = document.getElementById('a1_v4'), l = document.getElementById('l1_v4'), o = b.style.display !== 'none';
+    b.style.display = o ? 'none' : 'block';
+    a.textContent = o ? '▶' : '▼';
+    l.textContent = o ? '展开思考链（3 轮）' : '收起思考链';
+  };
+  window.t2_v4 = function() {
+    const b = document.getElementById('b2_v4'), a = document.getElementById('a2_v4'), l = document.getElementById('l2_v4'), o = b.style.display !== 'none';
+    b.style.display = o ? 'none' : 'block';
+    a.textContent = o ? '▶' : '▼';
+    l.textContent = o ? '查看 AI 思考过程' : '收起思考过程';
+  };
 
 })();
 </script>
