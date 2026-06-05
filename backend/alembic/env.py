@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.core.config import get_settings
 from app.db.base import Base
+from app.db.session import _build_engine_args
 from app.models import register_models  # noqa: F401 — 确保所有模型被导入
 register_models()
 
@@ -18,7 +19,8 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 settings = get_settings()
-config.set_main_option("sqlalchemy.url", settings.database_url)
+_clean_url, _ = _build_engine_args(settings.database_url)
+config.set_main_option("sqlalchemy.url", _clean_url)
 
 target_metadata = Base.metadata
 
