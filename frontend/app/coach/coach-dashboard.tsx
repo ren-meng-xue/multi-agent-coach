@@ -501,10 +501,7 @@ export function CoachDashboard() {
     setReviewText("");
 
     try {
-      const baseUrl = (process.env.NEXT_PUBLIC_API_URL || "").replace(
-        /\/$/,
-        "",
-      );
+      const baseUrl = "";
       const response = await fetch(
         `${baseUrl}/api/v1/coach/review?session_id=${sessionId}`,
         {

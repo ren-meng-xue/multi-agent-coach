@@ -39,9 +39,7 @@ export type DashboardData = {
 };
 
 const getBaseUrl = () => {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (!baseUrl) throw new Error("缺少后端接口配置");
-  return baseUrl.replace(/\/$/, "");
+  return "";
 };
 
 /** 统一处理响应。 */

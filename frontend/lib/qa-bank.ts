@@ -13,9 +13,7 @@ export type QABankUploadResult = {
 };
 
 const getBaseUrl = () => {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (!baseUrl) throw new Error("缺少后端接口配置");
-  return baseUrl.replace(/\/$/, "");
+  return "";
 };
 
 /** 获取题库各分类条目数。 */

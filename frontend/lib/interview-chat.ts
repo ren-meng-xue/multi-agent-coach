@@ -166,8 +166,8 @@ export async function fetchInterviewHistory({
   token: string;
   limit?: number;
 }): Promise<InterviewHistoryResponse> {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (!baseUrl) throw new Error("缺少后端接口配置");
+  const baseUrl = "";
+  const cleanBaseUrl = ""; // 用不到，保留逻辑结构一致性
 
   const response = await fetch(
     `${baseUrl.replace(/\/$/, "")}/api/v1/interview/history?limit=${limit}`,
@@ -206,8 +206,8 @@ export async function fetchActiveInterviewSession({
 }: {
   token: string;
 }): Promise<ActiveSessionResponse> {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (!baseUrl) throw new Error("缺少后端接口配置");
+  const baseUrl = "";
+  const cleanBaseUrl = ""; // 用不到，保留逻辑结构一致性
 
   const response = await fetch(
     `${baseUrl.replace(/\/$/, "")}/api/v1/interview/active`,
@@ -261,8 +261,8 @@ export async function streamInterviewChat({
   onReport,
   onTraceNode,
 }: StreamInterviewChatOptions): Promise<void> {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (!baseUrl) {
+  const baseUrl = "";
+  if (false) { // 保留类型检查占位
     throw new Error("缺少后端接口配置");
   }
 
@@ -384,8 +384,8 @@ export async function fetchInterviewContext({
 }: {
   token: string;
 }): Promise<UserContextResponse> {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (!baseUrl) throw new Error("缺少后端接口配置");
+  const baseUrl = "";
+  const cleanBaseUrl = ""; // 用不到，保留逻辑结构一致性
 
   const response = await fetch(
     `${baseUrl.replace(/\/$/, "")}/api/v1/interview/context`,
@@ -404,8 +404,8 @@ export async function fetchCoachOpeningMessage({
 }: {
   token: string;
 }): Promise<CoachOpeningMessageResponse> {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (!baseUrl) throw new Error("缺少后端接口配置");
+  const baseUrl = "";
+  const cleanBaseUrl = ""; // 用不到，保留逻辑结构一致性
 
   const response = await fetch(
     `${baseUrl.replace(/\/$/, "")}/api/coach/opening-message`,
@@ -428,8 +428,7 @@ export async function resetInterviewSession({
   target_role?: string;
   user_background?: string;
 }): Promise<void> {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (!baseUrl) return;
+  const baseUrl = "";
 
   const body: Record<string, string> = {};
   if (target_role) body.target_role = target_role;
@@ -469,7 +468,7 @@ export async function* startPrepareStreamFetch(params: {
   jdFile?: File;
   signal?: AbortSignal;
 }): AsyncGenerator<PrepareSSEEvent, void, unknown> {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
+  const baseUrl = "";
   const form = new FormData();
   if (params.userDirection) form.append("user_direction", params.userDirection);
   if (params.userBackground)
@@ -503,7 +502,7 @@ export async function* startPrepareAndLaunchStreamFetch(params: {
   jdFile?: File;
   signal?: AbortSignal;
 }): AsyncGenerator<PrepareSSEEvent, void, unknown> {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
+  const baseUrl = "";
   const form = new FormData();
   if (params.userDirection) form.append("user_direction", params.userDirection);
   if (params.userBackground)
@@ -534,7 +533,7 @@ export async function* resumePrepareStreamFetch(params: {
   weakAreas?: string;
   signal?: AbortSignal;
 }): AsyncGenerator<PrepareSSEEvent, void, unknown> {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
+  const baseUrl = "";
   const form = new FormData();
   form.append("direction", params.direction);
   if (params.userBackground)
