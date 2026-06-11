@@ -37,7 +37,7 @@ export function TurnTraceCard({
   expanded: controlledExpanded,
   onToggle: controlledOnToggle,
 }: TurnTraceCardProps) {
-  const [internalExpanded, setInternalExpanded] = useState(false);
+  const [internalExpanded, setInternalExpanded] = useState(true);
 
   const expanded =
     controlledExpanded !== undefined ? controlledExpanded : internalExpanded;

@@ -143,11 +143,15 @@
   --mac-text-placeholder: #b0b0b0;
   --mac-accent-indigo: #4f46e5;
   --mac-accent-indigo-hover: #4338ca;
-  --mac-font-display: var(--font-dm-serif-display), Georgia, "Times New Roman", serif;
-  --mac-font-body: var(--font-dm-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mac-font-display:
+    var(--font-dm-serif-display), Georgia, "Times New Roman", serif;
+  --mac-font-body:
+    var(--font-dm-sans), system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
   --mac-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
   --mac-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
-  --mac-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
+  --mac-shadow-lg:
+    0 12px 40px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
   --mac-radius-xs: 6px;
   --mac-radius-xl: 28px;
   --mac-transition: 0.22s cubic-bezier(0.4, 0, 0.2, 1);
@@ -163,7 +167,8 @@
   --mac-radius: 14px;
   --mac-radius-sm: 10px;
   --mac-radius-lg: 20px;
-  --mac-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+  --mac-shadow-md:
+    0 4px 16px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 body {
@@ -263,9 +268,99 @@ body::before {
 
 .mac-nav-item.active {
   background: #ffffff;
-  box-shadow: var(--mac-shadow-xs), 0 0 0 1px rgba(79, 70, 229, 0.08);
+  box-shadow:
+    var(--mac-shadow-xs),
+    0 0 0 1px rgba(79, 70, 229, 0.08);
   color: var(--mac-accent-indigo);
   font-weight: 600;
+}
+
+.mac-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(4px);
+  animation: mac-fade-in 0.15s ease-out;
+}
+
+.mac-modal-card {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 28px 32px 24px;
+  max-width: 360px;
+  width: 90%;
+  box-shadow:
+    0 20px 60px rgba(15, 23, 42, 0.18),
+    0 0 0 1px rgba(79, 70, 229, 0.06);
+  animation: mac-scale-in 0.15s ease-out;
+  text-align: center;
+}
+
+.mac-modal-text {
+  font-family: var(--mac-font-body);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--mac-text-primary);
+  margin: 0 0 20px;
+}
+
+.mac-modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.mac-modal-btn {
+  cursor: pointer;
+  border: 0;
+  border-radius: 10px;
+  padding: 9px 22px;
+  font-family: var(--mac-font-body);
+  font-size: 14px;
+  font-weight: 500;
+  transition: all var(--mac-transition);
+}
+
+.mac-modal-btn.secondary {
+  background: var(--mac-bg-subtle);
+  color: var(--mac-text-secondary);
+}
+
+.mac-modal-btn.secondary:hover {
+  background: var(--mac-border-light);
+}
+
+.mac-modal-btn.primary {
+  background: var(--mac-accent-indigo);
+  color: #ffffff;
+}
+
+.mac-modal-btn.primary:hover {
+  filter: brightness(1.08);
+}
+
+@keyframes mac-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes mac-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .mac-header-actions {
@@ -300,7 +395,11 @@ body::before {
   z-index: 0;
   width: 60%;
   height: 70%;
-  background: radial-gradient(circle, rgba(79, 70, 229, 0.06) 0%, transparent 70%);
+  background: radial-gradient(
+    circle,
+    rgba(79, 70, 229, 0.06) 0%,
+    transparent 70%
+  );
   pointer-events: none;
 }
 
@@ -312,7 +411,11 @@ body::before {
   z-index: 0;
   width: 60%;
   height: 70%;
-  background: radial-gradient(circle, rgba(5, 150, 105, 0.06) 0%, transparent 70%);
+  background: radial-gradient(
+    circle,
+    rgba(5, 150, 105, 0.06) 0%,
+    transparent 70%
+  );
   pointer-events: none;
 }
 
@@ -892,123 +995,139 @@ body::before {
 /* === Coach 页面专用的极简微过渡和呼吸动画 === */
 /* ============ Dashboard Styles ============ */
 .mac-stat-row-cards {
-display: grid;
-grid-template-columns: repeat(4, 1fr);
-gap: 16px;
-margin-bottom: 20px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
 }
 
 .mac-stat-card {
-background: #ffffff;
-border: 1px solid var(--mac-border-light);
-border-radius: var(--mac-radius);
-padding: 22px 20px;
-text-align: center;
-box-shadow: var(--mac-shadow-xs);
-transition: all var(--mac-transition);
+  background: #ffffff;
+  border: 1px solid var(--mac-border-light);
+  border-radius: var(--mac-radius);
+  padding: 22px 20px;
+  text-align: center;
+  box-shadow: var(--mac-shadow-xs);
+  transition: all var(--mac-transition);
 }
 
 .mac-stat-card:hover {
-transform: translateY(-2px);
-box-shadow: var(--mac-shadow-md);
+  transform: translateY(-2px);
+  box-shadow: var(--mac-shadow-md);
 }
 
 .mac-stat-card .num {
-font-size: 34px;
-font-weight: 700;
-color: var(--mac-text-primary);
-letter-spacing: -0.02em;
-line-height: 1;
+  font-size: 34px;
+  font-weight: 700;
+  color: var(--mac-text-primary);
+  letter-spacing: -0.02em;
+  line-height: 1;
 }
 
 .mac-stat-card .lbl {
-font-size: 12px;
-color: var(--mac-text-tertiary);
-margin-top: 6px;
-font-weight: 500;
+  font-size: 12px;
+  color: var(--mac-text-tertiary);
+  margin-top: 6px;
+  font-weight: 500;
 }
 
-.mac-stat-card.c1 .num { color: var(--mac-accent-indigo); }
-.mac-stat-card.c2 .num { color: var(--mac-accent-emerald); }
-.mac-stat-card.c3 .num { color: var(--mac-accent-amber); }
-.mac-stat-card.c4 .num { color: var(--mac-accent-violet); }
+.mac-stat-card.c1 .num {
+  color: var(--mac-accent-indigo);
+}
+.mac-stat-card.c2 .num {
+  color: var(--mac-accent-emerald);
+}
+.mac-stat-card.c3 .num {
+  color: var(--mac-accent-amber);
+}
+.mac-stat-card.c4 .num {
+  color: var(--mac-accent-violet);
+}
 
 .mac-chart-duo {
-display: grid;
-grid-template-columns: 1fr 1fr;
-gap: 20px;
-margin-bottom: 20px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 20px;
 }
 
 .mac-chart-box {
-background: #ffffff;
-border: 1px solid var(--mac-border-light);
-border-radius: var(--mac-radius);
-padding: 24px;
-box-shadow: var(--mac-shadow-xs);
+  background: #ffffff;
+  border: 1px solid var(--mac-border-light);
+  border-radius: var(--mac-radius);
+  padding: 24px;
+  box-shadow: var(--mac-shadow-xs);
 }
 
 .mac-chart-box h4 {
-font-size: 15px;
-font-weight: 600;
-color: var(--mac-text-primary);
-margin-bottom: 18px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--mac-text-primary);
+  margin-bottom: 18px;
 }
 
 .mac-tag-cloud-box {
-background: #ffffff;
-border: 1px solid var(--mac-border-light);
-border-radius: var(--mac-radius);
-padding: 24px;
-box-shadow: var(--mac-shadow-xs);
+  background: #ffffff;
+  border: 1px solid var(--mac-border-light);
+  border-radius: var(--mac-radius);
+  padding: 24px;
+  box-shadow: var(--mac-shadow-xs);
 }
 
 .mac-tag-cloud-box h4 {
-font-size: 15px;
-font-weight: 600;
-color: var(--mac-text-primary);
-margin-bottom: 14px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--mac-text-primary);
+  margin-bottom: 14px;
 }
 
 .mac-tag-cluster {
-display: flex;
-flex-wrap: wrap;
-gap: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .mac-tag-pill {
-padding: 5px 13px;
-border-radius: 18px;
-font-size: 12px;
-font-weight: 500;
-border: 1px solid;
+  padding: 5px 13px;
+  border-radius: 18px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid;
 }
 
 .mac-tag-pill.severe {
-background: var(--mac-accent-rose-light);
-color: var(--mac-accent-rose);
-border-color: rgba(225, 29, 72, 0.2);
+  background: var(--mac-accent-rose-light);
+  color: var(--mac-accent-rose);
+  border-color: rgba(225, 29, 72, 0.2);
 }
 
 .mac-tag-pill.warn {
-background: var(--mac-accent-amber-light);
-color: var(--mac-accent-amber);
-border-color: rgba(217, 119, 6, 0.22);
+  background: var(--mac-accent-amber-light);
+  color: var(--mac-accent-amber);
+  border-color: rgba(217, 119, 6, 0.22);
 }
 
 .mac-tag-pill.info {
-background: var(--mac-accent-indigo-light);
-color: var(--mac-accent-indigo);
-border-color: rgba(79, 70, 229, 0.15);
+  background: var(--mac-accent-indigo-light);
+  color: var(--mac-accent-indigo);
+  border-color: rgba(79, 70, 229, 0.15);
 }
 
 @media (max-width: 960px) {
-.mac-stat-row-cards { grid-template-columns: repeat(2, 1fr); }
-.mac-chart-duo { grid-template-columns: 1fr; }
+  .mac-stat-row-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .mac-chart-duo {
+    grid-template-columns: 1fr;
+  }
 }
 
-
 @keyframes traceNodeRunning {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(83, 74, 183, 0.2); }
-  50% { box-shadow: 0 0 0 4px rgba(83, 74, 183, 0.07); }
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(83, 74, 183, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(83, 74, 183, 0.07);
+  }
 }
