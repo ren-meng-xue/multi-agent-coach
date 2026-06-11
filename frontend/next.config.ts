@@ -1,12 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // 开发阶段代理后端请求，解决跨域问题
   async rewrites() {
+    const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
     return [
       {
-        source: "/api/backend/:path*",
-        destination: "http://localhost:8000/api/:path*",
+        source: "/api/v1/:path*",
+        destination: `${backendUrl}/api/v1/:path*`,
       },
     ];
   },
