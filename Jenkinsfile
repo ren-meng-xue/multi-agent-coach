@@ -36,9 +36,17 @@ pipeline {
         sh '''
           set -eu
           cd "$DEPLOY_DIR"
-          git fetch origin "$DEPLOY_BRANCH"
-          git checkout "$DEPLOY_BRANCH"
-          git pull --ff-only origin "$DEPLOY_BRANCH"
+          for attempt in 1 2 3 4 5; do
+            if git fetch origin "$DEPLOY_BRANCH" &&
+               git checkout "$DEPLOY_BRANCH" &&
+               git pull --ff-only origin "$DEPLOY_BRANCH"; then
+              break
+            fi
+            if [ "$attempt" = 5 ]; then
+              exit 1
+            fi
+            sleep $((attempt * 10))
+          done
         '''
       }
     }
