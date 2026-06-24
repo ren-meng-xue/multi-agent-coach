@@ -1,4 +1,4 @@
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm AS builder
+FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
@@ -7,6 +7,8 @@ ENV UV_LINK_MODE=copy
 ENV UV_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
 ENV UV_HTTP_TIMEOUT=300
 ENV UV_CONCURRENT_DOWNLOADS=2
+
+RUN pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ uv
 
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
