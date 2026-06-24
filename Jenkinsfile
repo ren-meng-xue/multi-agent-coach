@@ -27,38 +27,35 @@ pipeline {
 
     stage('Update Source') {
       steps {
-        dir("${DEPLOY_DIR}") {
-          sh '''
-            set -eu
-            git fetch origin "$DEPLOY_BRANCH"
-            git checkout "$DEPLOY_BRANCH"
-            git pull --ff-only origin "$DEPLOY_BRANCH"
-          '''
-        }
+        sh '''
+          set -eu
+          cd "$DEPLOY_DIR"
+          git fetch origin "$DEPLOY_BRANCH"
+          git checkout "$DEPLOY_BRANCH"
+          git pull --ff-only origin "$DEPLOY_BRANCH"
+        '''
       }
     }
 
     stage('Build And Deploy') {
       steps {
-        dir("${DEPLOY_DIR}") {
-          sh '''
-            set -eu
-            docker compose up -d --build
-          '''
-        }
+        sh '''
+          set -eu
+          cd "$DEPLOY_DIR"
+          docker compose up -d --build
+        '''
       }
     }
 
     stage('Verify') {
       steps {
-        dir("${DEPLOY_DIR}") {
-          sh '''
-            set -eu
-            docker compose ps
-            curl -fsS http://localhost:8000/api/v1/health
-            curl -fsS http://localhost:3000 >/dev/null
-          '''
-        }
+        sh '''
+          set -eu
+          cd "$DEPLOY_DIR"
+          docker compose ps
+          curl -fsS http://localhost:8000/api/v1/health
+          curl -fsS http://localhost:3000 >/dev/null
+        '''
       }
     }
   }
