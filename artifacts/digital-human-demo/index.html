@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI 求职作品集：卡通数智人试播</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #18212f;
+        --muted: #5c687a;
+        --line: #d9e0ea;
+        --panel: #ffffff;
+        --bg: #f4f7fb;
+        --blue: #2563eb;
+        --teal: #0f9f9a;
+        --green: #2f8f46;
+        --amber: #b7791f;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family:
+          Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+        color: var(--ink);
+        background:
+          linear-gradient(90deg, rgba(37, 99, 235, 0.05) 1px, transparent 1px),
+          linear-gradient(rgba(15, 159, 154, 0.05) 1px, transparent 1px),
+          var(--bg);
+        background-size: 40px 40px;
+      }
+
+      main {
+        width: min(1120px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 28px 0;
+      }
+
+      .stage {
+        min-height: calc(100vh - 56px);
+        display: grid;
+        grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
+        gap: 18px;
+        align-items: stretch;
+      }
+
+      .screen,
+      .presenter {
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.9);
+        box-shadow: 0 24px 80px rgba(24, 33, 47, 0.08);
+      }
+
+      .screen {
+        display: flex;
+        flex-direction: column;
+        min-height: 650px;
+      }
+
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .brand {
+        font-weight: 760;
+      }
+
+      .timer {
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .hero {
+        padding: 28px 30px 18px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      h1 {
+        margin: 0;
+        max-width: 820px;
+        font-size: 42px;
+        line-height: 1.12;
+        letter-spacing: 0;
+      }
+
+      .subtitle {
+        margin: 12px 0 0;
+        max-width: 720px;
+        color: var(--muted);
+        font-size: 18px;
+        line-height: 1.65;
+      }
+
+      .projects {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+        padding: 20px;
+      }
+
+      .project {
+        min-height: 230px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+
+      .project h2 {
+        margin: 0;
+        font-size: 20px;
+        line-height: 1.25;
+      }
+
+      .project p {
+        margin: 10px 0 0;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.55;
+      }
+
+      .tag {
+        display: inline-flex;
+        width: fit-content;
+        align-items: center;
+        height: 26px;
+        padding: 0 9px;
+        border: 1px solid currentColor;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .blue {
+        color: var(--blue);
+      }
+
+      .teal {
+        color: var(--teal);
+      }
+
+      .green {
+        color: var(--green);
+      }
+
+      .flow {
+        margin: 0 20px 20px;
+        border: 1px solid var(--line);
+        background: #f9fbfe;
+        padding: 18px;
+      }
+
+      .flow-title {
+        margin: 0 0 12px;
+        font-weight: 750;
+      }
+
+      .flow-row {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .step {
+        min-height: 76px;
+        padding: 12px;
+        border: 1px solid var(--line);
+        background: #fff;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .tech {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 0 20px 22px;
+      }
+
+      .chip {
+        border: 1px solid var(--line);
+        background: #fff;
+        padding: 8px 10px;
+        font-size: 13px;
+        font-weight: 650;
+      }
+
+      .presenter {
+        min-height: 650px;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .avatar-wrap {
+        position: relative;
+        flex: 1;
+        min-height: 430px;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 28% 24%, rgba(15, 159, 154, 0.16), transparent 26%),
+          radial-gradient(circle at 72% 14%, rgba(37, 99, 235, 0.14), transparent 28%),
+          #eef4fb;
+      }
+
+      .node {
+        position: absolute;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--blue);
+        opacity: 0.55;
+      }
+
+      .node:nth-child(1) {
+        left: 20%;
+        top: 20%;
+      }
+
+      .node:nth-child(2) {
+        right: 18%;
+        top: 30%;
+        background: var(--teal);
+      }
+
+      .node:nth-child(3) {
+        left: 28%;
+        bottom: 26%;
+        background: var(--green);
+      }
+
+      svg {
+        width: min(320px, 86%);
+        height: auto;
+      }
+
+      .mouth {
+        transform-origin: center;
+      }
+
+      body.talking .mouth {
+        animation: speak 0.22s infinite alternate ease-in-out;
+      }
+
+      body.talking .head {
+        animation: nod 1.8s infinite ease-in-out;
+        transform-origin: 50% 72%;
+      }
+
+      @keyframes speak {
+        from {
+          transform: scaleY(0.55);
+        }
+        to {
+          transform: scaleY(1.4);
+        }
+      }
+
+      @keyframes nod {
+        0%,
+        100% {
+          transform: translateY(0);
+        }
+        50% {
+          transform: translateY(4px);
+        }
+      }
+
+      .caption {
+        min-height: 130px;
+        padding: 18px;
+        border-top: 1px solid var(--line);
+        background: #fff;
+      }
+
+      .caption strong {
+        display: block;
+        margin-bottom: 8px;
+      }
+
+      .caption p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.65;
+      }
+
+      .controls {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        padding: 14px 18px 18px;
+        border-top: 1px solid var(--line);
+      }
+
+      button {
+        appearance: none;
+        border: 1px solid #1f4fd6;
+        background: var(--blue);
+        color: #fff;
+        height: 42px;
+        font: inherit;
+        font-weight: 760;
+        cursor: pointer;
+      }
+
+      button.secondary {
+        background: #fff;
+        color: var(--ink);
+        border-color: var(--line);
+      }
+
+      @media (max-width: 900px) {
+        .stage,
+        .projects,
+        .flow-row {
+          grid-template-columns: 1fr;
+        }
+
+        h1 {
+          font-size: 31px;
+        }
+
+        .screen,
+        .presenter {
+          min-height: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="stage" aria-label="卡通数智人中文试播">
+        <div class="screen">
+          <div class="topbar">
+            <div class="brand">AI 求职作品集</div>
+            <div class="timer">中文卡通数智人 · 30 秒试播</div>
+          </div>
+
+          <div class="hero">
+            <h1>三个 Agent 项目，展示 AI 应用工程化能力</h1>
+            <p class="subtitle">
+              围绕求职场景，把岗位情报、面试陪练和开发者知识库串成一套可演示的 AI 产品组合。
+            </p>
+          </div>
+
+          <div class="projects">
+            <article class="project">
+              <div>
+                <span class="tag blue">项目 01</span>
+                <h2>Job Intel Agent</h2>
+                <p>输入 JD 和简历，自动解析职位、调研公司，并生成个性化求职情报报告。</p>
+              </div>
+              <p>关键词：LangGraph、Tavily、Firecrawl、SSE</p>
+            </article>
+
+            <article class="project">
+              <div>
+                <span class="tag teal">项目 02</span>
+                <h2>Multi Agent Coach</h2>
+                <p>通过多个 Agent 协作完成模拟面试、持续追问、评估反馈和候选人画像积累。</p>
+              </div>
+              <p>关键词：多 Agent、长期记忆、Reflexion</p>
+            </article>
+
+            <article class="project">
+              <div>
+                <span class="tag green">项目 03</span>
+                <h2>Offer Copilot</h2>
+                <p>面向开发者资料和项目文档的 RAG 知识库，支持检索、引用校验和流式回答。</p>
+              </div>
+              <p>关键词：RAG、pgvector、rerank、Grafana</p>
+            </article>
+          </div>
+
+          <div class="flow">
+            <p class="flow-title">展示主线</p>
+            <div class="flow-row">
+              <div class="step">粘贴岗位 JD</div>
+              <div class="step">上传简历</div>
+              <div class="step">Agent 调研和分析</div>
+              <div class="step">模拟面试与反馈</div>
+              <div class="step">RAG 知识库问答</div>
+            </div>
+          </div>
+
+          <div class="tech" aria-label="技术栈">
+            <span class="chip">FastAPI</span>
+            <span class="chip">Next.js</span>
+            <span class="chip">PostgreSQL</span>
+            <span class="chip">pgvector</span>
+            <span class="chip">Redis</span>
+            <span class="chip">Celery</span>
+            <span class="chip">SSE</span>
+            <span class="chip">RAG</span>
+            <span class="chip">LangGraph</span>
+          </div>
+        </div>
+
+        <aside class="presenter">
+          <div class="avatar-wrap">
+            <span class="node"></span>
+            <span class="node"></span>
+            <span class="node"></span>
+            <svg viewBox="0 0 340 460" role="img" aria-label="卡通 AI 工程师数智人">
+              <g class="head">
+                <path d="M85 410c12-88 39-134 85-134s73 46 85 134H85z" fill="#1f2937" />
+                <path d="M102 398c10-58 31-88 68-88s58 30 68 88H102z" fill="#2563eb" />
+                <path d="M128 298h84v66c0 20-17 36-42 36s-42-16-42-36v-66z" fill="#f0b890" />
+                <circle cx="170" cy="172" r="86" fill="#f4c7a1" />
+                <path d="M89 160c7-62 45-102 99-96 56 6 77 45 72 99-38-24-82-31-171-3z" fill="#1f2937" />
+                <path d="M92 154c18-71 96-104 153-49-37-13-81-4-153 49z" fill="#111827" opacity=".42" />
+                <circle cx="137" cy="181" r="8" fill="#18212f" />
+                <circle cx="203" cy="181" r="8" fill="#18212f" />
+                <path d="M154 211c10 7 22 7 32 0" fill="none" stroke="#b6785e" stroke-width="5" stroke-linecap="round" />
+                <ellipse class="mouth" cx="170" cy="235" rx="22" ry="8" fill="#7f1d1d" />
+                <path d="M109 166c14-11 34-14 50-7" fill="none" stroke="#111827" stroke-width="6" stroke-linecap="round" />
+                <path d="M185 159c17-7 36-4 50 7" fill="none" stroke="#111827" stroke-width="6" stroke-linecap="round" />
+                <rect x="111" y="172" width="49" height="29" rx="13" fill="none" stroke="#2563eb" stroke-width="5" />
+                <rect x="181" y="172" width="49" height="29" rx="13" fill="none" stroke="#2563eb" stroke-width="5" />
+                <path d="M160 186h21" stroke="#2563eb" stroke-width="5" />
+                <circle cx="95" cy="202" r="18" fill="#f0b890" />
+                <circle cx="245" cy="202" r="18" fill="#f0b890" />
+              </g>
+              <path d="M118 342c22 23 82 23 104 0" fill="none" stroke="#dbeafe" stroke-width="13" stroke-linecap="round" />
+              <path d="M108 411h124" stroke="#0f172a" stroke-width="16" stroke-linecap="round" opacity=".35" />
+            </svg>
+          </div>
+
+          <div class="caption">
+            <strong>当前口播</strong>
+            <p id="captionText">点击“播放口播”，预览中文卡通数智人介绍效果。</p>
+          </div>
+
+          <div class="controls">
+            <button id="playButton" type="button">播放口播</button>
+            <button id="stopButton" class="secondary" type="button">停止</button>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <script>
+      const scriptLines = [
+        "大家好，我是 XXX。",
+        "我最近围绕 AI 求职场景，做了三个完整项目：岗位情报 Agent、AI 面试陪练系统，以及开发者 RAG 知识库。",
+        "第一个项目可以根据 JD 和简历，自动生成个性化求职情报报告。",
+        "第二个项目通过多个 Agent 协作，模拟真实面试、持续追问，并生成反馈和候选人画像。",
+        "第三个项目实现了文档导入、向量检索、混合召回、引用校验和流式回答。",
+        "这三个项目展示了我在 AI Agent、RAG、FastAPI、Next.js、PostgreSQL、Redis 和工程化落地上的实践能力。",
+      ];
+
+      const captionText = document.querySelector("#captionText");
+      const playButton = document.querySelector("#playButton");
+      const stopButton = document.querySelector("#stopButton");
+      let timer = null;
+
+      function setTalking(isTalking) {
+        document.body.classList.toggle("talking", isTalking);
+      }
+
+      function stopSpeech() {
+        window.speechSynthesis.cancel();
+        clearInterval(timer);
+        timer = null;
+        setTalking(false);
+      }
+
+      function pickChineseVoice() {
+        const voices = window.speechSynthesis.getVoices();
+        return (
+          voices.find((voice) => voice.lang === "zh-CN") ||
+          voices.find((voice) => voice.lang.startsWith("zh")) ||
+          null
+        );
+      }
+
+      function playSpeech() {
+        stopSpeech();
+        const text = scriptLines.join("");
+        const utterance = new SpeechSynthesisUtterance(text);
+        const voice = pickChineseVoice();
+        if (voice) utterance.voice = voice;
+        utterance.lang = "zh-CN";
+        utterance.rate = 0.95;
+        utterance.pitch = 1.02;
+
+        let index = 0;
+        captionText.textContent = scriptLines[index];
+        timer = setInterval(() => {
+          index = Math.min(index + 1, scriptLines.length - 1);
+          captionText.textContent = scriptLines[index];
+        }, 5200);
+
+        utterance.onstart = () => setTalking(true);
+        utterance.onend = stopSpeech;
+        utterance.onerror = stopSpeech;
+
+        window.speechSynthesis.speak(utterance);
+      }
+
+      playButton.addEventListener("click", playSpeech);
+      stopButton.addEventListener("click", stopSpeech);
+      window.speechSynthesis.onvoiceschanged = pickChineseVoice;
+    </script>
+  </body>
+</html>
