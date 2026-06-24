@@ -35,6 +35,7 @@ log = get_logger("app.main")
 async def lifespan(app: FastAPI):
     """应用启动/关闭时的生命周期事件。"""
     log.info("startup", app_env=settings.app_env)
+    log.info("ci_smoke_log", message="backend main.py deployment log marker")
     await setup_interviewer_checkpointer(settings.database_url)
     yield
     await close_interviewer_checkpointer()
