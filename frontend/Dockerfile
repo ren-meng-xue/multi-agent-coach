@@ -7,7 +7,7 @@ ENV PNPM_VERSION=11.9.0
 
 RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
 
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm config set registry https://registry.npmmirror.com && pnpm install --frozen-lockfile
 
 FROM node:22-alpine AS builder
