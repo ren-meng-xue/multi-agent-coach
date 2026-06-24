@@ -68,9 +68,9 @@ pipeline {
           cd "$DEPLOY_DIR"
           trap 'docker compose ps; docker compose logs --tail=120 frontend' EXIT
           docker compose ps
-          curl -fsS http://localhost:8000/api/v1/health
+          curl --max-time 10 -fsS http://localhost:8000/api/v1/health
           for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
-            if curl -fsS http://localhost:3000 >/dev/null; then
+            if curl --max-time 10 -fsS http://localhost:3000/healthz >/dev/null; then
               break
             fi
             if [ "$attempt" = 12 ]; then

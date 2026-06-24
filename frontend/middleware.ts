@@ -26,7 +26,7 @@ export default clerkMiddleware(async (auth, req) => {
 export const config = {
   matcher: [
     // 跳过 Next.js 内部资源、静态文件、以及登录/注册公开页面（避免 Clerk dev 握手拖慢首屏）
-    "/((?!_next|login|sign-up|[^?]*\\.(?:prototype?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    "/((?!_next|healthz|login|sign-up|[^?]*\\.(?:prototype?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
     // 始终对 API 路由鉴权
     "/(api|trpc)(.*)",
   ],
