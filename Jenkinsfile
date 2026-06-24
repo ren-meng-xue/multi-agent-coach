@@ -66,6 +66,7 @@ pipeline {
         sh '''
           set -eu
           cd "$DEPLOY_DIR"
+          trap 'docker compose ps; docker compose logs --tail=120 frontend' EXIT
           docker compose ps
           curl -fsS http://localhost:8000/api/v1/health
           for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
