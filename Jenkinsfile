@@ -68,7 +68,15 @@ pipeline {
           cd "$DEPLOY_DIR"
           docker compose ps
           curl -fsS http://localhost:8000/api/v1/health
-          curl -fsS http://localhost:3000 >/dev/null
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            if curl -fsS http://localhost:3000 >/dev/null; then
+              break
+            fi
+            if [ "$attempt" = 12 ]; then
+              exit 1
+            fi
+            sleep 5
+          done
         '''
       }
     }
