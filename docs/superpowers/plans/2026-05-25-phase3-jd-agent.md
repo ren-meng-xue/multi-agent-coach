@@ -201,7 +201,7 @@ async def _fetch_url(url: str) -> str | None:
             if resp.status_code != 200:
                 log.warning("jd_url_fetch_failed", url=url, status=resp.status_code)
                 return None
-            soup = BeautifulSoup(resp.text, "html.parser")
+            soup = BeautifulSoup(resp.text, "prototype.parser")
             for tag in soup(["script", "style", "nav", "footer"]):
                 tag.decompose()
             text = soup.get_text(separator="\n", strip=True)

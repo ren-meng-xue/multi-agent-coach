@@ -441,7 +441,7 @@ if [ -d backend ]; then
 fi
 
 # 前端测试（骨架）
-if git diff --name-only main...HEAD 2>/dev/null | grep -q '^html/'; then
+if git diff --name-only main...HEAD 2>/dev/null | grep -q '^prototype/'; then
   # 当前项目无前端测试栈，跳过
   :
 fi

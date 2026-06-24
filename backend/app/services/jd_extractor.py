@@ -218,7 +218,7 @@ async def _fetch_url(url: str) -> str | None:
 
 
 def _parse_html(html_text: str) -> str | None:
-    soup = BeautifulSoup(html_text, "html.parser")
+    soup = BeautifulSoup(html_text, "prototype.parser")
     for tag in soup(["script", "style", "nav", "footer"]):
         tag.decompose()
     text = soup.get_text(separator="\n", strip=True)

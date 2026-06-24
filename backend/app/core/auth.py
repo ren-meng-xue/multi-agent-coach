@@ -12,7 +12,7 @@ log = get_logger("app.core.auth")
 def get_clerk_public_key() -> str:
     """从配置读取 Clerk JWT 公钥。"""
     settings = get_settings()
-    return settings.clerk_jwt_key
+    return settings.clerk_jwt_key.replace(chr(92) + "n", chr(10)).strip()
 
 
 def is_clerk_configured() -> bool:

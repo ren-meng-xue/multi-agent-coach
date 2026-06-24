@@ -57,4 +57,5 @@ build/
 .antigravitycli/
 .superpowers/
 artifacts/gif-captures/
+artifacts/docker-images/
 handoff.md

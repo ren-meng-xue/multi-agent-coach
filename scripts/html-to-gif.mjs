@@ -8,7 +8,7 @@ import { pathToFileURL } from "node:url";
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 
-const DEFAULT_HTML = "html/Skill.html";
+const DEFAULT_HTML = "prototype/Skill.prototype";
 const DEFAULT_OUTPUT = "artifacts/skill-demo.gif";
 const MAC_CHROME =
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";

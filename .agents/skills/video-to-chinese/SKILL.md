@@ -87,7 +87,7 @@ for ts, text in segments:
 - 保留作者说的**每一句话**，不得删减、压缩或改写
 - 将连续的短碎片（同一语义单元内）拼接成完整句子/段落
 - 每隔 60–90 秒或话题切换处加一行时间戳标记 `**[HH:MM:SS]**`
-- **全部输出简体中文**（英文字幕须逐句翻译为中文，不得保留英文原文）
+- 输出语言与字幕原文一致（中文视频输出中文，英文视频输出英文）
 
 **文件头格式：**
 
@@ -130,13 +130,13 @@ for ts, text in segments:
 
 - 全小写，单词用连字符
 - 反映视频核心主题，不超过 6 个单词
-- 示例：`codex-10-best-practices`、`claude-code-15-things`
+- 示例：`codex-10-best-practices`、`Codex-15-things`
 
 ---
 
 ## 配套 hook
 
-- `.claude/hooks/video_to_chinese_pre_write.py`：Write 前校验文件名格式和必填章节
-- `.claude/hooks/video_to_chinese_post_write.py`：Write 后打印存档确认
+- `.Codex/hooks/video_to_chinese_pre_write.py`：Write 前校验文件名格式和必填章节
+- `.Codex/hooks/video_to_chinese_post_write.py`：Write 后打印存档确认
 
-输出文件统一存入项目根目录的 `docs/`，不要存入 `.claude/` 目录。
+历史产出位于 `.Codex/skills/video-to-chinese/docs/`。

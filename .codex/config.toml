@@ -1,0 +1,22 @@
+[mcp_servers.TalkToFigma]
+command = "bunx"
+args = ["cursor-talk-to-figma-mcp@latest"]
+
+[mcp_servers.postgres-local]
+command = "npx"
+args = [
+    "-y",
+    "@bytebase/dbhub",
+    "--dsn",
+    "postgresql://coach:coach@localhost:5432/coach",
+]
+
+[mcp_servers.redis-local]
+command = "uvx"
+args = [
+    "--from",
+    "redis-mcp-server@latest",
+    "redis-mcp-server",
+    "--url",
+    "redis://localhost:6379/0",
+]

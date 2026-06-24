@@ -420,7 +420,11 @@ export function CoachDashboard() {
       : getToken();
 
     void tokenPromise.then(async (token) => {
-      if (!token) return;
+      if (!token) {
+        setLoadError(true);
+        setIsLoading(false);
+        return;
+      }
       try {
         const results = await Promise.allSettled([
           fetchUserStage({ token }),
@@ -432,6 +436,7 @@ export function CoachDashboard() {
         // 所有请求全部失败 = 后端不可达
         if (results.every((r) => r.status === "rejected")) {
           setLoadError(true);
+          setIsLoading(false);
           return;
         }
 

@@ -46,6 +46,8 @@ services:
 
   worker:
     image: multi-agent-coach-backend
+    build:
+      context: ./backend
     container_name: coach-worker
     restart: unless-stopped
     env_file:
