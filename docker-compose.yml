@@ -17,6 +17,7 @@ services:
         condition: service_healthy
 
   backend:
+    image: multi-agent-coach-backend
     build:
       context: ./backend
     container_name: coach-backend
@@ -44,8 +45,7 @@ services:
       start_period: 30s
 
   worker:
-    build:
-      context: ./backend
+    image: multi-agent-coach-backend
     container_name: coach-worker
     restart: unless-stopped
     env_file:

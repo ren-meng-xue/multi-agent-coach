@@ -45,10 +45,10 @@ REDIS_URL=redis://redis:6379/0
 ```bash
 cd /www/wwwroot/multi-agent-coach
 docker compose config
-docker compose up -d --build
+docker compose build backend
+docker compose up -d backend worker postgres redis
 docker compose ps
 curl -fsS http://localhost:8000/api/v1/health
-curl -fsS http://localhost:3000 >/dev/null
 ```
 
 预期容器：
@@ -60,6 +60,8 @@ coach-worker
 coach-postgres
 coach-redis
 ```
+
+说明：`worker` 复用 `backend` 构建出的 `multi-agent-coach-backend` 镜像，只更换启动命令为 Celery worker，避免同一套 Python 依赖重复构建。
 
 ## 3. Jenkins 接入 Docker
 
