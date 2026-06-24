@@ -1,4 +1,67 @@
 services:
+  frontend:
+    build:
+      context: ./frontend
+    container_name: coach-frontend
+    restart: unless-stopped
+    env_file:
+      - path: .env.deploy
+        required: false
+    environment:
+      BACKEND_URL: http://backend:8000
+      NEXT_PUBLIC_API_URL: ""
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: ./backend
+    container_name: coach-backend
+    restart: unless-stopped
+    env_file:
+      - path: .env.deploy
+        required: false
+    environment:
+      APP_ENV: prod
+      DATABASE_URL: postgresql+asyncpg://coach:coach@postgres:5432/coach
+      REDIS_URL: redis://redis:6379/0
+      CORS_ORIGINS: '["http://localhost:3000"]'
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=5)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  worker:
+    build:
+      context: ./backend
+    container_name: coach-worker
+    restart: unless-stopped
+    env_file:
+      - path: .env.deploy
+        required: false
+    environment:
+      APP_ENV: prod
+      DATABASE_URL: postgresql+asyncpg://coach:coach@postgres:5432/coach
+      REDIS_URL: redis://redis:6379/0
+    command: ["celery", "-A", "app.tasks.celery_app", "worker", "--loglevel=INFO"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   postgres:
     image: pgvector/pgvector:pg16
     container_name: coach-postgres

@@ -1,0 +1,8 @@
+.DS_Store
+.env*
+.next
+.vercel
+coverage
+frontend.log
+node_modules
+tsconfig.tsbuildinfo
